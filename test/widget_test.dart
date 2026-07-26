@@ -792,19 +792,30 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, '更改'));
     await tester.pumpAndSettle();
 
-    expect(find.text('选择区域'), findsOneWidget);
-    expect(find.text('共 8 个区域'), findsOneWidget);
+    expect(find.text('移动到片区'), findsOneWidget);
+    expect(find.text('选择一个片区作为当前点位所属片区'), findsOneWidget);
     final selectedTile = find.byKey(
-      const ValueKey('plan-group-picker-option-宇治站附近'),
+      const ValueKey('plan-point-group-option-宇治站附近'),
+    );
+    final selectedIcon = tester.widget<Icon>(
+      find.byKey(const ValueKey('plan-point-group-selection-宇治站附近')),
     );
     expect(selectedTile, findsOneWidget);
-    expect(tester.getSize(selectedTile).height, 68);
+    expect(tester.getSize(selectedTile).height, 44);
+    expect(selectedIcon.icon, Icons.check_circle);
     expect(
       find.byKey(const ValueKey('plan-group-picker-selected-accent')),
-      findsOneWidget,
+      findsNothing,
     );
 
-    final createEntry = find.byKey(const ValueKey('plan-group-picker-create'));
+    final createEntry = find.byKey(
+      const ValueKey('plan-point-group-create-entry'),
+    );
+    await tester.dragUntilVisible(
+      createEntry,
+      find.byType(ListView).last,
+      const Offset(0, -240),
+    );
     await tester.tap(createEntry);
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -888,11 +899,14 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, '更改'));
     await tester.pumpAndSettle();
 
-    expect(find.text('选择区域'), findsOneWidget);
-    expect(find.byTooltip('新建片区'), findsNothing);
+    expect(find.text('移动到片区'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('plan-point-group-create-entry')),
+      findsNothing,
+    );
 
     Finder optionText(String text) {
-      return find.byKey(ValueKey('plan-group-picker-option-$text'));
+      return find.byKey(ValueKey('plan-point-group-option-$text'));
     }
 
     final earlyTop = tester.getTopLeft(optionText('先访问')).dy;
@@ -1059,14 +1073,14 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, '更改'));
     await tester.pumpAndSettle();
 
-    expect(find.text('选择区域'), findsOneWidget);
-    expect(find.text('共 8 个区域'), findsOneWidget);
+    expect(find.text('移动到片区'), findsOneWidget);
+    expect(find.text('选择一个片区作为当前点位所属片区'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('plan-group-picker-selected-accent')),
+      find.byKey(const ValueKey('plan-point-group-selection-宇治站附近')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('plan-group-picker-create')),
+      find.byKey(const ValueKey('plan-point-group-create-entry')),
       findsOneWidget,
     );
   });

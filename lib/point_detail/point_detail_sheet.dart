@@ -168,41 +168,41 @@ class PointDetailSheet extends StatelessWidget {
     BuildContext context,
     Future<void> Function(PilgrimagePoint point, String? groupId) moveToGroup,
   ) async {
-    final pickerGroups = groupBuckets.isNotEmpty
-        ? groupBuckets
-        : [
-            for (final group in sortGroupsByPlanOrder(groups))
-              PlanGroupBucket(
-                id: group.id,
-                name: group.name,
-                group: group,
-                points: const [],
-                completedCount: 0,
-              ),
-            const PlanGroupBucket(
-              id: 'ungrouped',
-              name: '未分组',
-              points: [],
-              completedCount: 0,
-              isUngrouped: true,
-            ),
-          ];
-    final selectedGroupId = point.groupId ?? 'ungrouped';
-    await showPlanGroupPickerSheet(
+    const ungroupedOptionId = '__ungrouped__';
+    final pickerGroups = sortGroupsByPlanOrder(groups);
+    final selectedGroupId = await showPlanGroupSelectionSheet(
       context: context,
-      groups: pickerGroups,
-      selectedGroupId: selectedGroupId,
-      onCreateGroup: onCreateGroup,
-      onSelectGroup: (selectedGroup) async {
-        await moveToGroup(
-          point,
-          selectedGroup.isUngrouped ? null : selectedGroup.id,
-        );
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
+      title: '移动到片区',
+      subtitle: '选择一个片区作为当前点位所属片区',
+      selectedOptionId: point.groupId ?? ungroupedOptionId,
+      options: [
+        const PlanGroupSelectionOption(id: ungroupedOptionId, title: '未分入片区'),
+        for (final group in pickerGroups)
+          PlanGroupSelectionOption(id: group.id, title: group.name),
+      ],
+      onCreateOption: onCreateGroup == null
+          ? null
+          : () async {
+              final created = await onCreateGroup!();
+              return created == null
+                  ? null
+                  : PlanGroupSelectionOption(
+                      id: created.id,
+                      title: created.name,
+                    );
+            },
     );
+    if (!context.mounted || selectedGroupId == null) {
+      return;
+    }
+
+    final groupId = selectedGroupId == ungroupedOptionId
+        ? null
+        : selectedGroupId;
+    await moveToGroup(point, groupId);
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
