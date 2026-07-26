@@ -9,7 +9,7 @@ Future<void> showPlanGroupPickerSheet({
   required List<PlanGroupBucket> groups,
   required String selectedGroupId,
   required ValueChanged<PlanGroupBucket> onSelectGroup,
-  required Future<PilgrimagePlanGroup?> Function() onCreateGroup,
+  Future<PilgrimagePlanGroup?> Function()? onCreateGroup,
   bool showProgressRing = true,
   bool emphasizeTotalCount = false,
 }) {
@@ -61,41 +61,42 @@ Future<void> showPlanGroupPickerSheet({
                           ],
                         ),
                       ),
-                      IconButton(
-                        key: const ValueKey('plan-group-picker-create'),
-                        tooltip: '新建片区',
-                        onPressed: () async {
-                          final created = await onCreateGroup();
-                          if (created == null || !context.mounted) {
-                            return;
-                          }
-                          setSheetState(() {
-                            pickerGroups
-                              ..removeWhere((group) => group.id == created.id)
-                              ..add(
-                                PlanGroupBucket(
-                                  id: created.id,
-                                  name: created.name,
-                                  group: created,
-                                  points: const [],
-                                  completedCount: 0,
-                                ),
-                              )
-                              ..sort((a, b) {
-                                if (a.isUngrouped) {
-                                  return 1;
-                                }
-                                if (b.isUngrouped) {
-                                  return -1;
-                                }
-                                return a.group!.orderIndex.compareTo(
-                                  b.group!.orderIndex,
-                                );
-                              });
-                          });
-                        },
-                        icon: const Icon(Icons.create_new_folder_outlined),
-                      ),
+                      if (onCreateGroup != null)
+                        IconButton(
+                          key: const ValueKey('plan-group-picker-create'),
+                          tooltip: '新建片区',
+                          onPressed: () async {
+                            final created = await onCreateGroup();
+                            if (created == null || !context.mounted) {
+                              return;
+                            }
+                            setSheetState(() {
+                              pickerGroups
+                                ..removeWhere((group) => group.id == created.id)
+                                ..add(
+                                  PlanGroupBucket(
+                                    id: created.id,
+                                    name: created.name,
+                                    group: created,
+                                    points: const [],
+                                    completedCount: 0,
+                                  ),
+                                )
+                                ..sort((a, b) {
+                                  if (a.isUngrouped) {
+                                    return 1;
+                                  }
+                                  if (b.isUngrouped) {
+                                    return -1;
+                                  }
+                                  return a.group!.orderIndex.compareTo(
+                                    b.group!.orderIndex,
+                                  );
+                                });
+                            });
+                          },
+                          icon: const Icon(Icons.create_new_folder_outlined),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 14),

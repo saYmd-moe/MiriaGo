@@ -8,6 +8,7 @@ import '../color_grading/color_grading_params.dart';
 import '../color_grading/color_grading_screen.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
+import '../plan/plan_group_utils.dart';
 import '../plan/reference_image_status.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../widgets/copyable_text.dart';
@@ -196,6 +197,10 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
       ),
       actionScope: PointDetailActionScope.manage,
       groups: widget.controller.plan.groups,
+      groupBuckets: planGroupBuckets(
+        widget.controller.plan,
+        widget.controller.completedPointIds,
+      ),
       onMoveToGroup: widget.controller.movePointToGroup,
       records: widget.controller.recordsForPoint(point.id),
       onOpenRecords: () => _openPointRecords(point),

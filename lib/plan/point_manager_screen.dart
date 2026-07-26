@@ -672,6 +672,7 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
       onReplaceReference: _replaceReferenceImage,
       actionScope: PointDetailActionScope.manage,
       groups: _plan.groups,
+      groupBuckets: _groups,
       onMoveToGroup: _movePointToGroup,
       onCreateGroup: _createGroupFromPicker,
       onEditPoint: () => _editPoint(currentPoint),

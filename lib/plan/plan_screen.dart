@@ -457,6 +457,10 @@ class _PlanScreenState extends State<PlanScreen> {
         ),
       ),
       groups: controller.plan.groups,
+      groupBuckets: planGroupBuckets(
+        controller.plan,
+        controller.completedPointIds,
+      ),
       onMoveToGroup: controller.movePointToGroup,
       onCreateGroup: () => _createGroupFromPointDetail(context),
       records: controller.recordsForPoint(point.id),

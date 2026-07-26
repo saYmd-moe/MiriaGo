@@ -29,6 +29,7 @@ class PointDetailSheet extends StatelessWidget {
     this.onComplete,
     this.actionScope = PointDetailActionScope.visit,
     this.groups = const [],
+    this.groupBuckets = const [],
     this.onMoveToGroup,
     this.onCreateGroup,
     this.records = const [],
@@ -52,6 +53,7 @@ class PointDetailSheet extends StatelessWidget {
   onReplaceReference;
   final PointDetailActionScope actionScope;
   final List<PilgrimagePlanGroup> groups;
+  final List<PlanGroupBucket> groupBuckets;
   final Future<void> Function(PilgrimagePoint point, String? groupId)?
   onMoveToGroup;
   final Future<PilgrimagePlanGroup?> Function()? onCreateGroup;
@@ -76,6 +78,7 @@ class PointDetailSheet extends StatelessWidget {
     VoidCallback? onComplete,
     PointDetailActionScope actionScope = PointDetailActionScope.visit,
     List<PilgrimagePlanGroup> groups = const [],
+    List<PlanGroupBucket> groupBuckets = const [],
     Future<void> Function(PilgrimagePoint point, String? groupId)?
     onMoveToGroup,
     Future<PilgrimagePlanGroup?> Function()? onCreateGroup,
@@ -100,6 +103,7 @@ class PointDetailSheet extends StatelessWidget {
           onReplaceReference: onReplaceReference,
           actionScope: actionScope,
           groups: groups,
+          groupBuckets: groupBuckets,
           onMoveToGroup: onMoveToGroup,
           onCreateGroup: onCreateGroup,
           records: records,
@@ -164,41 +168,41 @@ class PointDetailSheet extends StatelessWidget {
     BuildContext context,
     Future<void> Function(PilgrimagePoint point, String? groupId) moveToGroup,
   ) async {
-    const ungroupedOptionId = '__ungrouped__';
-    final pickerGroups = sortGroupsByPlanOrder(groups);
-    final selectedGroupId = await showPlanGroupSelectionSheet(
+    final pickerGroups = groupBuckets.isNotEmpty
+        ? groupBuckets
+        : [
+            for (final group in sortGroupsByPlanOrder(groups))
+              PlanGroupBucket(
+                id: group.id,
+                name: group.name,
+                group: group,
+                points: const [],
+                completedCount: 0,
+              ),
+            const PlanGroupBucket(
+              id: 'ungrouped',
+              name: '未分组',
+              points: [],
+              completedCount: 0,
+              isUngrouped: true,
+            ),
+          ];
+    final selectedGroupId = point.groupId ?? 'ungrouped';
+    await showPlanGroupPickerSheet(
       context: context,
-      title: '移动到片区',
-      subtitle: '选择一个片区作为当前点位所属片区',
-      selectedOptionId: point.groupId ?? ungroupedOptionId,
-      options: [
-        const PlanGroupSelectionOption(id: ungroupedOptionId, title: '未分入片区'),
-        for (final group in pickerGroups)
-          PlanGroupSelectionOption(id: group.id, title: group.name),
-      ],
-      onCreateOption: onCreateGroup == null
-          ? null
-          : () async {
-              final created = await onCreateGroup!();
-              return created == null
-                  ? null
-                  : PlanGroupSelectionOption(
-                      id: created.id,
-                      title: created.name,
-                    );
-            },
+      groups: pickerGroups,
+      selectedGroupId: selectedGroupId,
+      onCreateGroup: onCreateGroup,
+      onSelectGroup: (selectedGroup) async {
+        await moveToGroup(
+          point,
+          selectedGroup.isUngrouped ? null : selectedGroup.id,
+        );
+        if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
     );
-    if (!context.mounted || selectedGroupId == null) {
-      return;
-    }
-
-    final groupId = selectedGroupId == ungroupedOptionId
-        ? null
-        : selectedGroupId;
-    await moveToGroup(point, groupId);
-    if (context.mounted) {
-      Navigator.of(context).pop();
-    }
   }
 
   @override

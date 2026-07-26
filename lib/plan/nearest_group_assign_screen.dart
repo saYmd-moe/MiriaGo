@@ -339,6 +339,7 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
       onReplaceReference: _replaceReferenceImage,
       actionScope: PointDetailActionScope.assign,
       groups: _plan.groups,
+      groupBuckets: planGroupBuckets(_plan, _plan.completedPointIds),
       onMoveToGroup: _movePointToGroup,
       navigationApp: widget.settings.navigationApp,
     );
@@ -769,6 +770,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
       onReplaceReference: _replaceReferenceImage,
       actionScope: PointDetailActionScope.assign,
       groups: _plan.groups,
+      groupBuckets: planGroupBuckets(_plan, _plan.completedPointIds),
       onMoveToGroup: _movePointToGroup,
       navigationApp: widget.settings.navigationApp,
     );

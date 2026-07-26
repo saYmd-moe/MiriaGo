@@ -300,6 +300,10 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
         ),
       ),
       groups: _controller.plan.groups,
+      groupBuckets: planGroupBuckets(
+        _controller.plan,
+        _controller.completedPointIds,
+      ),
       onMoveToGroup: _controller.movePointToGroup,
       records: _controller.recordsForPoint(point.id),
       onOpenRecords: () => _openPointRecords(point),
@@ -642,23 +646,19 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     BuildContext context,
     List<PlanGroupBucket> groups,
   ) async {
-    final selectedGroupId = await showPlanGroupSelectionSheet(
+    await showPlanGroupPickerSheet(
       context: context,
-      title: '选择片区',
-      subtitle: '选择要在地图中查看的片区',
-      selectedOptionId: groups[_selectedGroupIndex].id,
-      options: [
-        for (final group in groups)
-          PlanGroupSelectionOption(id: group.id, title: group.name),
-      ],
+      groups: groups,
+      selectedGroupId: groups[_selectedGroupIndex].id,
+      onSelectGroup: (selectedGroup) {
+        final index = groups.indexWhere(
+          (group) => group.id == selectedGroup.id,
+        );
+        if (index >= 0) {
+          _selectGroup(index, groups);
+        }
+      },
     );
-    if (!mounted || selectedGroupId == null) {
-      return;
-    }
-    final index = groups.indexWhere((group) => group.id == selectedGroupId);
-    if (index >= 0) {
-      _selectGroup(index, groups);
-    }
   }
 }
 
