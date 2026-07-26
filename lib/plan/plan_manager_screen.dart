@@ -5,6 +5,7 @@ import '../data/pilgrimage_repository.dart';
 import '../plan_transfer/import_export_screen.dart';
 import '../widgets/confirm_action_dialog.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_models.dart';
 
 class PlanManagerScreen extends StatefulWidget {
@@ -20,6 +21,8 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
   List<PilgrimagePlan>? _plans;
   PilgrimagePlan? _activePlan;
   Object? _error;
+  bool _sortingEnabled = false;
+  String? _switchingPlanId;
 
   @override
   void initState() {
@@ -55,12 +58,30 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
   }
 
   Future<void> _switchPlan(PilgrimagePlan plan) async {
-    await widget.repository.setActivePlan(plan.id);
+    if (_switchingPlanId != null) {
+      return;
+    }
+    setState(() => _switchingPlanId = plan.id);
+
+    var switched = false;
+    try {
+      await widget.repository.setActivePlan(plan.id);
+      switched = true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showReplacingSnackBar(const SnackBar(content: Text('切换计划失败，请稍后重试。')));
+      }
+    }
     if (!mounted) {
       return;
     }
+    setState(() => _switchingPlanId = null);
 
-    Navigator.of(context).pop();
+    if (switched) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _createEmptyPlan() async {
@@ -175,12 +196,57 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
     }
   }
 
+  Future<void> _duplicatePlan(PilgrimagePlan plan) async {
+    try {
+      final visitRecords = await widget.repository.loadVisitRecords(plan.id);
+      final duplicatedPlan = await widget.repository.importPlanPackage(
+        plan: plan.copyWith(name: '${plan.name} 副本'),
+        visitRecords: visitRecords,
+      );
+      await _loadPlans();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showReplacingSnackBar(
+        SnackBar(content: Text('已复制「${duplicatedPlan.name}」')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showReplacingSnackBar(const SnackBar(content: Text('复制计划失败，请稍后重试。')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final plans = _plans;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('切换计划')),
+      appBar: AppBar(
+        title: const Text('切换计划'),
+        actions: [
+          IconButton(
+            key: const ValueKey('plan-sort-toggle'),
+            tooltip: _sortingEnabled ? '退出计划排序' : '计划排序',
+            onPressed: () {
+              setState(() => _sortingEnabled = !_sortingEnabled);
+            },
+            style: IconButton.styleFrom(
+              foregroundColor: _sortingEnabled
+                  ? AppColors.accent
+                  : AppColors.textSecondary,
+              backgroundColor: _sortingEnabled
+                  ? AppColors.accent.withValues(alpha: 0.08)
+                  : Colors.transparent,
+            ),
+            icon: const Icon(Icons.sort),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: Builder(
         builder: (context) {
           if (_error != null) {
@@ -208,6 +274,7 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
                   onSwitch: () => _switchPlan(activePlan),
                   onRename: () => _editPlanInfo(activePlan),
                   onExport: () => _openImportExport(activePlan),
+                  onDuplicate: () => _duplicatePlan(activePlan),
                   onDelete: () => _deletePlan(activePlan),
                 ),
                 const SizedBox(height: 10),
@@ -221,11 +288,12 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
                   _PlanCard(
                     plan: plan,
                     selected: plan.id == activePlan?.id,
-                    showDragHandle: true,
+                    showDragHandle: _sortingEnabled,
                     canDelete: plans.length > 1,
                     onSwitch: () => _switchPlan(plan),
                     onRename: () => _editPlanInfo(plan),
                     onExport: () => _openImportExport(plan),
+                    onDuplicate: () => _duplicatePlan(plan),
                     onDelete: () => _deletePlan(plan),
                   ),
                   const SizedBox(height: 8),
@@ -300,6 +368,7 @@ class _PlanCard extends StatefulWidget {
     required this.onSwitch,
     required this.onRename,
     required this.onExport,
+    required this.onDuplicate,
     required this.onDelete,
   });
 
@@ -310,6 +379,7 @@ class _PlanCard extends StatefulWidget {
   final VoidCallback onSwitch;
   final VoidCallback onRename;
   final VoidCallback onExport;
+  final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
   @override
@@ -319,6 +389,7 @@ class _PlanCard extends StatefulWidget {
 class _PlanCardState extends State<_PlanCard> {
   bool _cardHovered = false;
   bool _actionHovered = false;
+  bool _menuOpen = false;
 
   void _setActionHovered(bool hovered) {
     if (_actionHovered == hovered) {
@@ -334,6 +405,13 @@ class _PlanCardState extends State<_PlanCard> {
     setState(() => _cardHovered = hovered);
   }
 
+  void _setMenuOpen(bool open) {
+    if (_menuOpen == open) {
+      return;
+    }
+    setState(() => _menuOpen = open);
+  }
+
   @override
   Widget build(BuildContext context) {
     final plan = widget.plan;
@@ -341,7 +419,7 @@ class _PlanCardState extends State<_PlanCard> {
     final borderColor = selected ? AppColors.accent : AppColors.border;
     final works = _works(plan);
 
-    final cardColor = _cardHovered && !_actionHovered
+    final cardColor = _cardHovered && !_actionHovered && !_menuOpen
         ? Color.alphaBlend(
             AppColors.accent.withValues(alpha: 0.035),
             AppColors.surface,
@@ -384,6 +462,7 @@ class _PlanCardState extends State<_PlanCard> {
                         copyLabel: '计划名称',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        onTap: selected ? null : widget.onSwitch,
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 17,
@@ -405,6 +484,7 @@ class _PlanCardState extends State<_PlanCard> {
                         copyLabel: '计划信息',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        onTap: selected ? null : widget.onSwitch,
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12.5,
@@ -526,10 +606,12 @@ class _PlanCardState extends State<_PlanCard> {
                       ),
                       const SizedBox(width: 2),
                       _PlanMoreButton(
-                        planId: plan.id,
+                        plan: plan,
                         canDelete: widget.canDelete,
                         onExport: widget.onExport,
+                        onDuplicate: widget.onDuplicate,
                         onDelete: widget.onDelete,
+                        onMenuOpenChanged: _setMenuOpen,
                       ),
                     ],
                   ),
@@ -573,16 +655,20 @@ class _PlanCardState extends State<_PlanCard> {
 
 class _PlanMoreButton extends StatefulWidget {
   const _PlanMoreButton({
-    required this.planId,
+    required this.plan,
     required this.canDelete,
     required this.onExport,
+    required this.onDuplicate,
     required this.onDelete,
+    required this.onMenuOpenChanged,
   });
 
-  final String planId;
+  final PilgrimagePlan plan;
   final bool canDelete;
   final VoidCallback onExport;
+  final VoidCallback onDuplicate;
   final VoidCallback onDelete;
+  final ValueChanged<bool> onMenuOpenChanged;
 
   @override
   State<_PlanMoreButton> createState() => _PlanMoreButtonState();
@@ -591,24 +677,37 @@ class _PlanMoreButton extends StatefulWidget {
 class _PlanMoreButtonState extends State<_PlanMoreButton> {
   final MenuController _controller = MenuController();
 
+  static const double _menuWidth = 150;
+  static const double _buttonWidth = 38;
+
   @override
   Widget build(BuildContext context) {
     return MenuAnchor(
       controller: _controller,
+      onOpen: () => widget.onMenuOpenChanged(true),
+      onClose: () => widget.onMenuOpenChanged(false),
+      alignmentOffset: const Offset(_buttonWidth - _menuWidth, 4),
+      clipBehavior: Clip.none,
+      style: const MenuStyle(
+        alignment: AlignmentDirectional.bottomStart,
+        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+        surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        minimumSize: WidgetStatePropertyAll(Size(_menuWidth, 0)),
+        maximumSize: WidgetStatePropertyAll(Size(_menuWidth, 520)),
+        elevation: WidgetStatePropertyAll(0),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+      ),
       menuChildren: [
-        MenuItemButton(
-          onPressed: widget.onExport,
-          leadingIcon: const Icon(Icons.import_export_outlined),
-          child: const Text('导入导出'),
-        ),
-        MenuItemButton(
-          onPressed: widget.canDelete ? widget.onDelete : null,
-          leadingIcon: const Icon(Icons.delete_outline),
-          child: const Text('删除计划'),
+        _PlanActionsMenuPanel(
+          canDelete: widget.canDelete,
+          onExport: widget.onExport,
+          onDuplicate: widget.onDuplicate,
+          onDelete: widget.onDelete,
         ),
       ],
       child: _PlanActionButton(
-        key: ValueKey('plan-card-transfer-${widget.planId}'),
+        key: ValueKey('plan-card-transfer-${widget.plan.id}'),
         tooltip: '更多计划操作',
         onPressed: () {
           if (_controller.isOpen) {
@@ -619,6 +718,188 @@ class _PlanMoreButtonState extends State<_PlanMoreButton> {
         },
         icon: Icons.more_horiz,
         iconSize: 20,
+      ),
+    );
+  }
+}
+
+class _PlanActionsMenuPanel extends StatelessWidget {
+  const _PlanActionsMenuPanel({
+    required this.canDelete,
+    required this.onExport,
+    required this.onDuplicate,
+    required this.onDelete,
+  });
+
+  final bool canDelete;
+  final VoidCallback onExport;
+  final VoidCallback onDuplicate;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('plan-actions-menu'),
+      width: _PlanMoreButtonState._menuWidth,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            key: const ValueKey('plan-actions-menu-panel'),
+            painter: const _PlanMenuSurfacePainter(),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 23, 10, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PlanMenuActionItem(
+                    actionKey: const ValueKey('plan-menu-action-transfer'),
+                    label: '导入导出',
+                    icon: Icons.import_export_outlined,
+                    onPressed: onExport,
+                  ),
+                  const SizedBox(height: 6),
+                  _PlanMenuActionItem(
+                    actionKey: const ValueKey('plan-menu-action-copy'),
+                    label: '复制计划',
+                    icon: Icons.copy_outlined,
+                    onPressed: onDuplicate,
+                  ),
+                  const Divider(height: 17, color: AppColors.border),
+                  _PlanMenuActionItem(
+                    actionKey: const ValueKey('plan-menu-action-delete'),
+                    label: '删除计划',
+                    icon: Icons.delete_outline,
+                    onPressed: canDelete ? onDelete : null,
+                    isDangerous: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Positioned(
+            top: 0,
+            right: 8,
+            child: SizedBox(
+              key: ValueKey('plan-actions-menu-pointer'),
+              width: 22,
+              height: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanMenuSurfacePainter extends CustomPainter {
+  const _PlanMenuSurfacePainter();
+
+  static const double _pointerHeight = 13;
+  static const double _cornerRadius = 8;
+  static const double _pointerRight = 8;
+  static const double _pointerWidth = 22;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pointerRight = size.width - _pointerRight;
+    final pointerLeft = pointerRight - _pointerWidth;
+    final pointerCenter = (pointerLeft + pointerRight) / 2;
+    final path = Path()
+      ..moveTo(_cornerRadius, _pointerHeight)
+      ..lineTo(pointerLeft, _pointerHeight)
+      ..lineTo(pointerCenter, 0)
+      ..lineTo(pointerRight, _pointerHeight)
+      ..lineTo(size.width - _cornerRadius, _pointerHeight)
+      ..quadraticBezierTo(
+        size.width,
+        _pointerHeight,
+        size.width,
+        _pointerHeight + _cornerRadius,
+      )
+      ..lineTo(size.width, size.height - _cornerRadius)
+      ..quadraticBezierTo(
+        size.width,
+        size.height,
+        size.width - _cornerRadius,
+        size.height,
+      )
+      ..lineTo(_cornerRadius, size.height)
+      ..quadraticBezierTo(0, size.height, 0, size.height - _cornerRadius)
+      ..lineTo(0, _pointerHeight + _cornerRadius)
+      ..quadraticBezierTo(0, _pointerHeight, _cornerRadius, _pointerHeight)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = AppColors.textPrimary.withValues(alpha: 0.16)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7),
+    );
+    canvas.drawPath(path, Paint()..color = AppColors.surface);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlanMenuSurfacePainter oldDelegate) => false;
+}
+
+class _PlanMenuActionItem extends StatefulWidget {
+  const _PlanMenuActionItem({
+    required this.actionKey,
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.isDangerous = false,
+  });
+
+  final Key actionKey;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool isDangerous;
+
+  @override
+  State<_PlanMenuActionItem> createState() => _PlanMenuActionItemState();
+}
+
+class _PlanMenuActionItemState extends State<_PlanMenuActionItem> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = widget.isDangerous
+        ? AppColors.error
+        : AppColors.textPrimary;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        key: widget.actionKey,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: _hovered ? AppColors.surfaceMuted : AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [],
+        ),
+        child: MenuItemButton(
+          onPressed: widget.onPressed,
+          leadingIcon: Icon(widget.icon),
+          style: ButtonStyle(
+            minimumSize: const WidgetStatePropertyAll(Size.fromHeight(46)),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 14),
+            ),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            foregroundColor: WidgetStatePropertyAll(foregroundColor),
+            iconColor: WidgetStatePropertyAll(foregroundColor),
+            overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+          ),
+          child: Text(widget.label),
+        ),
       ),
     );
   }

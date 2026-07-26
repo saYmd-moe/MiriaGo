@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -29,6 +31,8 @@ class PointDetailSheet extends StatelessWidget {
     this.actionScope = PointDetailActionScope.visit,
     this.groups = const [],
     this.onMoveToGroup,
+    this.usePlanGroupPicker = false,
+    this.onCreateGroup,
     this.records = const [],
     this.onOpenRecords,
     this.onOpenRecord,
@@ -52,6 +56,8 @@ class PointDetailSheet extends StatelessWidget {
   final List<PilgrimagePlanGroup> groups;
   final Future<void> Function(PilgrimagePoint point, String? groupId)?
   onMoveToGroup;
+  final bool usePlanGroupPicker;
+  final Future<PilgrimagePlanGroup?> Function()? onCreateGroup;
   final List<PilgrimageVisitRecord> records;
   final VoidCallback? onOpenRecords;
   final ValueChanged<PilgrimageVisitRecord>? onOpenRecord;
@@ -75,6 +81,8 @@ class PointDetailSheet extends StatelessWidget {
     List<PilgrimagePlanGroup> groups = const [],
     Future<void> Function(PilgrimagePoint point, String? groupId)?
     onMoveToGroup,
+    bool usePlanGroupPicker = false,
+    Future<PilgrimagePlanGroup?> Function()? onCreateGroup,
     List<PilgrimageVisitRecord> records = const [],
     VoidCallback? onOpenRecords,
     ValueChanged<PilgrimageVisitRecord>? onOpenRecord,
@@ -97,6 +105,8 @@ class PointDetailSheet extends StatelessWidget {
           actionScope: actionScope,
           groups: groups,
           onMoveToGroup: onMoveToGroup,
+          usePlanGroupPicker: usePlanGroupPicker,
+          onCreateGroup: onCreateGroup,
           records: records,
           onOpenRecords: onOpenRecords,
           onOpenRecord: onOpenRecord,
@@ -152,6 +162,10 @@ class PointDetailSheet extends StatelessWidget {
     if (moveToGroup == null) {
       return;
     }
+    if (usePlanGroupPicker) {
+      await _showPlanMoveGroupSheet(context, moveToGroup);
+      return;
+    }
     final sortedGroups = sortGroupsByPlanOrder(groups);
 
     final selectedGroupId = await showModalBottomSheet<String?>(
@@ -200,6 +214,128 @@ class PointDetailSheet extends StatelessWidget {
       return;
     }
     Navigator.of(context).pop();
+  }
+
+  Future<void> _showPlanMoveGroupSheet(
+    BuildContext context,
+    Future<void> Function(PilgrimagePoint point, String? groupId) moveToGroup,
+  ) async {
+    final pickerGroups = sortGroupsByPlanOrder(groups).toList();
+    final selectedGroupId = await showModalBottomSheet<String?>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> createGroup() async {
+              final createGroup = onCreateGroup;
+              if (createGroup == null) {
+                return;
+              }
+              final created = await createGroup();
+              if (created == null || !context.mounted) {
+                return;
+              }
+              setSheetState(() {
+                pickerGroups
+                  ..removeWhere((group) => group.id == created.id)
+                  ..add(created)
+                  ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+              });
+            }
+
+            return SafeArea(
+              top: false,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: math.min(
+                    MediaQuery.sizeOf(context).height * 0.82,
+                    520,
+                  ),
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  children: [
+                    const Text(
+                      '移动到片区',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      '选择一个片区作为当前点位所属片区',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _PlanGroupOptionTile(
+                      title: '未分入片区',
+                      selected: point.groupId == null,
+                      onTap: () => Navigator.of(context).pop(''),
+                    ),
+                    for (final group in pickerGroups)
+                      _PlanGroupOptionTile(
+                        title: group.name,
+                        selected: point.groupId == group.id,
+                        onTap: () => Navigator.of(context).pop(group.id),
+                      ),
+                    if (onCreateGroup != null) ...[
+                      const Divider(height: 17, color: AppColors.border),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          key: const ValueKey('plan-point-group-create-entry'),
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: createGroup,
+                          child: SizedBox(
+                            height: 46,
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 8),
+                                Icon(Icons.add, color: AppColors.accent),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '新建片区',
+                                  style: TextStyle(
+                                    color: AppColors.accentDark,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!context.mounted || selectedGroupId == null) {
+      return;
+    }
+
+    final groupId = selectedGroupId.isEmpty ? null : selectedGroupId;
+    await moveToGroup(point, groupId);
+    if (context.mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -560,6 +696,99 @@ class _GroupOptionTile extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0),
         ),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _PlanGroupOptionTile extends StatefulWidget {
+  const _PlanGroupOptionTile({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<_PlanGroupOptionTile> createState() => _PlanGroupOptionTileState();
+}
+
+class _PlanGroupOptionTileState extends State<_PlanGroupOptionTile> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = widget.selected;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: InkWell(
+            onTap: widget.onTap,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            child: SizedBox(
+              key: ValueKey('plan-point-group-option-${widget.title}'),
+              height: 44,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  curve: Curves.easeOut,
+                  height: 36,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? AppColors.accent.withValues(alpha: 0.08)
+                        : _hovered
+                        ? AppColors.accent.withValues(alpha: 0.05)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          selected
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          key: ValueKey(
+                            'plan-point-group-selection-${widget.title}',
+                          ),
+                          color: selected
+                              ? AppColors.accent
+                              : AppColors.textSecondary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

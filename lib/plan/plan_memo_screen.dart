@@ -912,7 +912,11 @@ class _EmptyPlanMemo extends StatelessWidget {
                         ) ...[
                           _MemoSuggestionItem(suggestion: _suggestions[index]),
                           if (index < _suggestions.length - 1)
-                            const Divider(height: 1, indent: 42),
+                            const Divider(
+                              height: 1,
+                              indent: 42,
+                              color: Color(0xB3FFFFFF),
+                            ),
                         ],
                       ],
                     ),
