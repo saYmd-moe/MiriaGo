@@ -283,3 +283,213 @@ class _PlanGroupPickerTile extends StatelessWidget {
     );
   }
 }
+
+class PlanGroupSelectionOption {
+  const PlanGroupSelectionOption({required this.id, required this.title});
+
+  final String id;
+  final String title;
+}
+
+Future<String?> showPlanGroupSelectionSheet({
+  required BuildContext context,
+  required String title,
+  required String subtitle,
+  required List<PlanGroupSelectionOption> options,
+  required String selectedOptionId,
+  Future<PlanGroupSelectionOption?> Function()? onCreateOption,
+}) {
+  final pickerOptions = [...options];
+  return showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setSheetState) {
+          Future<void> createOption() async {
+            final create = onCreateOption;
+            if (create == null) {
+              return;
+            }
+            final created = await create();
+            if (created == null || !context.mounted) {
+              return;
+            }
+            setSheetState(() {
+              pickerOptions
+                ..removeWhere((option) => option.id == created.id)
+                ..add(created);
+            });
+          }
+
+          return SafeArea(
+            top: false,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.82 > 520
+                    ? 520
+                    : MediaQuery.sizeOf(context).height * 0.82,
+              ),
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  for (final option in pickerOptions)
+                    _PlanGroupSelectionTile(
+                      option: option,
+                      selected: option.id == selectedOptionId,
+                      onTap: () => Navigator.of(context).pop(option.id),
+                    ),
+                  if (onCreateOption != null) ...[
+                    const Divider(height: 17, color: AppColors.border),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        key: const ValueKey('plan-point-group-create-entry'),
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: createOption,
+                        child: SizedBox(
+                          height: 46,
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 8),
+                              Icon(Icons.add, color: AppColors.accent),
+                              const SizedBox(width: 12),
+                              Text(
+                                '新建片区',
+                                style: TextStyle(
+                                  color: AppColors.accentDark,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+class _PlanGroupSelectionTile extends StatefulWidget {
+  const _PlanGroupSelectionTile({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final PlanGroupSelectionOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<_PlanGroupSelectionTile> createState() =>
+      _PlanGroupSelectionTileState();
+}
+
+class _PlanGroupSelectionTileState extends State<_PlanGroupSelectionTile> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        clipBehavior: Clip.antiAlias,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: InkWell(
+            onTap: widget.onTap,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            child: SizedBox(
+              key: ValueKey('plan-point-group-option-${widget.option.title}'),
+              height: 44,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  curve: Curves.easeOut,
+                  height: 36,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: widget.selected
+                        ? AppColors.accent.withValues(alpha: 0.08)
+                        : _hovered
+                        ? AppColors.accent.withValues(alpha: 0.05)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          widget.selected
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
+                          key: ValueKey(
+                            'plan-point-group-selection-${widget.option.title}',
+                          ),
+                          color: widget.selected
+                              ? AppColors.accent
+                              : AppColors.textSecondary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            widget.option.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

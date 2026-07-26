@@ -458,7 +458,6 @@ class _PlanScreenState extends State<PlanScreen> {
       ),
       groups: controller.plan.groups,
       onMoveToGroup: controller.movePointToGroup,
-      usePlanGroupPicker: true,
       onCreateGroup: () => _createGroupFromPointDetail(context),
       records: controller.recordsForPoint(point.id),
       onOpenRecords: () => _openPointRecords(context, point),

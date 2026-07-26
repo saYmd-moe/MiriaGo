@@ -11,6 +11,7 @@ import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../plan/add_points_screen.dart';
 import '../plan/plan_group_utils.dart';
+import '../plan/plan_group_picker_sheet.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
 import '../plan/reference_image_status.dart';
@@ -637,53 +638,27 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     return const LatLng(34.9671, 135.7727);
   }
 
-  void _showGroupPicker(BuildContext context, List<PlanGroupBucket> groups) {
-    showModalBottomSheet<void>(
+  Future<void> _showGroupPicker(
+    BuildContext context,
+    List<PlanGroupBucket> groups,
+  ) async {
+    final selectedGroupId = await showPlanGroupSelectionSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            itemCount: groups.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  selected: index == _selectedGroupIndex,
-                  selectedTileColor: AppColors.accent.withValues(alpha: 0.12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  leading: Icon(
-                    group.isUngrouped
-                        ? Icons.inventory_2_outlined
-                        : Icons.folder_outlined,
-                  ),
-                  title: Text(group.name),
-                  subtitle: Text(group.anchorLabel),
-                  trailing: Text(
-                    '${group.completedCount} / ${group.points.length}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _selectGroup(index, groups);
-                  },
-                ),
-              );
-            },
-          ),
-        );
-      },
+      title: '选择片区',
+      subtitle: '选择要在地图中查看的片区',
+      selectedOptionId: groups[_selectedGroupIndex].id,
+      options: [
+        for (final group in groups)
+          PlanGroupSelectionOption(id: group.id, title: group.name),
+      ],
     );
+    if (!mounted || selectedGroupId == null) {
+      return;
+    }
+    final index = groups.indexWhere((group) => group.id == selectedGroupId);
+    if (index >= 0) {
+      _selectGroup(index, groups);
+    }
   }
 }
 
@@ -696,6 +671,7 @@ class _MapGroupFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: const ValueKey('map-group-filter-bar'),
       color: AppColors.surface.withValues(alpha: 0.94),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(

@@ -899,10 +899,7 @@ void main() {
     expect(find.byTooltip('新建片区'), findsNothing);
 
     Finder optionText(String text) {
-      return find.descendant(
-        of: find.byType(ListTile),
-        matching: find.text(text),
-      );
+      return find.byKey(ValueKey('plan-point-group-option-$text'));
     }
 
     final earlyTop = tester.getTopLeft(optionText('先访问')).dy;
@@ -959,6 +956,24 @@ void main() {
     expect(find.text('井用机前步行道'), findsWidgets);
     expect(find.text('吹响吧！上低音号 / EP 1 / 2:08'), findsOneWidget);
     expect(find.textContaining('あじろぎの道 / 34.'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('map-group-filter-bar')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择片区'), findsOneWidget);
+    expect(find.text('选择要在地图中查看的片区'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('plan-point-group-option-宇治站附近')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<Icon>(
+            find.byKey(const ValueKey('plan-point-group-selection-宇治站附近')),
+          )
+          .icon,
+      Icons.check_circle,
+    );
   });
 
   testWidgets('plan map marker opens detail after selecting the point', (

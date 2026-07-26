@@ -673,7 +673,6 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
       actionScope: PointDetailActionScope.manage,
       groups: _plan.groups,
       onMoveToGroup: _movePointToGroup,
-      usePlanGroupPicker: true,
       onCreateGroup: _createGroupFromPicker,
       onEditPoint: () => _editPoint(currentPoint),
       navigationApp: widget.settings.navigationApp,
