@@ -16,6 +16,7 @@ import '../widgets/snackbar_helper.dart';
 import 'add_points_screen.dart';
 import 'nearest_group_assign_screen.dart';
 import 'pilgrimage_models.dart';
+import 'plan_group_picker_sheet.dart';
 import 'plan_group_manager_screen.dart';
 import 'plan_group_utils.dart';
 import 'reference_full_cache_runner.dart';
@@ -402,49 +403,78 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
   }
 
   Future<void> _showGroupSheet(List<PlanGroupBucket> groups) {
-    return showModalBottomSheet<void>(
+    final selectedGroupId = groups[_selectedGroupIndex].id;
+    return showPlanGroupPickerSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            itemCount: groups.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    group.isUngrouped
-                        ? Icons.inbox_outlined
-                        : Icons.folder_outlined,
-                    color: index == _selectedGroupIndex
-                        ? AppColors.accent
-                        : AppColors.textSecondary,
-                  ),
-                  title: Text(group.name),
-                  subtitle: Text(
-                    '${group.completedCount} / ${group.points.length}',
-                  ),
-                  trailing: index == _selectedGroupIndex
-                      ? Icon(Icons.check, color: AppColors.accent)
-                      : null,
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _selectGroup(index);
-                  },
-                ),
-              );
-            },
-          ),
+      groups: groups,
+      selectedGroupId: selectedGroupId,
+      showProgressRing: false,
+      emphasizeTotalCount: true,
+      onSelectGroup: (group) {
+        final index = _groups.indexWhere(
+          (candidate) => candidate.id == group.id,
         );
+        if (index >= 0) {
+          _selectGroup(index);
+        }
       },
+      onCreateGroup: _createGroupFromPicker,
     );
+  }
+
+  Future<PilgrimagePlanGroup?> _createGroupFromPicker() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const _PointManagerCreateGroupDialog(),
+    );
+    final trimmedName = name?.trim();
+    if (trimmedName == null || trimmedName.isEmpty || !mounted) {
+      return null;
+    }
+
+    final currentGroupId = _selectedGroup?.id;
+    final planGroups = _plan.groups;
+    final nextOrderIndex = planGroups.isEmpty
+        ? 0
+        : planGroups
+                  .map((group) => group.orderIndex)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
+    final now = DateTime.now();
+    final group = PilgrimagePlanGroup(
+      id: 'group-${now.microsecondsSinceEpoch}',
+      name: trimmedName,
+      orderIndex: nextOrderIndex,
+      createdAt: now,
+    );
+    try {
+      final updatedPlan = await widget.repository.createPlanGroup(
+        planId: _plan.id,
+        group: group,
+      );
+      if (!mounted) {
+        return null;
+      }
+      setState(() {
+        _plan = updatedPlan;
+        final updatedGroups = _groups;
+        final currentIndex = updatedGroups.indexWhere(
+          (candidate) => candidate.id == currentGroupId,
+        );
+        if (currentIndex >= 0) {
+          _selectedGroupIndex = currentIndex;
+        }
+        _didUpdate = true;
+      });
+      return updatedPlan.groups
+          .where((candidate) => candidate.id == group.id)
+          .firstOrNull;
+    } catch (_) {
+      if (mounted) {
+        _showInfo('片区创建失败，请稍后重试。');
+      }
+      return null;
+    }
   }
 
   Future<void> _showAnchorSheet(PlanGroupBucket group) async {
@@ -642,7 +672,9 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
       onReplaceReference: _replaceReferenceImage,
       actionScope: PointDetailActionScope.manage,
       groups: _plan.groups,
+      groupBuckets: _groups,
       onMoveToGroup: _movePointToGroup,
+      onCreateGroup: _createGroupFromPicker,
       onEditPoint: () => _editPoint(currentPoint),
       navigationApp: widget.settings.navigationApp,
     );
@@ -1096,6 +1128,62 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     ScaffoldMessenger.of(
       context,
     ).showReplacingSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+class _PointManagerCreateGroupDialog extends StatefulWidget {
+  const _PointManagerCreateGroupDialog();
+
+  @override
+  State<_PointManagerCreateGroupDialog> createState() =>
+      _PointManagerCreateGroupDialogState();
+}
+
+class _PointManagerCreateGroupDialogState
+    extends State<_PointManagerCreateGroupDialog> {
+  final _controller = TextEditingController();
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorText = '片区名不能为空');
+      return;
+    }
+    Navigator.of(context).pop(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新建片区'),
+      content: TextField(
+        key: const ValueKey('point-manager-group-name-field'),
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(labelText: '片区名称', errorText: _errorText),
+        textInputAction: TextInputAction.done,
+        onChanged: (_) {
+          if (_errorText != null) {
+            setState(() => _errorText = null);
+          }
+        },
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('创建')),
+      ],
+    );
   }
 }
 

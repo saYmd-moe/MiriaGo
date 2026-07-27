@@ -12,6 +12,7 @@ enum _RecordStatusFilter { all, completed, pending }
 
 const String _ungroupedRecordFilterId = '__ungrouped__';
 const String _orphanRecordFilterId = '__orphan__';
+const double _recordsToolbarControlHeight = 44;
 
 class RecordsScreen extends StatefulWidget {
   const RecordsScreen({
@@ -28,11 +29,9 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  String? _selectedWorkId;
-  String? _selectedGroupFilterId;
   String _searchQuery = '';
   _RecordStatusFilter _statusFilter = _RecordStatusFilter.all;
-  var _filtersExpanded = false;
+  var _expandedSectionsInitialized = false;
   final Set<String> _expandedSectionIds = {};
 
   @override
@@ -40,73 +39,124 @@ class _RecordsScreenState extends State<RecordsScreen> {
     final controller = widget.controller;
     final records = _filteredRecords(controller);
     final sections = _groupedRecords(controller, records);
+    if (!_expandedSectionsInitialized && sections.isNotEmpty) {
+      _expandedSectionIds.addAll(sections.map((section) => section.id));
+      _expandedSectionsInitialized = true;
+    }
+    final allSectionsExpanded =
+        sections.isNotEmpty &&
+        sections.every((section) => _expandedSectionIds.contains(section.id));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('记录')),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          _RecordsSummary(controller: controller),
-          const SizedBox(height: 16),
-          _RecordFilters(
-            works: controller.plan.works,
-            groups: controller.plan.groups,
-            selectedWorkId: _selectedWorkId,
-            selectedGroupFilterId: _selectedGroupFilterId,
-            statusFilter: _statusFilter,
-            searchQuery: _searchQuery,
-            expanded: _filtersExpanded,
-            activeFilterCount: _activeFilterCount,
-            onToggleExpanded: () {
-              setState(() => _filtersExpanded = !_filtersExpanded);
-            },
-            onSearchChanged: (query) {
-              setState(() {
-                _searchQuery = query;
-                _resetExpandedSections();
-              });
-            },
-            onWorkSelected: (workId) {
-              setState(() {
-                _selectedWorkId = workId;
-                _resetExpandedSections();
-              });
-            },
-            onGroupSelected: (groupId) {
-              setState(() {
-                _selectedGroupFilterId = groupId;
-                _resetExpandedSections();
-              });
-            },
-            onStatusSelected: (filter) {
-              setState(() {
-                _statusFilter = filter;
-                _resetExpandedSections();
-              });
-            },
+      appBar: AppBar(
+        key: const ValueKey('records-app-bar'),
+        title: const Text(
+          '记录',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+        ),
+        actions: [
+          IconButton(
+            key: const ValueKey('records-toggle-all-sections'),
+            tooltip: allSectionsExpanded ? '收起全部片区' : '展开全部片区',
+            onPressed: sections.isEmpty
+                ? null
+                : () {
+                    setState(() {
+                      if (allSectionsExpanded) {
+                        _expandedSectionIds.clear();
+                      } else {
+                        _expandedSectionIds.addAll(
+                          sections.map((section) => section.id),
+                        );
+                      }
+                    });
+                  },
+            icon: Icon(
+              allSectionsExpanded ? Icons.unfold_less : Icons.unfold_more,
+            ),
           ),
-          const SizedBox(height: 16),
-          _RecordsSectionHeader(
-            visibleCount: records.length,
-            totalCount: controller.visitRecords.length,
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: CustomScrollView(
+        key: const ValueKey('records-scroll-view'),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            sliver: SliverList.list(
+              children: [
+                _RecordsSummary(controller: controller),
+                const SizedBox(height: 16),
+                _RecordFilters(
+                  statusFilter: _statusFilter,
+                  searchQuery: _searchQuery,
+                  onSearchChanged: (query) {
+                    setState(() {
+                      _searchQuery = query;
+                      _resetExpandedSections();
+                    });
+                  },
+                  onStatusSelected: (filter) {
+                    setState(() {
+                      _statusFilter = filter;
+                      _resetExpandedSections();
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                _RecordsSectionHeader(
+                  visibleCount: records.length,
+                  totalCount: controller.visitRecords.length,
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
           if (records.isEmpty)
-            const _EmptyRecords()
+            const SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+              sliver: SliverToBoxAdapter(child: _EmptyRecords()),
+            )
           else
             for (final section in sections)
-              _RecordGroupSection(
-                section: section,
-                expanded: _expandedSectionIds.contains(section.id),
-                onToggleExpanded: () {
-                  setState(() {
-                    if (!_expandedSectionIds.add(section.id)) {
-                      _expandedSectionIds.remove(section.id);
-                    }
-                  });
-                },
-                onOpenRecord: (record) => _openRecordDetail(context, record),
+              SliverMainAxisGroup(
+                slivers: [
+                  SliverPersistentHeader(
+                    pinned: _expandedSectionIds.contains(section.id),
+                    delegate: _RecordGroupHeaderDelegate(
+                      section: section,
+                      expanded: _expandedSectionIds.contains(section.id),
+                      onToggleExpanded: () {
+                        setState(() {
+                          if (!_expandedSectionIds.add(section.id)) {
+                            _expandedSectionIds.remove(section.id);
+                          }
+                        });
+                      },
+                    ),
+                  ),
+                  if (_expandedSectionIds.contains(section.id))
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                      sliver: SliverList.builder(
+                        itemCount: section.entries.length,
+                        itemBuilder: (context, index) {
+                          final entry = section.entries[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: _VisitRecordCard(
+                              record: entry.record,
+                              point: entry.point,
+                              onTap: () =>
+                                  _openRecordDetail(context, entry.record),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
+          const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
       ),
     );
@@ -129,6 +179,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
   void _resetExpandedSections() {
     _expandedSectionIds.clear();
+    _expandedSectionsInitialized = false;
   }
 
   List<PilgrimageVisitRecord> _filteredRecords(
@@ -137,14 +188,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return controller.visitRecords
         .where((record) {
           final point = controller.pointById(record.pointId);
-          if (_selectedWorkId != null && record.workId != _selectedWorkId) {
-            return false;
-          }
-
-          if (!_matchesGroupFilter(point)) {
-            return false;
-          }
-
           if (!_matchesSearch(record, point)) {
             return false;
           }
@@ -230,37 +273,6 @@ class _RecordsScreenState extends State<RecordsScreen> {
       ..sort((a, b) => b.record.capturedAt.compareTo(a.record.capturedAt));
   }
 
-  bool _matchesGroupFilter(PilgrimagePoint? point) {
-    final filterId = _selectedGroupFilterId;
-    if (filterId == null) {
-      return true;
-    }
-    if (filterId == _orphanRecordFilterId) {
-      return point == null;
-    }
-    if (filterId == _ungroupedRecordFilterId) {
-      return point != null && point.groupId == null;
-    }
-    return point != null && point.groupId == filterId;
-  }
-
-  int get _activeFilterCount {
-    var count = 0;
-    if (_selectedWorkId != null) {
-      count += 1;
-    }
-    if (_selectedGroupFilterId != null) {
-      count += 1;
-    }
-    if (_statusFilter != _RecordStatusFilter.all) {
-      count += 1;
-    }
-    if (_searchQuery.trim().isNotEmpty) {
-      count += 1;
-    }
-    return count;
-  }
-
   bool _matchesSearch(PilgrimageVisitRecord record, PilgrimagePoint? point) {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
@@ -324,135 +336,231 @@ class _RecordsScreenState extends State<RecordsScreen> {
 
 class _RecordFilters extends StatelessWidget {
   const _RecordFilters({
-    required this.works,
-    required this.groups,
-    required this.selectedWorkId,
-    required this.selectedGroupFilterId,
     required this.statusFilter,
     required this.searchQuery,
-    required this.expanded,
-    required this.activeFilterCount,
-    required this.onToggleExpanded,
     required this.onSearchChanged,
-    required this.onWorkSelected,
-    required this.onGroupSelected,
     required this.onStatusSelected,
   });
 
-  final List<PilgrimageWork> works;
-  final List<PilgrimagePlanGroup> groups;
-  final String? selectedWorkId;
-  final String? selectedGroupFilterId;
   final _RecordStatusFilter statusFilter;
   final String searchQuery;
-  final bool expanded;
-  final int activeFilterCount;
-  final VoidCallback onToggleExpanded;
   final ValueChanged<String> onSearchChanged;
-  final ValueChanged<String?> onWorkSelected;
-  final ValueChanged<String?> onGroupSelected;
   final ValueChanged<_RecordStatusFilter> onStatusSelected;
 
   @override
   Widget build(BuildContext context) {
-    final summary = activeFilterCount == 0
-        ? '全部记录'
-        : '$activeFilterCount 个筛选条件';
+    return Row(
+      children: [
+        SizedBox(
+          key: const ValueKey('records-status-filter'),
+          width: 124,
+          height: _recordsToolbarControlHeight,
+          child: _RecordStatusPicker(
+            statusFilter: statusFilter,
+            onSelected: onStatusSelected,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: _recordsToolbarControlHeight,
+            child: _ExpandedRecordFilters(
+              searchQuery: searchQuery,
+              onSearchChanged: onSearchChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
+class _RecordStatusPicker extends StatefulWidget {
+  const _RecordStatusPicker({
+    required this.statusFilter,
+    required this.onSelected,
+  });
+
+  final _RecordStatusFilter statusFilter;
+  final ValueChanged<_RecordStatusFilter> onSelected;
+
+  @override
+  State<_RecordStatusPicker> createState() => _RecordStatusPickerState();
+}
+
+class _RecordStatusPickerState extends State<_RecordStatusPicker> {
+  var _isOpen = false;
+
+  static const _options = [
+    (_RecordStatusFilter.all, '全部', 'all'),
+    (_RecordStatusFilter.completed, '已完成', 'completed'),
+    (_RecordStatusFilter.pending, '未完成', 'pending'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final accentColor = Theme.of(context).colorScheme.primary;
+    final statusLabel = _options
+        .firstWhere((option) => option.$1 == widget.statusFilter)
+        .$2;
+    return MenuAnchor(
+      key: const ValueKey('records-status-menu-anchor'),
+      onOpen: () => setState(() => _isOpen = true),
+      onClose: () => setState(() => _isOpen = false),
+      alignmentOffset: const Offset(0, 4),
+      style: MenuStyle(
+        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+        backgroundColor: const WidgetStatePropertyAll(AppColors.surface),
+        elevation: const WidgetStatePropertyAll(8),
+        shadowColor: WidgetStatePropertyAll(
+          AppColors.textPrimary.withValues(alpha: 0.14),
+        ),
+        side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+        shape: const WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: onToggleExpanded,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Icon(Icons.filter_list, color: AppColors.accentDark),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      '筛选',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0,
+      builder: (context, controller, child) {
+        return Tooltip(
+          message: '按状态筛选',
+          child: Material(
+            key: const ValueKey('records-status-filter-surface'),
+            color: AppColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('records-status-filter-button'),
+              onTap: () {
+                if (controller.isOpen) {
+                  controller.close();
+                } else {
+                  controller.open();
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.filter_alt, color: AppColors.accent, size: 20),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        statusLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
                       ),
                     ),
-                  ),
-                  Text(
-                    summary,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
+                    Icon(
+                      _isOpen
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: AppColors.accentDark,
+                      size: 20,
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-          if (expanded) ...[
-            const Divider(height: 1, color: AppColors.border),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              child: _ExpandedRecordFilters(
-                works: works,
-                groups: groups,
-                selectedWorkId: selectedWorkId,
-                selectedGroupFilterId: selectedGroupFilterId,
-                statusFilter: statusFilter,
-                searchQuery: searchQuery,
-                onSearchChanged: onSearchChanged,
-                onWorkSelected: onWorkSelected,
-                onGroupSelected: onGroupSelected,
-                onStatusSelected: onStatusSelected,
-              ),
+        );
+      },
+      menuChildren: [
+        SizedBox(
+          key: const ValueKey('records-status-menu'),
+          width: 124,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(8, 14, 8, 10),
+                  child: Text(
+                    '选择状态',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                for (final option in _options)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: MenuItemButton(
+                      key: ValueKey('records-status-option-${option.$3}'),
+                      onPressed: () => widget.onSelected(option.$1),
+                      leadingIcon: option.$1 == widget.statusFilter
+                          ? Icon(Icons.check, color: accentColor, size: 19)
+                          : const SizedBox(width: 19),
+                      style: ButtonStyle(
+                        minimumSize: const WidgetStatePropertyAll(
+                          Size.fromHeight(42),
+                        ),
+                        padding: const WidgetStatePropertyAll(
+                          EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                        backgroundColor: WidgetStatePropertyAll(
+                          option.$1 == widget.statusFilter
+                              ? accentColor.withValues(alpha: 0.09)
+                              : Colors.transparent,
+                        ),
+                        foregroundColor: WidgetStatePropertyAll(
+                          option.$1 == widget.statusFilter
+                              ? accentColor
+                              : AppColors.textPrimary,
+                        ),
+                        overlayColor: WidgetStateProperty.resolveWith((states) {
+                          if (option.$1 == widget.statusFilter) {
+                            return Colors.transparent;
+                          }
+                          return states.contains(WidgetState.hovered)
+                              ? accentColor.withValues(alpha: 0.035)
+                              : Colors.transparent;
+                        }),
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        option.$2,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _ExpandedRecordFilters extends StatefulWidget {
   const _ExpandedRecordFilters({
-    required this.works,
-    required this.groups,
-    required this.selectedWorkId,
-    required this.selectedGroupFilterId,
-    required this.statusFilter,
     required this.searchQuery,
     required this.onSearchChanged,
-    required this.onWorkSelected,
-    required this.onGroupSelected,
-    required this.onStatusSelected,
   });
 
-  final List<PilgrimageWork> works;
-  final List<PilgrimagePlanGroup> groups;
-  final String? selectedWorkId;
-  final String? selectedGroupFilterId;
-  final _RecordStatusFilter statusFilter;
   final String searchQuery;
   final ValueChanged<String> onSearchChanged;
-  final ValueChanged<String?> onWorkSelected;
-  final ValueChanged<String?> onGroupSelected;
-  final ValueChanged<_RecordStatusFilter> onStatusSelected;
 
   @override
   State<_ExpandedRecordFilters> createState() => _ExpandedRecordFiltersState();
@@ -486,175 +594,66 @@ class _ExpandedRecordFiltersState extends State<_ExpandedRecordFilters> {
 
   @override
   Widget build(BuildContext context) {
-    final groups = sortGroupsByPlanOrder(widget.groups);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TextField(
-          controller: _searchController,
-          decoration: InputDecoration(
-            labelText: '搜索点位',
-            prefixIcon: const Icon(Icons.search),
-            hintText: '点位、作品、场景、集数、坐标',
-            suffixIcon: _searchController.text.isEmpty
-                ? null
+    return Container(
+      key: const ValueKey('records-search-shell'),
+      height: _recordsToolbarControlHeight,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: TextField(
+        key: const ValueKey('records-search-field'),
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: '搜索点位、作品、场景',
+          hintStyle: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.42),
+            letterSpacing: 0,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            key: ValueKey('records-search-prefix-icon'),
+            size: 20,
+          ),
+          prefixIconConstraints: const BoxConstraints.tightFor(
+            width: 40,
+            height: 42,
+          ),
+          constraints: const BoxConstraints.tightFor(
+            height: _recordsToolbarControlHeight,
+          ),
+          isDense: true,
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.zero,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          suffixIconConstraints: const BoxConstraints.tightFor(
+            width: 40,
+            height: 42,
+          ),
+          suffixIcon: SizedBox(
+            width: 40,
+            child: _searchController.text.isEmpty
+                ? const SizedBox.shrink()
                 : IconButton(
                     tooltip: '清空搜索',
+                    padding: EdgeInsets.zero,
                     onPressed: () {
                       _searchController.clear();
                       widget.onSearchChanged('');
                       setState(() {});
                     },
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, size: 18),
                   ),
           ),
-          onChanged: (value) {
-            widget.onSearchChanged(value);
-            setState(() {});
-          },
         ),
-        const SizedBox(height: 14),
-        const Text(
-          '作品',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _FilterChipButton(
-                label: '全部',
-                selected: widget.selectedWorkId == null,
-                onSelected: () => widget.onWorkSelected(null),
-              ),
-              for (final work in widget.works) ...[
-                const SizedBox(width: 8),
-                _FilterChipButton(
-                  label: work.title,
-                  selected: widget.selectedWorkId == work.id,
-                  onSelected: () => widget.onWorkSelected(work.id),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          '片区',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
-          ),
-        ),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _FilterChipButton(
-                label: '全部',
-                selected: widget.selectedGroupFilterId == null,
-                onSelected: () => widget.onGroupSelected(null),
-              ),
-              for (final group in groups) ...[
-                const SizedBox(width: 8),
-                _FilterChipButton(
-                  label: group.name,
-                  selected: widget.selectedGroupFilterId == group.id,
-                  onSelected: () => widget.onGroupSelected(group.id),
-                ),
-              ],
-              const SizedBox(width: 8),
-              _FilterChipButton(
-                label: '未分组',
-                selected:
-                    widget.selectedGroupFilterId == _ungroupedRecordFilterId,
-                onSelected: () =>
-                    widget.onGroupSelected(_ungroupedRecordFilterId),
-              ),
-              const SizedBox(width: 8),
-              _FilterChipButton(
-                label: '孤立记录',
-                selected: widget.selectedGroupFilterId == _orphanRecordFilterId,
-                onSelected: () => widget.onGroupSelected(_orphanRecordFilterId),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          '状态',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _FilterChipButton(
-              label: '全部',
-              selected: widget.statusFilter == _RecordStatusFilter.all,
-              onSelected: () =>
-                  widget.onStatusSelected(_RecordStatusFilter.all),
-            ),
-            _FilterChipButton(
-              label: '已完成点位',
-              selected: widget.statusFilter == _RecordStatusFilter.completed,
-              onSelected: () =>
-                  widget.onStatusSelected(_RecordStatusFilter.completed),
-            ),
-            _FilterChipButton(
-              label: '未完成点位',
-              selected: widget.statusFilter == _RecordStatusFilter.pending,
-              onSelected: () =>
-                  widget.onStatusSelected(_RecordStatusFilter.pending),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _FilterChipButton extends StatelessWidget {
-  const _FilterChipButton({
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      onSelected: (_) => onSelected(),
-      labelStyle: TextStyle(
-        color: selected ? Colors.white : AppColors.textPrimary,
-        fontSize: 13,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0,
+        textAlignVertical: TextAlignVertical.center,
+        onChanged: (value) {
+          widget.onSearchChanged(value);
+          setState(() {});
+        },
       ),
-      selectedColor: AppColors.accent,
-      backgroundColor: AppColors.surface,
-      side: BorderSide(color: selected ? AppColors.accent : AppColors.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 }
@@ -722,122 +721,185 @@ class _RecordsSectionHeader extends StatelessWidget {
   }
 }
 
-class _RecordGroupSection extends StatelessWidget {
-  const _RecordGroupSection({
+class _RecordGroupHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _RecordGroupHeaderDelegate({
     required this.section,
     required this.expanded,
     required this.onToggleExpanded,
-    required this.onOpenRecord,
   });
 
   final _RecordGroup section;
   final bool expanded;
   final VoidCallback onToggleExpanded;
-  final ValueChanged<PilgrimageVisitRecord> onOpenRecord;
 
   @override
+  double get minExtent => 64;
+
+  @override
+  double get maxExtent => 64;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return _RecordGroupHeader(
+      key: ValueKey('records-group-${section.id}'),
+      section: section,
+      expanded: expanded,
+      onToggleExpanded: onToggleExpanded,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _RecordGroupHeaderDelegate oldDelegate) {
+    return section != oldDelegate.section ||
+        expanded != oldDelegate.expanded ||
+        onToggleExpanded != oldDelegate.onToggleExpanded;
+  }
+}
+
+class _RecordGroupHeader extends StatefulWidget {
+  const _RecordGroupHeader({
+    required this.section,
+    required this.expanded,
+    required this.onToggleExpanded,
+    super.key,
+  });
+
+  final _RecordGroup section;
+  final bool expanded;
+  final VoidCallback onToggleExpanded;
+
+  @override
+  State<_RecordGroupHeader> createState() => _RecordGroupHeaderState();
+}
+
+class _RecordGroupHeaderState extends State<_RecordGroupHeader> {
+  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Material(
-            color: AppColors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: const BorderSide(color: AppColors.border),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onToggleExpanded,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-                child: Row(
-                  children: [
-                    Icon(
-                      expanded ? Icons.folder_open_outlined : section.icon,
-                      color: AppColors.accentDark,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            section.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            section.subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceMuted,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+    final section = widget.section;
+    return ColoredBox(
+      color: AppColors.background,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onToggleExpanded,
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              key: ValueKey('records-group-surface-${section.id}'),
+              constraints: const BoxConstraints(minHeight: 64),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          key: ValueKey('records-group-icon-${section.id}'),
+                          _sectionIcon(section, widget.expanded),
+                          color: AppColors.accent,
+                          size: 27,
                         ),
-                        child: Text(
-                          '${section.entries.length} 条',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                section.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                section.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        SizedBox.square(
+                          key: ValueKey('records-group-count-${section.id}'),
+                          dimension: 30,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(5),
+                                  child: Text(
+                                    '${section.entries.length}',
+                                    style: TextStyle(
+                                      color: AppColors.accentDark,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          widget.expanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          color: AppColors.textSecondary,
+                          size: 24,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      expanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      color: AppColors.textSecondary,
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Divider(
+                      key: ValueKey('records-group-divider'),
+                      color: AppColors.border,
+                      height: 1,
+                      thickness: 1,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
-          if (expanded) ...[
-            const SizedBox(height: 8),
-            for (final entry in section.entries) ...[
-              _VisitRecordCard(
-                record: entry.record,
-                point: entry.point,
-                groupName: section.title,
-                onTap: () => onOpenRecord(entry.record),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ],
-        ],
+        ),
       ),
     );
+  }
+
+  IconData _sectionIcon(_RecordGroup section, bool expanded) {
+    if (section.id == _ungroupedRecordFilterId) {
+      return expanded ? Icons.inventory_2 : Icons.inventory_2_outlined;
+    }
+    if (section.id == _orphanRecordFilterId) {
+      return Icons.link_off;
+    }
+    return expanded ? Icons.location_on : Icons.location_on_outlined;
   }
 }
 
@@ -848,40 +910,76 @@ class _RecordsSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final completionProgress = controller.totalCount == 0
+        ? 0.0
+        : (controller.completedCount / controller.totalCount).clamp(0.0, 1.0);
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          Icon(
-            Icons.collections_bookmark_outlined,
-            color: AppColors.accent,
-            size: 30,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                Text(
-                  '${controller.visitRecords.length} 条巡礼记录',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
+                Expanded(
+                  child: _RecordsDashboardMetric(
+                    value: TextSpan(
+                      text: '${controller.visitRecords.length}',
+                      style: TextStyle(color: AppColors.accent),
+                    ),
+                    label: '条巡礼记录',
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  '完成 ${controller.completedCount}/${controller.totalCount}',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    letterSpacing: 0,
+                Container(width: 1, height: 42, color: AppColors.border),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: _RecordsDashboardMetric(
+                    value: TextSpan(
+                      text: '${controller.completedCount}',
+                      children: [
+                        TextSpan(
+                          text: ' / ${controller.totalCount}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    label: '已完成',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 4,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: AppColors.accent.withValues(alpha: 0.12),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: completionProgress,
+                    heightFactor: 1,
+                    child: ColoredBox(
+                      key: const ValueKey('records-completion-progress'),
+                      color: AppColors.accent,
+                    ),
                   ),
                 ),
               ],
@@ -893,134 +991,156 @@ class _RecordsSummary extends StatelessWidget {
   }
 }
 
+class _RecordsDashboardMetric extends StatelessWidget {
+  const _RecordsDashboardMetric({required this.value, required this.label});
+
+  final InlineSpan value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text.rich(
+          value,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            height: 1,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 12,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _VisitRecordCard extends StatelessWidget {
   const _VisitRecordCard({
     required this.record,
     required this.point,
-    required this.groupName,
     required this.onTap,
   });
 
   final PilgrimageVisitRecord record;
   final PilgrimagePoint? point;
-  final String groupName;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final resolvedPoint = point;
     final title = resolvedPoint?.name ?? record.displayPointNameSnapshot;
-    final subtitle = resolvedPoint == null
-        ? _recordSnapshotSubtitle(record)
-        : '${resolvedPoint.work.title} / ${resolvedPoint.displayEpisodeLabel}';
+    final workTitle =
+        resolvedPoint?.work.title ?? record.displayWorkTitleSnapshot;
+    final episodeParts = resolvedPoint?.displayEpisodeLabel
+        .split('/')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    final episodeText = episodeParts == null || episodeParts.isEmpty
+        ? ''
+        : ' / ${episodeParts.join('・')}';
     final photoPath = resolveVisitRecordDisplayPhotoPath(record);
     return Material(
+      key: ValueKey('record-card-${record.id}'),
       color: AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: AppColors.border),
-      ),
+      borderRadius: BorderRadius.circular(8),
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.12),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Row(
-          children: [
-            SizedBox(
-              width: 104,
-              height: 104,
-              child: VisitRecordPhoto(path: photoPath),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        _RecordChip(
-                          icon: Icons.schedule,
-                          label: _formatCapturedAt(record.capturedAt),
-                        ),
-                      ],
-                    ),
-                  ],
+        child: SizedBox(
+          height: 112,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    width: 108,
+                    height: 96,
+                    child: VisitRecordPhoto(path: photoPath),
+                  ),
                 ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(right: 10),
-              child: Icon(Icons.chevron_right, color: AppColors.textSecondary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _recordSnapshotSubtitle(PilgrimageVisitRecord record) {
-  final workTitle = record.displayWorkTitleSnapshot;
-  final pointSubtitle = record.displayPointSubtitleSnapshot;
-  if (pointSubtitle.isEmpty) {
-    return workTitle;
-  }
-  return '$workTitle / $pointSubtitle';
-}
-
-class _RecordChip extends StatelessWidget {
-  const _RecordChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AppColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$workTitle$episodeText',
+                        key: ValueKey('record-meta-text-${record.id}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        key: ValueKey('record-captured-row-${record.id}'),
+                        children: [
+                          const Icon(
+                            Icons.schedule_outlined,
+                            size: 15,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _formatCapturedAt(record.capturedAt),
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textSecondary,
+                  size: 25,
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

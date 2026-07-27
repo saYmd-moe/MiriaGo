@@ -34,7 +34,11 @@ String? _displayableVisitRecordPath(String? path) {
   if (value.startsWith('docs/sample_images/')) {
     return value;
   }
-  return resolveExistingAppManagedFilePathSync(value);
+  final managedPath = resolveExistingAppManagedFilePathSync(value);
+  if (managedPath != null) {
+    return managedPath;
+  }
+  return File(value).existsSync() ? value : null;
 }
 
 String? _firstDisplayableVisitRecordPath(Iterable<String?> paths) {

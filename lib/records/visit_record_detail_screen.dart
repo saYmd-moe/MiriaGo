@@ -10,6 +10,7 @@ import '../color_grading/color_grading_params.dart';
 import '../color_grading/color_grading_screen.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
+import '../plan/plan_group_utils.dart';
 import '../plan/reference_image_status.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../widgets/copyable_text.dart';
@@ -87,38 +88,69 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
             referenceImageUrl: referenceImageUrl,
           ),
           const SizedBox(height: 16),
-          Text(
-            resolvedPoint?.name ?? _record.displayPointNameSnapshot,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            resolvedPoint == null
-                ? _recordSnapshotSubtitle(_record)
-                : '${resolvedPoint.work.title} / ${resolvedPoint.subtitle}',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-              letterSpacing: 0,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      resolvedPoint?.name ?? _record.displayPointNameSnapshot,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      resolvedPoint == null
+                          ? _recordSnapshotSubtitle(_record)
+                          : '${resolvedPoint.work.title} / ${resolvedPoint.subtitle}',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (resolvedPoint != null) ...[
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: OutlinedButton(
+                    onPressed: () => _showPointDetail(resolvedPoint),
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                    ),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.place_outlined, size: 18),
+                        SizedBox(height: 3),
+                        Text(
+                          '点位详情',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 16),
           if (resolvedPoint == null) ...[
             const _OrphanRecordNotice(),
-            const SizedBox(height: 12),
-          ] else ...[
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showPointDetail(resolvedPoint),
-                icon: const Icon(Icons.place_outlined, size: 18),
-                label: const Text('查看点位详情'),
-              ),
-            ),
             const SizedBox(height: 12),
           ],
           _DetailSection(
@@ -167,6 +199,10 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
       ),
       actionScope: PointDetailActionScope.manage,
       groups: widget.controller.plan.groups,
+      groupBuckets: planGroupBuckets(
+        widget.controller.plan,
+        widget.controller.completedPointIds,
+      ),
       onMoveToGroup: widget.controller.movePointToGroup,
       records: widget.controller.recordsForPoint(point.id),
       onOpenRecords: () => _openPointRecords(point),
