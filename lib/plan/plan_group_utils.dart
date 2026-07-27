@@ -159,6 +159,7 @@ PilgrimagePoint? nextPendingPointAfterCompletion({
       .where(
         (point) =>
             point.groupId == completedPoint.groupId &&
+            point.hasCoordinate &&
             !completedPointIds.contains(point.id),
       )
       .firstOrNull;
@@ -167,7 +168,9 @@ PilgrimagePoint? nextPendingPointAfterCompletion({
   }
 
   return sortedPoints
-      .where((point) => !completedPointIds.contains(point.id))
+      .where(
+        (point) => point.hasCoordinate && !completedPointIds.contains(point.id),
+      )
       .firstOrNull;
 }
 
@@ -182,12 +185,26 @@ List<PilgrimagePoint> displayPointsForGroup(
     final location = currentLocation ?? previewCurrentLocation;
     const distance = Distance();
     points.sort((a, b) {
+      if (a.hasCoordinate != b.hasCoordinate) {
+        return a.hasCoordinate ? -1 : 1;
+      }
+      if (!a.hasCoordinate) {
+        return 0;
+      }
       final distanceA = distance(location, a.position);
       final distanceB = distance(location, b.position);
       return distanceA.compareTo(distanceB);
     });
   }
   if (descending) {
+    if (sortMode == PointSortMode.distance) {
+      final positionedPoints = points
+          .where((point) => point.hasCoordinate)
+          .toList(growable: false)
+          .reversed;
+      final pendingPoints = points.where((point) => !point.hasCoordinate);
+      return [...positionedPoints, ...pendingPoints];
+    }
     return points.reversed.toList(growable: false);
   }
   return points;
@@ -198,20 +215,23 @@ LatLng groupMapCenter(PlanGroupBucket group) {
       group.group?.anchorLongitude != null) {
     return LatLng(group.group!.anchorLatitude!, group.group!.anchorLongitude!);
   }
-  if (group.points.isEmpty) {
+  final positionedPoints = group.points
+      .where((point) => point.hasCoordinate)
+      .toList(growable: false);
+  if (positionedPoints.isEmpty) {
     return previewCurrentLocation;
   }
 
   final latitude =
-      group.points
+      positionedPoints
           .map((point) => point.position.latitude)
           .reduce((a, b) => a + b) /
-      group.points.length;
+      positionedPoints.length;
   final longitude =
-      group.points
+      positionedPoints
           .map((point) => point.position.longitude)
           .reduce((a, b) => a + b) /
-      group.points.length;
+      positionedPoints.length;
   return LatLng(latitude, longitude);
 }
 
@@ -222,7 +242,8 @@ List<Polygon> groupAreaPolygons(
   final polygons = <Polygon>[];
   for (var index = 0; index < groups.length; index += 1) {
     final group = groups[index];
-    if (group.isUngrouped || group.points.isEmpty) {
+    if (group.isUngrouped ||
+        !group.points.any((point) => point.hasCoordinate)) {
       continue;
     }
     final points = roundedGroupHull(group.points);
@@ -248,6 +269,7 @@ List<LatLng> roundedGroupHull(List<PilgrimagePoint> points) {
   const radiusPixels = 42.0;
   const circleSegments = 24;
   final pixels = points
+      .where((point) => point.hasCoordinate)
       .map((point) => _latLngToWorldPixel(point.position, zoom))
       .toList(growable: false);
 

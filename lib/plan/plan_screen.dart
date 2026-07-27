@@ -1,8 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
@@ -12,8 +9,10 @@ import '../point_detail/point_detail_sheet.dart';
 import '../records/point_visit_records_screen.dart';
 import '../records/visit_record_detail_screen.dart';
 import '../map/map_tile_config.dart';
+import '../map/current_location_resolver.dart';
 import '../utils/selected_item_order.dart';
 import 'add_points_screen.dart';
+import 'plan_group_picker_sheet.dart';
 import 'plan_group_utils.dart';
 import 'plan_memo_screen.dart';
 import 'pilgrimage_models.dart';
@@ -48,6 +47,8 @@ class PlanScreen extends StatefulWidget {
 
 class _PlanScreenState extends State<PlanScreen> {
   int _selectedGroupIndex = 0;
+  String? _selectedGroupId;
+  late String _selectedPlanId;
   PointSortMode _sortMode = PointSortMode.plan;
   bool _sortDescending = false;
   bool _showMap = false;
@@ -65,16 +66,27 @@ class _PlanScreenState extends State<PlanScreen> {
   AppSettings get settings => widget.settings;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedPlanId = controller.plan.id;
+    _selectedGroupId = controller.plan.currentGroupId;
+  }
+
+  @override
   void dispose() {
     _pointListController.dispose();
     super.dispose();
   }
 
   void _selectGroup(int index, List<PlanGroupBucket> groups) {
+    final selectedIndex = index.clamp(0, groups.length - 1);
+    final groupId = groups[selectedIndex].id;
     setState(() {
-      _selectedGroupIndex = index.clamp(0, groups.length - 1);
+      _selectedGroupIndex = selectedIndex;
+      _selectedGroupId = groupId;
       _showMap = false;
     });
+    controller.setCurrentGroup(groupId);
   }
 
   void _selectPoint(PilgrimagePoint point, List<PlanGroupBucket> groups) {
@@ -87,8 +99,12 @@ class _PlanScreenState extends State<PlanScreen> {
     setState(() {
       if (nextGroupIndex >= 0) {
         _selectedGroupIndex = nextGroupIndex;
+        _selectedGroupId = groups[nextGroupIndex].id;
       }
     });
+    if (nextGroupIndex >= 0) {
+      controller.setCurrentGroup(groups[nextGroupIndex].id);
+    }
     controller.selectPoint(point);
   }
 
@@ -196,29 +212,7 @@ class _PlanScreenState extends State<PlanScreen> {
     });
 
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showSnackBar('定位服务未开启。');
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _showSnackBar('需要定位权限来显示当前位置。');
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
+      final position = await resolveCurrentLocation();
       if (!mounted) {
         return;
       }
@@ -227,8 +221,8 @@ class _PlanScreenState extends State<PlanScreen> {
         _currentLocation = LatLng(position.latitude, position.longitude);
         _showVirtualLocation = true;
       });
-    } on TimeoutException {
-      _showSnackBar('定位超时，请稍后重试。');
+    } on CurrentLocationException catch (error) {
+      _showSnackBar(currentLocationFailureMessage(error));
     } catch (_) {
       _showSnackBar('定位失败，请检查权限和定位服务。');
     } finally {
@@ -244,8 +238,21 @@ class _PlanScreenState extends State<PlanScreen> {
   Widget build(BuildContext context) {
     final plan = controller.plan;
     final groups = planGroupBuckets(plan, controller.completedPointIds);
+    if (_selectedPlanId != plan.id) {
+      _selectedPlanId = plan.id;
+      _selectedGroupId = plan.currentGroupId;
+    }
+    final restoredGroupIndex = groups.indexWhere(
+      (group) => group.id == _selectedGroupId,
+    );
+    if (restoredGroupIndex >= 0) {
+      _selectedGroupIndex = restoredGroupIndex;
+    }
     if (_selectedGroupIndex >= groups.length) {
       _selectedGroupIndex = groups.isEmpty ? 0 : groups.length - 1;
+    }
+    if (groups.isNotEmpty) {
+      _selectedGroupId = groups[_selectedGroupIndex].id;
     }
     final selectedGroup = groups.isEmpty ? null : groups[_selectedGroupIndex];
     final displayPoints = selectedGroup == null
@@ -341,7 +348,19 @@ class _PlanScreenState extends State<PlanScreen> {
             _GroupSwitcher(
               groups: groups,
               selectedIndex: _selectedGroupIndex,
-              onSelectGroup: (index) => _selectGroup(index, groups),
+              onSelectGroup: (group) {
+                final currentGroups = planGroupBuckets(
+                  controller.plan,
+                  controller.completedPointIds,
+                );
+                final index = currentGroups.indexWhere(
+                  (candidate) => candidate.id == group.id,
+                );
+                if (index >= 0) {
+                  _selectGroup(index, currentGroups);
+                }
+              },
+              onCreateGroup: () => _createGroupFromPointDetail(context),
             ),
             _PlanGroupControls(
               plan: plan,
@@ -444,13 +463,64 @@ class _PlanScreenState extends State<PlanScreen> {
         ),
       ),
       groups: controller.plan.groups,
+      groupBuckets: planGroupBuckets(
+        controller.plan,
+        controller.completedPointIds,
+      ),
       onMoveToGroup: controller.movePointToGroup,
+      onCreateGroup: () => _createGroupFromPointDetail(context),
       records: controller.recordsForPoint(point.id),
       onOpenRecords: () => _openPointRecords(context, point),
       onOpenRecord: (record) => _openRecordDetail(context, record),
       onEditPoint: () => _editPoint(context, point),
       navigationApp: settings.navigationApp,
     );
+  }
+
+  Future<PilgrimagePlanGroup?> _createGroupFromPointDetail(
+    BuildContext context,
+  ) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const _PlanPointCreateGroupDialog(),
+    );
+    final trimmedName = name?.trim();
+    if (trimmedName == null || trimmedName.isEmpty || !mounted) {
+      return null;
+    }
+
+    final groups = controller.plan.groups;
+    final nextOrderIndex = groups.isEmpty
+        ? 0
+        : groups
+                  .map((group) => group.orderIndex)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
+    final now = DateTime.now();
+    final group = PilgrimagePlanGroup(
+      id: 'group-${now.microsecondsSinceEpoch}',
+      name: trimmedName,
+      orderIndex: nextOrderIndex,
+      createdAt: now,
+    );
+    try {
+      final updatedPlan = await widget.repository.createPlanGroup(
+        planId: controller.plan.id,
+        group: group,
+      );
+      if (!mounted) {
+        return null;
+      }
+      controller.replacePlan(updatedPlan);
+      return updatedPlan.groups
+          .where((item) => item.id == group.id)
+          .firstOrNull;
+    } catch (_) {
+      if (mounted) {
+        _showSnackBar('片区创建失败，请稍后重试。');
+      }
+      return null;
+    }
   }
 
   Future<void> _editPoint(BuildContext context, PilgrimagePoint point) async {
@@ -585,6 +655,50 @@ class _PlanScreenState extends State<PlanScreen> {
   }
 }
 
+class _PlanPointCreateGroupDialog extends StatefulWidget {
+  const _PlanPointCreateGroupDialog();
+
+  @override
+  State<_PlanPointCreateGroupDialog> createState() =>
+      _PlanPointCreateGroupDialogState();
+}
+
+class _PlanPointCreateGroupDialogState
+    extends State<_PlanPointCreateGroupDialog> {
+  final _nameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新建片区'),
+      content: TextField(
+        key: const ValueKey('plan-point-group-name-field'),
+        controller: _nameController,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: '片区名称'),
+        textInputAction: TextInputAction.done,
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_nameController.text),
+          child: const Text('创建'),
+        ),
+      ],
+    );
+  }
+}
+
 enum _PlanMenuAction { switchPlan, addPoints, managePoints, memo, importExport }
 
 class _ReferenceCacheIconButton extends StatelessWidget {
@@ -620,11 +734,13 @@ class _GroupSwitcher extends StatelessWidget {
     required this.groups,
     required this.selectedIndex,
     required this.onSelectGroup,
+    required this.onCreateGroup,
   });
 
   final List<PlanGroupBucket> groups;
   final int selectedIndex;
-  final ValueChanged<int> onSelectGroup;
+  final ValueChanged<PlanGroupBucket> onSelectGroup;
+  final Future<PilgrimagePlanGroup?> Function() onCreateGroup;
 
   @override
   Widget build(BuildContext context) {
@@ -636,7 +752,7 @@ class _GroupSwitcher extends StatelessWidget {
           IconButton(
             onPressed: selectedIndex == 0
                 ? null
-                : () => onSelectGroup(selectedIndex - 1),
+                : () => onSelectGroup(groups[selectedIndex - 1]),
             icon: const Icon(Icons.chevron_left),
             tooltip: '上一个片区',
           ),
@@ -659,7 +775,7 @@ class _GroupSwitcher extends StatelessWidget {
           IconButton(
             onPressed: selectedIndex == groups.length - 1
                 ? null
-                : () => onSelectGroup(selectedIndex + 1),
+                : () => onSelectGroup(groups[selectedIndex + 1]),
             icon: const Icon(Icons.chevron_right),
             tooltip: '下一个片区',
           ),
@@ -669,51 +785,12 @@ class _GroupSwitcher extends StatelessWidget {
   }
 
   void _showGroupPicker(BuildContext context) {
-    showModalBottomSheet<void>(
+    showPlanGroupPickerSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            itemCount: groups.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  selected: index == selectedIndex,
-                  selectedTileColor: AppColors.accent.withValues(alpha: 0.12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  leading: Icon(
-                    group.isUngrouped
-                        ? Icons.inventory_2_outlined
-                        : Icons.folder_outlined,
-                  ),
-                  title: Text(group.name),
-                  subtitle: Text(group.anchorLabel),
-                  trailing: Text(
-                    '${group.completedCount} / ${group.points.length}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    onSelectGroup(index);
-                  },
-                ),
-              );
-            },
-          ),
-        );
-      },
+      groups: groups,
+      selectedGroupId: groups[selectedIndex].id,
+      onSelectGroup: onSelectGroup,
+      onCreateGroup: onCreateGroup,
     );
   }
 }
@@ -1107,7 +1184,7 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
       return null;
     }
     for (final point in widget.group.points) {
-      if (point.id == selectedPointId) {
+      if (point.id == selectedPointId && point.hasCoordinate) {
         return point;
       }
     }
@@ -1128,7 +1205,7 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
   @override
   Widget build(BuildContext context) {
     final mapPoints = selectedItemsLast<PilgrimagePoint>(
-      widget.group.points,
+      widget.group.points.where((point) => point.hasCoordinate),
       isSelected: (point) => point.id == widget.selectedPointId,
     );
 

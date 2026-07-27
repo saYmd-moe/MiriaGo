@@ -123,4 +123,25 @@ void main() {
     );
     expect(encoded, isNot(contains('img-tc.anitabi.cn')));
   });
+
+  test('round-trips a point whose coordinate is pending', () async {
+    final repository = SamplePilgrimageRepository();
+    final plan = await repository.loadActivePlan();
+    final pendingPoint = plan.points.first.copyWith(
+      position: PilgrimagePoint.pendingPosition,
+    );
+
+    final decoded = PlanPackage.fromJsonString(
+      PlanPackage(
+        plan: plan.copyWith(points: [pendingPoint], currentPointId: null),
+        visitRecords: const [],
+      ).toJsonString(),
+    );
+
+    expect(decoded.plan.points.single.hasCoordinate, isFalse);
+    expect(
+      decoded.plan.points.single.position,
+      PilgrimagePoint.pendingPosition,
+    );
+  });
 }

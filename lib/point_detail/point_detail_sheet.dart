@@ -7,6 +7,7 @@ import '../data/user_reference_image_stub.dart'
 import '../widgets/snackbar_helper.dart';
 import '../map/map_navigation_launcher.dart';
 import '../plan/pilgrimage_models.dart';
+import '../plan/plan_group_picker_sheet.dart';
 import '../plan/plan_group_utils.dart';
 import '../records/visit_record_photo_stub.dart'
     if (dart.library.io) '../records/visit_record_photo_io.dart';
@@ -28,7 +29,9 @@ class PointDetailSheet extends StatelessWidget {
     this.onComplete,
     this.actionScope = PointDetailActionScope.visit,
     this.groups = const [],
+    this.groupBuckets = const [],
     this.onMoveToGroup,
+    this.onCreateGroup,
     this.records = const [],
     this.onOpenRecords,
     this.onOpenRecord,
@@ -50,8 +53,10 @@ class PointDetailSheet extends StatelessWidget {
   onReplaceReference;
   final PointDetailActionScope actionScope;
   final List<PilgrimagePlanGroup> groups;
+  final List<PlanGroupBucket> groupBuckets;
   final Future<void> Function(PilgrimagePoint point, String? groupId)?
   onMoveToGroup;
+  final Future<PilgrimagePlanGroup?> Function()? onCreateGroup;
   final List<PilgrimageVisitRecord> records;
   final VoidCallback? onOpenRecords;
   final ValueChanged<PilgrimageVisitRecord>? onOpenRecord;
@@ -73,8 +78,10 @@ class PointDetailSheet extends StatelessWidget {
     VoidCallback? onComplete,
     PointDetailActionScope actionScope = PointDetailActionScope.visit,
     List<PilgrimagePlanGroup> groups = const [],
+    List<PlanGroupBucket> groupBuckets = const [],
     Future<void> Function(PilgrimagePoint point, String? groupId)?
     onMoveToGroup,
+    Future<PilgrimagePlanGroup?> Function()? onCreateGroup,
     List<PilgrimageVisitRecord> records = const [],
     VoidCallback? onOpenRecords,
     ValueChanged<PilgrimageVisitRecord>? onOpenRecord,
@@ -96,7 +103,9 @@ class PointDetailSheet extends StatelessWidget {
           onReplaceReference: onReplaceReference,
           actionScope: actionScope,
           groups: groups,
+          groupBuckets: groupBuckets,
           onMoveToGroup: onMoveToGroup,
+          onCreateGroup: onCreateGroup,
           records: records,
           onOpenRecords: onOpenRecords,
           onOpenRecord: onOpenRecord,
@@ -152,54 +161,48 @@ class PointDetailSheet extends StatelessWidget {
     if (moveToGroup == null) {
       return;
     }
-    final sortedGroups = sortGroupsByPlanOrder(groups);
+    await _showPlanMoveGroupSheet(context, moveToGroup);
+  }
 
-    final selectedGroupId = await showModalBottomSheet<String?>(
+  Future<void> _showPlanMoveGroupSheet(
+    BuildContext context,
+    Future<void> Function(PilgrimagePoint point, String? groupId) moveToGroup,
+  ) async {
+    const ungroupedOptionId = '__ungrouped__';
+    final pickerGroups = sortGroupsByPlanOrder(groups);
+    final selectedGroupId = await showPlanGroupSelectionSheet(
       context: context,
-      showDragHandle: true,
-      backgroundColor: AppColors.surface,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            children: [
-              const Text(
-                '移动到片区',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _GroupOptionTile(
-                title: '未分入片区',
-                selected: point.groupId == null,
-                onTap: () => Navigator.of(context).pop(''),
-              ),
-              for (final group in sortedGroups)
-                _GroupOptionTile(
-                  title: group.name,
-                  selected: point.groupId == group.id,
-                  onTap: () => Navigator.of(context).pop(group.id),
-                ),
-            ],
-          ),
-        );
-      },
+      title: '移动到片区',
+      subtitle: '选择一个片区作为当前点位所属片区',
+      selectedOptionId: point.groupId ?? ungroupedOptionId,
+      options: [
+        const PlanGroupSelectionOption(id: ungroupedOptionId, title: '未分入片区'),
+        for (final group in pickerGroups)
+          PlanGroupSelectionOption(id: group.id, title: group.name),
+      ],
+      onCreateOption: onCreateGroup == null
+          ? null
+          : () async {
+              final created = await onCreateGroup!();
+              return created == null
+                  ? null
+                  : PlanGroupSelectionOption(
+                      id: created.id,
+                      title: created.name,
+                    );
+            },
     );
     if (!context.mounted || selectedGroupId == null) {
       return;
     }
 
-    final groupId = selectedGroupId.isEmpty ? null : selectedGroupId;
+    final groupId = selectedGroupId == ungroupedOptionId
+        ? null
+        : selectedGroupId;
     await moveToGroup(point, groupId);
-    if (!context.mounted) {
-      return;
+    if (context.mounted) {
+      Navigator.of(context).pop();
     }
-    Navigator.of(context).pop();
   }
 
   @override
@@ -276,8 +279,9 @@ class PointDetailSheet extends StatelessWidget {
                 _InfoRow(
                   icon: Icons.location_on_outlined,
                   label: '坐标',
-                  value:
-                      '${point.position.latitude.toStringAsFixed(5)}, ${point.position.longitude.toStringAsFixed(5)}',
+                  value: point.hasCoordinate
+                      ? '${point.position.latitude.toStringAsFixed(5)}, ${point.position.longitude.toStringAsFixed(5)}'
+                      : '待补充',
                 ),
                 const SizedBox(height: 8),
                 _GroupInfoRow(
@@ -345,14 +349,16 @@ class PointDetailSheet extends StatelessWidget {
                 _PointDetailActions(
                   scope: actionScope,
                   status: status,
-                  onOpenNavigation: () => _openNavigation(context),
+                  onOpenNavigation: point.hasCoordinate
+                      ? () => _openNavigation(context)
+                      : null,
                   onOpenCamera: onOpenCamera == null
                       ? null
                       : () {
                           Navigator.of(context).pop();
                           onOpenCamera!();
                         },
-                  onSetCurrent: onSetCurrent == null
+                  onSetCurrent: onSetCurrent == null || !point.hasCoordinate
                       ? null
                       : () {
                           Navigator.of(context).pop();
@@ -446,7 +452,7 @@ class _PointDetailActions extends StatelessWidget {
 
   final PointDetailActionScope scope;
   final VisitStatus status;
-  final VoidCallback onOpenNavigation;
+  final VoidCallback? onOpenNavigation;
   final VoidCallback? onOpenCamera;
   final VoidCallback? onSetCurrent;
   final _PointStatusAction? statusAction;
@@ -459,7 +465,7 @@ class _PointDetailActions extends StatelessWidget {
         child: FilledButton.icon(
           onPressed: onOpenNavigation,
           icon: const Icon(Icons.near_me_outlined, size: 18),
-          label: const Text('导航'),
+          label: Text(onOpenNavigation == null ? '坐标待补充' : '导航'),
         ),
       ),
       if (scope == PointDetailActionScope.visit && onOpenCamera != null) ...[
@@ -532,37 +538,6 @@ class _PointStatusAction {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-}
-
-class _GroupOptionTile extends StatelessWidget {
-  const _GroupOptionTile({
-    required this.title,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(
-          selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-          color: selected ? AppColors.accent : AppColors.textSecondary,
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0),
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
 }
 
 class _ReferenceColumn extends StatelessWidget {

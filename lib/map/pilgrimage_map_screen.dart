@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
@@ -11,6 +10,7 @@ import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../plan/add_points_screen.dart';
 import '../plan/plan_group_utils.dart';
+import '../plan/plan_group_picker_sheet.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
 import '../plan/reference_image_status.dart';
@@ -23,7 +23,9 @@ import '../widgets/auto_caching_reference_thumbnail.dart';
 import '../widgets/image_load_limiter.dart';
 import '../widgets/map_thumbnail_marker.dart';
 import 'map_navigation_launcher.dart';
+import 'map_marker_clustering.dart';
 import 'map_tile_config.dart';
+import 'current_location_resolver.dart';
 import '../widgets/reference_thumbnail_stub.dart'
     if (dart.library.io) '../widgets/reference_thumbnail_io.dart';
 
@@ -87,29 +89,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     });
 
     try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showSnackBar('定位服务未开启。');
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        _showSnackBar('需要定位权限来显示当前位置。');
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
+      final position = await resolveCurrentLocation();
       final location = LatLng(position.latitude, position.longitude);
 
       if (!mounted) {
@@ -120,8 +100,8 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
         _currentLocation = location;
       });
       _mapController.move(location, 16);
-    } on TimeoutException {
-      _showSnackBar('定位超时，请稍后重试。');
+    } on CurrentLocationException catch (error) {
+      _showSnackBar(currentLocationFailureMessage(error));
     } catch (_) {
       _showSnackBar('定位失败，请检查权限和定位服务。');
     } finally {
@@ -161,6 +141,9 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
   }
 
   void _centerPoint(PilgrimagePoint point) {
+    if (!point.hasCoordinate) {
+      return;
+    }
     _mapController.move(point.position, _mapController.camera.zoom);
   }
 
@@ -176,7 +159,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     setState(() {
       _selectedGroupIndex = nextIndex;
     });
-    if (group.points.isNotEmpty) {
+    if (group.points.any((point) => point.hasCoordinate)) {
       _mapController.move(groupMapCenter(group), 15);
     }
   }
@@ -298,6 +281,10 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
         ),
       ),
       groups: _controller.plan.groups,
+      groupBuckets: planGroupBuckets(
+        _controller.plan,
+        _controller.completedPointIds,
+      ),
       onMoveToGroup: _controller.movePointToGroup,
       records: _controller.recordsForPoint(point.id),
       onOpenRecords: () => _openPointRecords(point),
@@ -365,6 +352,47 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     ).showReplacingSnackBar(SnackBar(content: Text(message)));
   }
 
+  Marker _buildPointMarker({
+    required PilgrimagePoint point,
+    required PilgrimagePoint? selectedPoint,
+    required Set<String> thumbnailPointIds,
+    required List<PlanGroupBucket> groups,
+  }) {
+    final isSelected = point.id == selectedPoint?.id;
+    final showThumbnail =
+        _showThumbnailMarkers &&
+        (isSelected || thumbnailPointIds.contains(point.id));
+    return Marker(
+      key: ValueKey('plan-map-marker-${point.id}'),
+      point: point.position,
+      width: _showThumbnailMarkers ? (showThumbnail ? 84 : 24) : 44,
+      height: _showThumbnailMarkers ? (showThumbnail ? 82 : 24) : 44,
+      alignment: _showThumbnailMarkers
+          ? (showThumbnail ? Alignment.topCenter : Alignment.center)
+          : Alignment.center,
+      child: _showThumbnailMarkers
+          ? MapThumbnailMarker(
+              key: ValueKey('plan-map-thumbnail-marker-${point.id}'),
+              selected: isSelected,
+              imported: _controller.statusFor(point) == VisitStatus.completed,
+              showThumbnail: showThumbnail,
+              markerColor: mapColorForPoint(point, groups),
+              imageLoadLimiter: _thumbnailLoadLimiter,
+              localPath: point.referenceThumbnailPath,
+              imageUrl: hasRemoteReferenceImage(point)
+                  ? point.referenceImageUrl
+                  : null,
+              imageSource: widget.settings.anitabiImageSource,
+              onTap: () => _selectPoint(point),
+            )
+          : _PointMarker(
+              selected: isSelected,
+              status: _controller.statusFor(point),
+              onTap: () => _selectPoint(point),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final groups = planGroupBuckets(
@@ -387,8 +415,14 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
         )
         ? _controller.currentPoint
         : null;
-    final initialFocusPoint =
-        selectedPoint ?? currentPoint ?? _controller.points.firstOrNull;
+    final positionedPoints = _controller.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    final initialFocusPoint = (selectedPoint?.hasCoordinate ?? false)
+        ? selectedPoint
+        : (currentPoint?.hasCoordinate ?? false)
+        ? currentPoint
+        : positionedPoints.firstOrNull;
     final initialCenter =
         initialFocusPoint?.position ??
         (selectedGroup == null
@@ -396,7 +430,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
             : groupMapCenter(selectedGroup));
     final selectedGroupId = selectedGroup?.id ?? '';
     final mapPoints = selectedItemsLast<PilgrimagePoint>(
-      _controller.points,
+      positionedPoints,
       isSelected: (point) => point.id == selectedPoint?.id,
     );
 
@@ -428,63 +462,60 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
               ValueListenableBuilder<LatLngBounds?>(
                 valueListenable: _visibleBoundsNotifier,
                 builder: (context, visibleBounds, _) {
+                  final camera = MapCamera.of(context);
                   final thumbnailPointIds = _thumbnailPointIdsForCurrentView(
-                    _controller.points,
+                    positionedPoints,
                     visibleBounds,
                   );
+                  final clusteringEnabled =
+                      widget.settings.mapMarkerClusteringEnabled &&
+                      camera.zoom <= widget.settings.mapMarkerClusterMaxZoom;
+                  final markerClusters = clusteringEnabled
+                      ? clusterMapMarkers<PilgrimagePoint>(
+                          items: mapPoints,
+                          positionOf: (point) => point.position,
+                          camera: camera,
+                          radiusPixels: widget.settings.mapMarkerClusterRadius
+                              .toDouble(),
+                          keepSeparate: (point) =>
+                              point.id == selectedPoint?.id,
+                        )
+                      : [
+                          for (final point in mapPoints)
+                            MapMarkerCluster(
+                              items: [point],
+                              position: point.position,
+                            ),
+                        ];
                   return MarkerLayer(
                     markers: [
-                      for (final point in mapPoints)
-                        () {
-                          final isSelected = point.id == selectedPoint?.id;
-                          final showThumbnail =
-                              _showThumbnailMarkers &&
-                              (isSelected ||
-                                  thumbnailPointIds.contains(point.id));
-                          return Marker(
-                            key: ValueKey('plan-map-marker-${point.id}'),
-                            point: point.position,
-                            width: _showThumbnailMarkers
-                                ? (showThumbnail ? 84 : 24)
-                                : 44,
-                            height: _showThumbnailMarkers
-                                ? (showThumbnail ? 82 : 24)
-                                : 44,
-                            alignment: _showThumbnailMarkers
-                                ? (showThumbnail
-                                      ? Alignment.topCenter
-                                      : Alignment.center)
-                                : Alignment.center,
-                            child: _showThumbnailMarkers
-                                ? MapThumbnailMarker(
-                                    key: ValueKey(
-                                      'plan-map-thumbnail-marker-${point.id}',
-                                    ),
-                                    selected: isSelected,
-                                    imported:
-                                        _controller.statusFor(point) ==
-                                        VisitStatus.completed,
-                                    showThumbnail: showThumbnail,
-                                    markerColor: mapColorForPoint(
-                                      point,
-                                      groups,
-                                    ),
-                                    imageLoadLimiter: _thumbnailLoadLimiter,
-                                    localPath: point.referenceThumbnailPath,
-                                    imageUrl: hasRemoteReferenceImage(point)
-                                        ? point.referenceImageUrl
-                                        : null,
-                                    imageSource:
-                                        widget.settings.anitabiImageSource,
-                                    onTap: () => _selectPoint(point),
-                                  )
-                                : _PointMarker(
-                                    selected: isSelected,
-                                    status: _controller.statusFor(point),
-                                    onTap: () => _selectPoint(point),
-                                  ),
-                          );
-                        }(),
+                      for (final cluster in markerClusters)
+                        if (cluster.isCluster)
+                          Marker(
+                            key: ValueKey(
+                              'plan-map-cluster-${cluster.items.first.id}-${cluster.items.length}',
+                            ),
+                            point: cluster.position,
+                            width: 50,
+                            height: 50,
+                            child: MapMarkerClusterBadge(
+                              count: cluster.items.length,
+                              onTap: () => _mapController.move(
+                                cluster.position,
+                                nextClusterZoom(
+                                  camera,
+                                  widget.settings.mapMarkerClusterMaxZoom,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          _buildPointMarker(
+                            point: cluster.items.single,
+                            selectedPoint: selectedPoint,
+                            thumbnailPointIds: thumbnailPointIds,
+                            groups: groups,
+                          ),
                       if (_currentLocation != null)
                         Marker(
                           point: _currentLocation!,
@@ -578,9 +609,13 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                     recordCount: _controller
                         .recordsForPoint(selectedPoint.id)
                         .length,
-                    onSetCurrent: () => _setCurrentPoint(selectedPoint),
+                    onSetCurrent: selectedPoint.hasCoordinate
+                        ? () => _setCurrentPoint(selectedPoint)
+                        : null,
                     onOpenDetail: () => _showPointDetail(selectedPoint),
-                    onOpenNavigation: () => _openNavigation(selectedPoint),
+                    onOpenNavigation: selectedPoint.hasCoordinate
+                        ? () => _openNavigation(selectedPoint)
+                        : null,
                     onOpenCamera: () => _openCamera(selectedPoint),
                     onComplete: () =>
                         _controller.statusFor(selectedPoint) ==
@@ -598,51 +633,21 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     return const LatLng(34.9671, 135.7727);
   }
 
-  void _showGroupPicker(BuildContext context, List<PlanGroupBucket> groups) {
-    showModalBottomSheet<void>(
+  Future<void> _showGroupPicker(
+    BuildContext context,
+    List<PlanGroupBucket> groups,
+  ) async {
+    await showPlanGroupPickerSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            itemCount: groups.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
-            itemBuilder: (context, index) {
-              final group = groups[index];
-              return Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  selected: index == _selectedGroupIndex,
-                  selectedTileColor: AppColors.accent.withValues(alpha: 0.12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  leading: Icon(
-                    group.isUngrouped
-                        ? Icons.inventory_2_outlined
-                        : Icons.folder_outlined,
-                  ),
-                  title: Text(group.name),
-                  subtitle: Text(group.anchorLabel),
-                  trailing: Text(
-                    '${group.completedCount} / ${group.points.length}',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    _selectGroup(index, groups);
-                  },
-                ),
-              );
-            },
-          ),
+      groups: groups,
+      selectedGroupId: groups[_selectedGroupIndex].id,
+      onSelectGroup: (selectedGroup) {
+        final index = groups.indexWhere(
+          (group) => group.id == selectedGroup.id,
         );
+        if (index >= 0) {
+          _selectGroup(index, groups);
+        }
       },
     );
   }
@@ -657,6 +662,7 @@ class _MapGroupFilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
+      key: const ValueKey('map-group-filter-bar'),
       color: AppColors.surface.withValues(alpha: 0.94),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
@@ -802,9 +808,9 @@ class _PointCard extends StatelessWidget {
   final PilgrimagePoint point;
   final VisitStatus status;
   final int recordCount;
-  final VoidCallback onSetCurrent;
+  final VoidCallback? onSetCurrent;
   final VoidCallback onOpenDetail;
-  final VoidCallback onOpenNavigation;
+  final VoidCallback? onOpenNavigation;
   final VoidCallback onOpenCamera;
   final VoidCallback onComplete;
 
@@ -881,7 +887,7 @@ class _PointCard extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: onOpenNavigation,
                   icon: const Icon(Icons.near_me_outlined, size: 18),
-                  label: const Text('导航'),
+                  label: Text(point.hasCoordinate ? '导航' : '坐标待补充'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -909,7 +915,8 @@ class _PointCard extends StatelessWidget {
                   onPressed: onComplete,
                   icon: const Icon(Icons.check_circle_outline),
                 ),
-              if (status != VisitStatus.current &&
+              if (point.hasCoordinate &&
+                  status != VisitStatus.current &&
                   status != VisitStatus.completed) ...[
                 const SizedBox(width: 4),
                 IconButton.outlined(
@@ -939,7 +946,9 @@ class _PointCard extends StatelessWidget {
       '${point.work.title} / ${point.work.subtitle}',
       point.subtitle,
       point.displayEpisodeLabel,
-      '${point.position.latitude.toStringAsFixed(5)},${point.position.longitude.toStringAsFixed(5)}',
+      point.hasCoordinate
+          ? '${point.position.latitude.toStringAsFixed(5)},${point.position.longitude.toStringAsFixed(5)}'
+          : '坐标待补充',
     ].where((value) => value.trim().isNotEmpty).join('\n');
   }
 }

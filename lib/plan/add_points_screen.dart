@@ -41,6 +41,11 @@ InputDecoration stableInputDecoration({
   );
 }
 
+double _guideDialogHeight(BuildContext context, double contentHeight) {
+  final viewportLimit = MediaQuery.sizeOf(context).height * 0.72;
+  return viewportLimit < contentHeight ? viewportLimit : contentHeight;
+}
+
 InputDecoration _boxedFormDecoration({
   String? hintText,
   bool reserveHelperSpace = true,
@@ -133,6 +138,8 @@ class _AddPointsScreenState extends State<AddPointsScreen> {
   @override
   Widget build(BuildContext context) {
     final currentPlan = _plan;
+    final hasBangumiWork =
+        currentPlan?.works.any((work) => work.bangumiId != null) ?? false;
 
     return PopScope(
       canPop: true,
@@ -169,13 +176,19 @@ class _AddPointsScreenState extends State<AddPointsScreen> {
             ),
             const SizedBox(height: 12),
             _AddPointPanel(
-              enabled: currentPlan != null,
-              onMap: currentPlan == null
+              mapEnabled: currentPlan != null && hasBangumiWork,
+              manualEnabled: currentPlan != null,
+              quickManualEnabled:
+                  currentPlan != null && currentPlan.works.isNotEmpty,
+              onMap: currentPlan == null || !hasBangumiWork
                   ? null
                   : () => _openAnitabiMapImport(context, currentPlan),
               onManual: currentPlan == null
                   ? null
                   : () => _openManualPointForm(context, currentPlan),
+              onQuickManual: currentPlan == null || currentPlan.works.isEmpty
+                  ? null
+                  : () => _openQuickManualPointForm(context, currentPlan),
             ),
           ],
         ),
@@ -307,6 +320,53 @@ class _AddPointsScreenState extends State<AddPointsScreen> {
         ),
       ),
     );
+    if (!context.mounted) {
+      return;
+    }
+
+    final changed = await _reloadPlan(plan.id);
+    if (!context.mounted || !changed) {
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  Future<void> _openQuickManualPointForm(
+    BuildContext context,
+    PilgrimagePlan plan,
+  ) async {
+    final draft = await Navigator.of(context).push<_QuickManualPointDraft>(
+      appScaledMaterialPageRoute<_QuickManualPointDraft>(
+        settings: widget.settings,
+        builder: (_) =>
+            _QuickManualPointFormScreen(plan: plan, settings: widget.settings),
+      ),
+    );
+    if (draft == null || !context.mounted) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final point = PilgrimagePoint(
+      id: 'manual-${now.microsecondsSinceEpoch}',
+      work: draft.work,
+      name: draft.name,
+      subtitle: '',
+      position: draft.position ?? PilgrimagePoint.pendingPosition,
+      episodeLabel: '',
+      referenceLabel: '手动录入',
+      source: PointSource.manual,
+    );
+    try {
+      await widget.repository.addPointToPlan(planId: plan.id, point: point);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showReplacingSnackBar(const SnackBar(content: Text('点位保存失败，请稍后重试。')));
+      }
+      return;
+    }
     if (!context.mounted) {
       return;
     }
@@ -1294,6 +1354,7 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
       });
       _titleController.clear();
       _subtitleController.clear();
+      _cityController.clear();
       ScaffoldMessenger.of(
         context,
       ).showReplacingSnackBar(SnackBar(content: Text('已添加「$title」。')));
@@ -1314,6 +1375,25 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
     }
   }
 
+  Future<void> _showFillingGuide() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: _guideDialogHeight(context, 540),
+          child: AppScaledOverlayContent(
+            settings: widget.settings,
+            child: const _ManualWorkFillingGuideSheet(),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -1330,6 +1410,27 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
           leading: BackButton(
             onPressed: () => Navigator.of(context).pop(_didAdd),
           ),
+          actions: [
+            TextButton.icon(
+              key: const ValueKey('manual-work-filling-guide'),
+              onPressed: _showFillingGuide,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.accentDark,
+                minimumSize: const Size(0, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+              icon: const Icon(Icons.menu_book_outlined, size: 17),
+              label: const Text(
+                '填写指南',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
         body: Form(
           key: _formKey,
@@ -1474,6 +1575,406 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
   }
 }
 
+class _ManualPointFillingGuideSheet extends StatelessWidget {
+  const _ManualPointFillingGuideSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.72;
+
+    return ConstrainedBox(
+      key: const ValueKey('manual-point-guide-panel'),
+      constraints: BoxConstraints(maxWidth: 560, maxHeight: maxHeight),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.add_location_alt_outlined,
+                  color: AppColors.accentDark,
+                  size: 24,
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '点位填写指南',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '重点记录现场可识别的信息，方便到达后快速确认位置、场景和拍摄条件。',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const _FillingGuideItem(
+              index: 1,
+              title: '所属作品',
+              badge: '必填',
+              body: '选择点位对应的作品。计划中还没有作品时，先填写作品名称、原名和主要地区。',
+              example: '轻音少女',
+            ),
+            const _FillingGuideItem(
+              index: 2,
+              title: '名称与位置说明',
+              badge: '必填',
+              body: '名称优先填写中文常用名；位置说明优先填写当地原语言的地标、建筑或店铺名称，方便现场核对。',
+              example: '东京国际会展中心 / 東京ビッグサイト',
+            ),
+            const _FillingGuideItem(
+              index: 3,
+              title: '场景标签与参考来源',
+              badge: '必填',
+              body: '场景标签只写集数、时间点或场景编号；参考来源填写该点位原来所在的平台，或原始上传者。',
+              example: 'EP 1 / 12:32\n示例：小红书@BilyHurington / Bilibili@麦块晓天',
+            ),
+            const _FillingGuideItem(
+              index: 4,
+              title: '备注',
+              badge: '选填',
+              body: '记录营业时间、闭店翻修、拍摄限制、推荐机位或其他到访前需要知道的信息。',
+              example: '2025年完成翻修；最佳拍摄时间为上午；周末游客较多；',
+            ),
+            const _FillingGuideItem(
+              index: 5,
+              title: '坐标与参考图',
+              badge: '坐标必填',
+              body: '优先从地图选择准确位置，也可粘贴纬度、经度。参考图建议使用能清楚辨认构图的原始画面。',
+              example: '35.008900, 135.771100',
+              isLast: true,
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_searching_outlined,
+                    size: 19,
+                    color: AppColors.accentDark,
+                  ),
+                  const SizedBox(width: 9),
+                  const Expanded(
+                    child: Text(
+                      '保存前建议核对地图标记是否落在正确建筑或道路一侧；坐标偏差会直接影响导航和现场查找。',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 12,
+                        height: 1.45,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('知道了'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ManualWorkFillingGuideSheet extends StatelessWidget {
+  const _ManualWorkFillingGuideSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final viewportLimit = MediaQuery.sizeOf(context).height * 0.72;
+    final maxHeight = viewportLimit < 540 ? viewportLimit : 540.0;
+
+    return ConstrainedBox(
+      key: const ValueKey('manual-work-guide-panel'),
+      constraints: BoxConstraints(maxWidth: 560, maxHeight: maxHeight),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.menu_book_outlined,
+                  color: AppColors.accentDark,
+                  size: 24,
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '作品填写指南',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '填写作品本身的信息，点位名称、场景说明和具体地址请在添加点位时录入。',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const _FillingGuideItem(
+              index: 1,
+              title: '作品名称',
+              badge: '必填',
+              body: '填写常用中文译名或最容易辨认的名称，不要填写集数或具体场景名。',
+              example: '轻音少女',
+            ),
+            const _FillingGuideItem(
+              index: 2,
+              title: '作品原名',
+              badge: '选填',
+              body: '可填写官方日文、英文或其他原始标题；没有可靠信息时可以留空。',
+              example: 'けいおん！',
+            ),
+            const _FillingGuideItem(
+              index: 3,
+              title: '作品类型',
+              badge: '必填',
+              body: '选择最接近作品发行形式的类型，方便在作品列表中辨认和筛选。',
+              example: '动画',
+            ),
+            const _FillingGuideItem(
+              index: 4,
+              title: '主要地区',
+              badge: '选填',
+              body: '填写主要发生地或取景城市，可使用“城市 / 区域”的简洁格式；留空时沿用当前计划地区。',
+              example: '京都市 / 宇治市',
+              isLast: true,
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.28),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.lightbulb_outline,
+                    size: 19,
+                    color: AppColors.accentDark,
+                  ),
+                  const SizedBox(width: 9),
+                  const Expanded(
+                    child: Text(
+                      '保存作品后，表单会清空以便继续添加。作品不会自动生成点位，可随后使用“手动添加点位”录入巡礼地点。',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 12,
+                        height: 1.45,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('知道了'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FillingGuideItem extends StatelessWidget {
+  const _FillingGuideItem({
+    required this.index,
+    required this.title,
+    required this.badge,
+    required this.body,
+    required this.example,
+    this.isLast = false,
+  });
+
+  final int index;
+  final String title;
+  final String badge;
+  final String body;
+  final String example;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 32,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                if (!isLast)
+                  Positioned(
+                    top: 28,
+                    bottom: 0,
+                    child: Container(width: 2, color: AppColors.border),
+                  ),
+                Container(
+                  width: 28,
+                  height: 28,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$index',
+                    style: TextStyle(
+                      color: AppColors.onAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: badge == '必填'
+                              ? AppColors.accent.withValues(alpha: 0.1)
+                              : AppColors.surfaceMuted,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          badge,
+                          style: TextStyle(
+                            color: badge == '必填'
+                                ? AppColors.accentDark
+                                : AppColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    body,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                      height: 1.4,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '示例：$example',
+                    style: TextStyle(
+                      color: AppColors.accentDark,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ManualWorkTypeDropdownItem extends StatefulWidget {
   const _ManualWorkTypeDropdownItem({
     required this.type,
@@ -1568,6 +2069,520 @@ class _ManualWorkLabeledField extends StatelessWidget {
   }
 }
 
+class _QuickManualPointDraft {
+  const _QuickManualPointDraft({
+    required this.work,
+    required this.name,
+    required this.position,
+  });
+
+  final PilgrimageWork work;
+  final String name;
+  final LatLng? position;
+}
+
+class _QuickManualPointFormScreen extends StatefulWidget {
+  const _QuickManualPointFormScreen({
+    required this.plan,
+    required this.settings,
+  });
+
+  final PilgrimagePlan plan;
+  final AppSettings settings;
+
+  @override
+  State<_QuickManualPointFormScreen> createState() =>
+      _QuickManualPointFormScreenState();
+}
+
+class _QuickManualPointFormScreenState
+    extends State<_QuickManualPointFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _latitudeController = TextEditingController();
+  final _longitudeController = TextEditingController();
+  final _latitudeFocusNode = FocusNode();
+  final _longitudeFocusNode = FocusNode();
+  PilgrimageWork? _selectedWork;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedWork = widget.plan.works.firstOrNull;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _latitudeController.dispose();
+    _longitudeController.dispose();
+    _latitudeFocusNode.dispose();
+    _longitudeFocusNode.dispose();
+    super.dispose();
+  }
+
+  LatLng? get _position {
+    final latitude = double.tryParse(_latitudeController.text.trim());
+    final longitude = double.tryParse(_longitudeController.text.trim());
+    if (latitude == null || longitude == null) {
+      return null;
+    }
+    if (latitude < -90 ||
+        latitude > 90 ||
+        longitude < -180 ||
+        longitude > 180) {
+      return null;
+    }
+    return LatLng(latitude, longitude);
+  }
+
+  LatLng get _planCenter {
+    final positionedPoints = widget.plan.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    if (positionedPoints.isEmpty) {
+      return const LatLng(35, 135);
+    }
+    final latitude =
+        positionedPoints
+            .map((point) => point.position.latitude)
+            .reduce((a, b) => a + b) /
+        positionedPoints.length;
+    final longitude =
+        positionedPoints
+            .map((point) => point.position.longitude)
+            .reduce((a, b) => a + b) /
+        positionedPoints.length;
+    return LatLng(latitude, longitude);
+  }
+
+  Future<void> _pickCoordinateFromMap() async {
+    final result = await Navigator.of(context).push<LatLng>(
+      appScaledMaterialPageRoute<LatLng>(
+        settings: widget.settings,
+        builder: (_) => _ManualPointMapPickerScreen(
+          initialPosition: _position ?? _planCenter,
+          settings: widget.settings,
+        ),
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _latitudeController.text = result.latitude.toStringAsFixed(6);
+      _longitudeController.text = result.longitude.toStringAsFixed(6);
+    });
+  }
+
+  Future<void> _pasteCoordinateFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) {
+      return;
+    }
+    final coordinate = parseCoordinateText(data?.text ?? '');
+    if (coordinate == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showReplacingSnackBar(const SnackBar(content: Text('剪贴板中没有有效坐标。')));
+      return;
+    }
+    setState(() {
+      _latitudeController.text = coordinate.latitude.toStringAsFixed(6);
+      _longitudeController.text = coordinate.longitude.toStringAsFixed(6);
+    });
+  }
+
+  Future<void> _showFillingGuide() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          height: _guideDialogHeight(context, 500),
+          child: AppScaledOverlayContent(
+            settings: widget.settings,
+            child: const _QuickManualPointFillingGuideSheet(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    Navigator.of(context).pop(
+      _QuickManualPointDraft(
+        work: _selectedWork!,
+        name: _nameController.text.trim(),
+        position: _position,
+      ),
+    );
+  }
+
+  String? _validateCoordinate(String? value, {required bool latitude}) {
+    final text = value?.trim() ?? '';
+    final otherText = (latitude ? _longitudeController : _latitudeController)
+        .text
+        .trim();
+    if (text.isEmpty && otherText.isEmpty) {
+      return null;
+    }
+    if (text.isEmpty) {
+      return latitude ? '请同时填写纬度' : '请同时填写经度';
+    }
+    final coordinate = double.tryParse(text);
+    final min = latitude ? -90 : -180;
+    final max = latitude ? 90 : 180;
+    if (coordinate == null || coordinate < min || coordinate > max) {
+      return latitude ? '纬度格式不正确' : '经度格式不正确';
+    }
+    return null;
+  }
+
+  InputDecoration _coordinateDecoration(String hintText) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(
+        color: AppColors.textSecondary.withValues(alpha: 0.42),
+        fontSize: 13,
+        letterSpacing: 0,
+      ),
+      isDense: true,
+      contentPadding: EdgeInsets.zero,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      errorBorder: InputBorder.none,
+      focusedErrorBorder: InputBorder.none,
+      errorStyle: const TextStyle(fontSize: 11, height: 0.9),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('快速手动添加点位'),
+        actions: [
+          TextButton.icon(
+            key: const ValueKey('quick-point-filling-guide'),
+            onPressed: _showFillingGuide,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.accentDark,
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+            icon: const Icon(Icons.menu_book_outlined, size: 17),
+            label: const Text(
+              '填写指南',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            Text(
+              '加入到：${widget.plan.name}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _FormSection(
+              children: [
+                _ManualWorkLabeledField(
+                  label: '所属作品',
+                  required: true,
+                  prominent: true,
+                  child: PilgrimageWorkDropdown(
+                    works: widget.plan.works,
+                    value: _selectedWork,
+                    settings: widget.settings,
+                    omitScrollbarInsetWhenUnscrollable: true,
+                    onChanged: (work) => setState(() => _selectedWork = work),
+                    validator: (work) => work == null ? '请选择作品' : null,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _ManualWorkLabeledField(
+                  label: '点位名称',
+                  required: true,
+                  prominent: true,
+                  child: TextFormField(
+                    key: const ValueKey('quick-point-name'),
+                    controller: _nameController,
+                    decoration: _boxedFormDecoration(hintText: '例如：东京国际会展中心'),
+                    textInputAction: TextInputAction.next,
+                    validator: _requiredText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _FormSection(
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '坐标位置',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '选填',
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CoordinateLabeledField(
+                        label: '纬度',
+                        required: false,
+                        focusNode: _latitudeFocusNode,
+                        child: TextFormField(
+                          key: const ValueKey('quick-point-latitude'),
+                          controller: _latitudeController,
+                          focusNode: _latitudeFocusNode,
+                          decoration: _coordinateDecoration('例如：35.712576'),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          textInputAction: TextInputAction.next,
+                          validator: (value) =>
+                              _validateCoordinate(value, latitude: true),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _CoordinateLabeledField(
+                        label: '经度',
+                        required: false,
+                        focusNode: _longitudeFocusNode,
+                        child: TextFormField(
+                          key: const ValueKey('quick-point-longitude'),
+                          controller: _longitudeController,
+                          focusNode: _longitudeFocusNode,
+                          decoration: _coordinateDecoration('例如：139.722166'),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          textInputAction: TextInputAction.done,
+                          validator: (value) =>
+                              _validateCoordinate(value, latitude: false),
+                          onFieldSubmitted: (_) => _submit(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('quick-point-map-picker'),
+                        onPressed: _pickCoordinateFromMap,
+                        style: OutlinedButton.styleFrom(
+                          fixedSize: const Size.fromHeight(40),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          foregroundColor: AppColors.accent,
+                          backgroundColor: AppColors.accent.withValues(
+                            alpha: 0.06,
+                          ),
+                          side: BorderSide(
+                            color: AppColors.accent.withValues(alpha: 0.35),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: const Icon(Icons.location_on, size: 19),
+                        label: const Text(
+                          '从地图选择',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 44,
+                      height: 40,
+                      child: IconButton.outlined(
+                        tooltip: '粘贴剪切板坐标',
+                        onPressed: _pasteCoordinateFromClipboard,
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: const Icon(Icons.content_paste_outlined),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const ValueKey('quick-point-submit'),
+              onPressed: _submit,
+              icon: const Icon(Icons.check_outlined, size: 18),
+              label: const Text('保存点位'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String? _requiredText(String? value) {
+    return (value?.trim().isEmpty ?? true) ? '请填写此项' : null;
+  }
+}
+
+class _QuickManualPointFillingGuideSheet extends StatelessWidget {
+  const _QuickManualPointFillingGuideSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final viewportLimit = MediaQuery.sizeOf(context).height * 0.72;
+    final maxHeight = viewportLimit < 480 ? viewportLimit : 480.0;
+    return ConstrainedBox(
+      key: const ValueKey('quick-point-guide-panel'),
+      constraints: BoxConstraints(maxWidth: 560, maxHeight: maxHeight),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.add_location_alt_outlined,
+                  color: AppColors.accentDark,
+                  size: 24,
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    '快速添加填写指南',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '关闭',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, size: 20),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '先录入最基本的信息，之后可从点位编辑页继续补充位置说明、场景标签、参考来源、备注和参考图。',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                height: 1.45,
+                letterSpacing: 0,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const _FillingGuideItem(
+              index: 1,
+              title: '所属作品',
+              badge: '必填',
+              body: '选择点位对应的已有作品。若列表中没有目标作品，请先返回添加内容页添加作品。',
+              example: '轻音少女',
+            ),
+            const _FillingGuideItem(
+              index: 2,
+              title: '点位名称',
+              badge: '必填',
+              body: '填写便于识别和搜索的中文常用名称，后续可在编辑页修改。',
+              example: '东京国际会展中心',
+            ),
+            const _FillingGuideItem(
+              index: 3,
+              title: '坐标位置',
+              badge: '选填',
+              body: '暂时不知道准确位置时可以留空；填写时需同时提供纬度和经度，也可从地图选择或粘贴坐标。',
+              example: '35.008900, 135.771100',
+              isLast: true,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                key: const ValueKey('quick-point-guide-confirm'),
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('知道了'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ManualPointFormScreen extends StatefulWidget {
   const _ManualPointFormScreen({
     required this.plan,
@@ -1655,11 +2670,12 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
       _subtitleController.text = editingPoint.subtitle;
       _episodeController.text = editingPoint.episodeLabel;
       _referenceController.text = editingPoint.referenceLabel;
-      _latitudeController.text = editingPoint.position.latitude.toStringAsFixed(
-        6,
-      );
-      _longitudeController.text = editingPoint.position.longitude
-          .toStringAsFixed(6);
+      if (editingPoint.hasCoordinate) {
+        _latitudeController.text = editingPoint.position.latitude
+            .toStringAsFixed(6);
+        _longitudeController.text = editingPoint.position.longitude
+            .toStringAsFixed(6);
+      }
       _noteController.text = editingPoint.note ?? '';
     }
   }
@@ -1701,10 +2717,11 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
       final pointId =
           editingPoint?.id ?? 'manual-${now.microsecondsSinceEpoch}';
       final storedReference = _pendingReferenceImage;
-      final position = LatLng(
-        double.parse(_latitudeController.text.trim()),
-        double.parse(_longitudeController.text.trim()),
-      );
+      final latitudeText = _latitudeController.text.trim();
+      final longitudeText = _longitudeController.text.trim();
+      final position = latitudeText.isEmpty && longitudeText.isEmpty
+          ? PilgrimagePoint.pendingPosition
+          : LatLng(double.parse(latitudeText), double.parse(longitudeText));
       final noteText = _noteController.text.trim();
       final point = editingPoint == null
           ? PilgrimagePoint(
@@ -1961,20 +2978,39 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
   }
 
   LatLng get _planCenter {
-    if (widget.plan.points.isEmpty) {
+    final positionedPoints = widget.plan.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    if (positionedPoints.isEmpty) {
       return const LatLng(35, 135);
     }
     final latitude =
-        widget.plan.points
+        positionedPoints
             .map((point) => point.position.latitude)
             .reduce((a, b) => a + b) /
-        widget.plan.points.length;
+        positionedPoints.length;
     final longitude =
-        widget.plan.points
+        positionedPoints
             .map((point) => point.position.longitude)
             .reduce((a, b) => a + b) /
-        widget.plan.points.length;
+        positionedPoints.length;
     return LatLng(latitude, longitude);
+  }
+
+  Future<void> _showPointFillingGuide() {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        clipBehavior: Clip.antiAlias,
+        child: AppScaledOverlayContent(
+          settings: widget.settings ?? const AppSettings(),
+          child: const _ManualPointFillingGuideSheet(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -2007,6 +3043,27 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
               Navigator.of(context).pop(false);
             },
           ),
+          actions: [
+            TextButton.icon(
+              key: const ValueKey('manual-point-filling-guide'),
+              onPressed: _showPointFillingGuide,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.accentDark,
+                minimumSize: const Size(0, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+              icon: const Icon(Icons.menu_book_outlined, size: 17),
+              label: const Text(
+                '填写指南',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
         body: Form(
           key: _formKey,
@@ -2095,7 +3152,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     child: TextFormField(
                       key: const ValueKey('point-form-name'),
                       controller: _nameController,
-                      decoration: _boxedFormDecoration(hintText: '请输入点位名称'),
+                      decoration: _boxedFormDecoration(hintText: '例如：东京国际会展中心'),
                       textInputAction: TextInputAction.next,
                       validator: _requiredText,
                     ),
@@ -2107,7 +3164,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     prominent: true,
                     child: TextFormField(
                       controller: _subtitleController,
-                      decoration: _boxedFormDecoration(hintText: '请输入位置说明'),
+                      decoration: _boxedFormDecoration(hintText: '例如：東京ビッグサイト'),
                       textInputAction: TextInputAction.next,
                       validator: _requiredText,
                     ),
@@ -2119,7 +3176,9 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     prominent: true,
                     child: TextFormField(
                       controller: _episodeController,
-                      decoration: _boxedFormDecoration(hintText: '请输入集数或场景标签'),
+                      decoration: _boxedFormDecoration(
+                        hintText: '例如：EP 1 / 12:32',
+                      ),
                       textInputAction: TextInputAction.next,
                       validator: _requiredText,
                     ),
@@ -2131,7 +3190,9 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     prominent: true,
                     child: TextFormField(
                       controller: _referenceController,
-                      decoration: _boxedFormDecoration(hintText: '请输入参考来源'),
+                      decoration: _boxedFormDecoration(
+                        hintText: '例如：小红书@BilyHurington / Bilibili@麦块晓天',
+                      ),
                       textInputAction: TextInputAction.next,
                       validator: _requiredText,
                     ),
@@ -2144,7 +3205,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                       key: const ValueKey('point-form-note'),
                       controller: _noteController,
                       decoration: _boxedFormDecoration(
-                        hintText: '可选，填写闭店、翻修或拍摄建议等补充信息',
+                        hintText: '例如：2025年完成翻修；最佳拍摄时间为上午；周末游客较多',
                       ),
                       minLines: 4,
                       maxLines: 8,
@@ -2177,12 +3238,13 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                         child: _CoordinateLabeledField(
                           label: '纬度',
                           focusNode: _latitudeFocusNode,
+                          required: !_canKeepCoordinatePending,
                           child: TextFormField(
                             key: const ValueKey('point-form-latitude'),
                             controller: _latitudeController,
                             focusNode: _latitudeFocusNode,
                             decoration: _coordinateInputDecoration(
-                              hintText: '例如 34.8917',
+                              hintText: '例如：35.712576',
                             ),
                             style: const TextStyle(
                               color: AppColors.textPrimary,
@@ -2204,12 +3266,13 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                         child: _CoordinateLabeledField(
                           label: '经度',
                           focusNode: _longitudeFocusNode,
+                          required: !_canKeepCoordinatePending,
                           child: TextFormField(
                             key: const ValueKey('point-form-longitude'),
                             controller: _longitudeController,
                             focusNode: _longitudeFocusNode,
                             decoration: _coordinateInputDecoration(
-                              hintText: '例如 135.8077',
+                              hintText: '例如：139.722166',
                             ),
                             style: const TextStyle(
                               color: AppColors.textPrimary,
@@ -2355,12 +3418,19 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
   }
 
   String? _validateLatitude(String? value) {
-    return _validateCoordinate(value, min: -90, max: 90, emptyMessage: '请填写纬度');
+    return _validateCoordinate(
+      value,
+      otherValue: _longitudeController.text,
+      min: -90,
+      max: 90,
+      emptyMessage: '请填写纬度',
+    );
   }
 
   String? _validateLongitude(String? value) {
     return _validateCoordinate(
       value,
+      otherValue: _latitudeController.text,
       min: -180,
       max: 180,
       emptyMessage: '请填写经度',
@@ -2369,12 +3439,16 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
 
   String? _validateCoordinate(
     String? value, {
+    required String otherValue,
     required double min,
     required double max,
     required String emptyMessage,
   }) {
     final text = value?.trim() ?? '';
     if (text.isEmpty) {
+      if (_canKeepCoordinatePending && otherValue.trim().isEmpty) {
+        return null;
+      }
       return emptyMessage;
     }
 
@@ -2385,6 +3459,9 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
 
     return null;
   }
+
+  bool get _canKeepCoordinatePending =>
+      _editingPoint != null && !_editingPoint!.hasCoordinate;
 }
 
 class _CoordinateLabeledField extends StatelessWidget {
@@ -2392,11 +3469,13 @@ class _CoordinateLabeledField extends StatelessWidget {
     required this.label,
     required this.focusNode,
     required this.child,
+    this.required = true,
   });
 
   final String label;
   final FocusNode focusNode;
   final Widget child;
+  final bool required;
 
   @override
   Widget build(BuildContext context) {
@@ -2424,10 +3503,11 @@ class _CoordinateLabeledField extends StatelessWidget {
                 TextSpan(
                   children: [
                     TextSpan(text: label),
-                    const TextSpan(
-                      text: ' *',
-                      style: TextStyle(color: Colors.redAccent),
-                    ),
+                    if (required)
+                      const TextSpan(
+                        text: ' *',
+                        style: TextStyle(color: Colors.redAccent),
+                      ),
                   ],
                 ),
                 style: const TextStyle(
@@ -3519,14 +4599,20 @@ class _QuickImportPanel extends StatelessWidget {
 
 class _AddPointPanel extends StatelessWidget {
   const _AddPointPanel({
-    required this.enabled,
+    required this.mapEnabled,
+    required this.manualEnabled,
+    required this.quickManualEnabled,
     required this.onMap,
     required this.onManual,
+    required this.onQuickManual,
   });
 
-  final bool enabled;
+  final bool mapEnabled;
+  final bool manualEnabled;
+  final bool quickManualEnabled;
   final VoidCallback? onMap;
   final VoidCallback? onManual;
+  final VoidCallback? onQuickManual;
 
   @override
   Widget build(BuildContext context) {
@@ -3569,10 +4655,24 @@ class _AddPointPanel extends StatelessWidget {
             key: const ValueKey('add-points-anitabi-map'),
             icon: Icons.map_outlined,
             title: '从作品地图导入点位',
-            subtitle: '在作品地图上选择并导入点位',
+            subtitle: mapEnabled ? '在作品地图上选择并导入点位' : '请先通过 Bangumi 搜索添加作品',
             recommended: true,
-            enabled: enabled,
+            enabled: mapEnabled,
             onTap: onMap,
+          ),
+          Divider(
+            height: 1,
+            indent: 12,
+            endIndent: 12,
+            color: AppColors.border.withValues(alpha: 0.60),
+          ),
+          _PointCreationAction(
+            key: const ValueKey('add-points-quick-manual-point'),
+            icon: Icons.add_location_alt_outlined,
+            title: '快速手动添加点位',
+            subtitle: quickManualEnabled ? '只填写作品、名称和可选坐标' : '请先添加作品',
+            enabled: quickManualEnabled,
+            onTap: onQuickManual,
           ),
           Divider(
             height: 1,
@@ -3585,7 +4685,7 @@ class _AddPointPanel extends StatelessWidget {
             icon: Icons.edit_location_alt_outlined,
             title: '手动添加点位',
             subtitle: '手动输入点位信息，逐个添加',
-            enabled: enabled,
+            enabled: manualEnabled,
             onTap: onManual,
           ),
         ],
@@ -3617,7 +4717,7 @@ class _PointCreationAction extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Material(
-        color: Colors.transparent,
+        color: enabled ? Colors.transparent : AppColors.surfaceMuted,
         borderRadius: BorderRadius.circular(7),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -3634,10 +4734,18 @@ class _PointCreationAction extends StatelessWidget {
                     height: 42,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.08),
+                      color: enabled
+                          ? AppColors.accent.withValues(alpha: 0.08)
+                          : AppColors.border.withValues(alpha: 0.35),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(icon, color: AppColors.accent, size: 24),
+                    child: Icon(
+                      icon,
+                      color: enabled
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 11),
                   Expanded(
@@ -3652,8 +4760,10 @@ class _PointCreationAction extends StatelessWidget {
                                 title,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
+                                style: TextStyle(
+                                  color: enabled
+                                      ? AppColors.textPrimary
+                                      : AppColors.textSecondary,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0,
@@ -3668,15 +4778,19 @@ class _PointCreationAction extends StatelessWidget {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppColors.accent.withValues(
-                                    alpha: 0.10,
-                                  ),
+                                  color: enabled
+                                      ? AppColors.accent.withValues(alpha: 0.10)
+                                      : AppColors.border.withValues(
+                                          alpha: 0.30,
+                                        ),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
                                   '推荐',
                                   style: TextStyle(
-                                    color: AppColors.accentDark,
+                                    color: enabled
+                                        ? AppColors.accentDark
+                                        : AppColors.textSecondary,
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0,
@@ -3691,8 +4805,10 @@ class _PointCreationAction extends StatelessWidget {
                           subtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                          style: TextStyle(
+                            color: AppColors.textSecondary.withValues(
+                              alpha: enabled ? 1 : 0.65,
+                            ),
                             fontSize: 13,
                             letterSpacing: 0,
                           ),

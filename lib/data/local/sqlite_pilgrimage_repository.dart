@@ -17,12 +17,12 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
     : _database = database ?? AppDatabase(openConnection());
 
   final AppDatabase _database;
-  bool _visitRecordPathRepairAttempted = false;
+  bool _managedPathRepairAttempted = false;
 
   @override
   Future<List<PilgrimagePlan>> loadPlans() async {
     await _seedIfNeeded();
-    await _repairVisitRecordManagedFilePathsIfNeeded();
+    await _repairManagedFilePathsIfNeeded();
     final planRows = await (_database.select(
       _database.plans,
     )..orderBy([(table) => OrderingTerm.asc(table.createdAt)])).get();
@@ -33,7 +33,7 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
   @override
   Future<PilgrimagePlan> loadActivePlan() async {
     await _seedIfNeeded();
-    await _repairVisitRecordManagedFilePathsIfNeeded();
+    await _repairManagedFilePathsIfNeeded();
     final activePlan =
         await (_database.select(_database.plans)
               ..where((table) => table.active.equals(true))
@@ -99,13 +99,16 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
         200,
       ),
       mapThumbnailConcurrentLoads: row.mapThumbnailConcurrentLoads.clamp(1, 30),
+      mapMarkerClusteringEnabled: row.mapMarkerClusteringEnabled,
+      mapMarkerClusterRadius: row.mapMarkerClusterRadius.clamp(32, 120),
+      mapMarkerClusterMaxZoom: row.mapMarkerClusterMaxZoom.clamp(10, 22),
     );
   }
 
   @override
   Future<List<PilgrimageVisitRecord>> loadVisitRecords(String planId) async {
     await _seedIfNeeded();
-    await _repairVisitRecordManagedFilePathsIfNeeded();
+    await _repairManagedFilePathsIfNeeded();
     final rows =
         await (_database.select(_database.visitRecords)
               ..where((table) => table.planId.equals(planId))
@@ -167,6 +170,13 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
     final groupIdMap = {
       for (final group in plan.groups) group.id: '$idPrefix${group.id}',
     };
+    final importedCurrentPointId = plan.currentPointId;
+    final currentPointCanBeRestored =
+        importedCurrentPointId != null &&
+        !plan.completedPointIds.contains(importedCurrentPointId) &&
+        plan.points.any(
+          (point) => point.id == importedCurrentPointId && point.hasCoordinate,
+        );
     final existingNames = (await _database.select(_database.plans).get())
         .map((plan) => plan.name)
         .toSet();
@@ -178,9 +188,9 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
       points: _remapPoints(plan.points, workIdMap, pointIdMap, groupIdMap),
       createdAt: now,
       updatedAt: now,
-      currentPointId: plan.currentPointId == null
-          ? null
-          : pointIdMap[plan.currentPointId],
+      currentPointId: currentPointCanBeRestored
+          ? pointIdMap[importedCurrentPointId]
+          : null,
       currentGroupId: plan.currentGroupId == null
           ? null
           : groupIdMap[plan.currentGroupId],
@@ -612,6 +622,21 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
   }) async {
     final storagePointId = _storageId(planId, pointId);
     await _database.transaction(() async {
+      final target =
+          await (_database.select(_database.points)
+                ..where(
+                  (table) =>
+                      table.planId.equals(planId) &
+                      table.id.equals(storagePointId),
+                )
+                ..limit(1))
+              .getSingleOrNull();
+      if (target == null ||
+          PilgrimagePoint.isPendingPosition(
+            LatLng(target.latitude, target.longitude),
+          )) {
+        return;
+      }
       await _clearCurrentPoint(planId);
       await (_database.update(_database.points)..where(
             (table) =>
@@ -623,6 +648,19 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
               completedAt: Value(null),
             ),
           );
+      await _touchPlan(planId);
+    });
+  }
+
+  @override
+  Future<void> setCurrentGroup({
+    required String planId,
+    required String? groupId,
+  }) async {
+    await _database.transaction(() async {
+      await (_database.update(_database.plans)
+            ..where((table) => table.id.equals(planId)))
+          .write(PlansCompanion(currentGroupId: Value(groupId)));
       await _touchPlan(planId);
     });
   }
@@ -654,7 +692,9 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
         await (_database.update(_database.points)..where(
               (table) =>
                   table.planId.equals(planId) &
-                  table.id.equals(storageNextCurrentPointId),
+                  table.id.equals(storageNextCurrentPointId) &
+                  (table.latitude.equals(-90) & table.longitude.equals(0))
+                      .not(),
             ))
             .write(const PointsCompanion(isCurrent: Value(true)));
       }
@@ -706,8 +746,41 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
   }
 
   @override
-  Future<void> reopenPoint({required String planId, required String pointId}) {
-    return setCurrentPoint(planId: planId, pointId: pointId);
+  Future<void> reopenPoint({
+    required String planId,
+    required String pointId,
+  }) async {
+    final storagePointId = _storageId(planId, pointId);
+    await _database.transaction(() async {
+      final point =
+          await (_database.select(_database.points)
+                ..where(
+                  (table) =>
+                      table.planId.equals(planId) &
+                      table.id.equals(storagePointId),
+                )
+                ..limit(1))
+              .getSingleOrNull();
+      if (point == null) {
+        return;
+      }
+      await (_database.update(_database.points)..where(
+            (table) =>
+                table.planId.equals(planId) & table.id.equals(storagePointId),
+          ))
+          .write(const PointsCompanion(completedAt: Value(null)));
+      if (!PilgrimagePoint.isPendingPosition(
+        LatLng(point.latitude, point.longitude),
+      )) {
+        await _clearCurrentPoint(planId);
+        await (_database.update(_database.points)..where(
+              (table) =>
+                  table.planId.equals(planId) & table.id.equals(storagePointId),
+            ))
+            .write(const PointsCompanion(isCurrent: Value(true)));
+      }
+      await _touchPlan(planId);
+    });
   }
 
   @override
@@ -721,7 +794,6 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
 
     final storagePointIds = _storageIds(planId, pointIds);
     await _database.transaction(() async {
-      await _clearCurrentPoint(planId);
       await (_database.update(_database.points)..where(
             (table) =>
                 table.planId.equals(planId) & table.id.isIn(storagePointIds),
@@ -738,12 +810,15 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
                 ..where(
                   (table) =>
                       table.planId.equals(planId) &
-                      table.id.isIn(storagePointIds),
+                      table.id.isIn(storagePointIds) &
+                      (table.latitude.equals(-90) & table.longitude.equals(0))
+                          .not(),
                 )
                 ..orderBy([(table) => OrderingTerm.asc(table.sortOrder)])
                 ..limit(1))
               .getSingleOrNull();
       if (firstSelectedPoint != null) {
+        await _clearCurrentPoint(planId);
         await (_database.update(_database.points)..where(
               (table) =>
                   table.planId.equals(planId) &
@@ -977,6 +1052,15 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
             mapThumbnailConcurrentLoads: Value(
               settings.mapThumbnailConcurrentLoads.clamp(1, 30),
             ),
+            mapMarkerClusteringEnabled: Value(
+              settings.mapMarkerClusteringEnabled,
+            ),
+            mapMarkerClusterRadius: Value(
+              settings.mapMarkerClusterRadius.clamp(32, 120),
+            ),
+            mapMarkerClusterMaxZoom: Value(
+              settings.mapMarkerClusterMaxZoom.clamp(10, 22),
+            ),
           ),
         );
   }
@@ -1004,11 +1088,39 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
     );
   }
 
-  Future<void> _repairVisitRecordManagedFilePathsIfNeeded() async {
-    if (_visitRecordPathRepairAttempted) {
+  Future<void> _repairManagedFilePathsIfNeeded() async {
+    if (_managedPathRepairAttempted) {
       return;
     }
-    _visitRecordPathRepairAttempted = true;
+    _managedPathRepairAttempted = true;
+
+    final pointRows = await _database.select(_database.points).get();
+    final pointCandidates = pointRows
+        .where(_pointNeedsManagedPathRepair)
+        .toList(growable: false);
+    for (final row in pointCandidates) {
+      final thumbnailPath = await _rebasedPathOrNull(
+        row.referenceThumbnailPath,
+      );
+      final fullImagePath = await _rebasedPathOrNull(
+        row.referenceFullImagePath,
+      );
+      if (thumbnailPath == null && fullImagePath == null) {
+        continue;
+      }
+      await (_database.update(
+        _database.points,
+      )..where((table) => table.id.equals(row.id))).write(
+        PointsCompanion(
+          referenceThumbnailPath: thumbnailPath == null
+              ? const Value.absent()
+              : Value(thumbnailPath),
+          referenceFullImagePath: fullImagePath == null
+              ? const Value.absent()
+              : Value(fullImagePath),
+        ),
+      );
+    }
 
     final rows = await _database.select(_database.visitRecords).get();
     final candidates = rows
@@ -1052,6 +1164,13 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
         ),
       );
     }
+  }
+
+  bool _pointNeedsManagedPathRepair(Point row) {
+    return hasPotentiallyRebasableAppManagedFilePath(
+          row.referenceThumbnailPath,
+        ) ||
+        hasPotentiallyRebasableAppManagedFilePath(row.referenceFullImagePath);
   }
 
   bool _visitRecordNeedsManagedPathRepair(VisitRecord row) {
@@ -1209,7 +1328,7 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
               planId: plan.id,
               point: point,
               sortOrder: index,
-              isCurrent: plan.currentPointId == point.id,
+              isCurrent: point.hasCoordinate && plan.currentPointId == point.id,
               completedAt: plan.completedPointIds.contains(point.id)
                   ? plan.updatedAt
                   : null,
@@ -1425,7 +1544,14 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
         if (point.completedAt != null) _modelId(row.id, point.id),
     };
     final currentPointId = points
-        .where((point) => point.isCurrent && point.completedAt == null)
+        .where(
+          (point) =>
+              point.isCurrent &&
+              point.completedAt == null &&
+              !PilgrimagePoint.isPendingPosition(
+                LatLng(point.latitude, point.longitude),
+              ),
+        )
         .firstOrNull
         ?.id;
 
@@ -1458,7 +1584,8 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
     }
 
     final hasPendingPoint = plan.points.any(
-      (point) => !plan.completedPointIds.contains(point.id),
+      (point) =>
+          point.hasCoordinate && !plan.completedPointIds.contains(point.id),
     );
     if (!hasPendingPoint) {
       return plan;
@@ -1695,7 +1822,9 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
                 (table) =>
                     table.planId.equals(planId) &
                     table.isCurrent.equals(true) &
-                    table.completedAt.isNull(),
+                    table.completedAt.isNull() &
+                    (table.latitude.equals(-90) & table.longitude.equals(0))
+                        .not(),
               )
               ..limit(1))
             .getSingleOrNull();
@@ -1708,7 +1837,10 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
         await (_database.select(_database.points)
               ..where(
                 (table) =>
-                    table.planId.equals(planId) & table.completedAt.isNull(),
+                    table.planId.equals(planId) &
+                    table.completedAt.isNull() &
+                    (table.latitude.equals(-90) & table.longitude.equals(0))
+                        .not(),
               )
               ..orderBy([(table) => OrderingTerm.asc(table.sortOrder)])
               ..limit(1))

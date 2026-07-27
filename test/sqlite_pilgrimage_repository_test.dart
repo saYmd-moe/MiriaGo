@@ -50,6 +50,22 @@ void main() {
     expect(reloadedPlan.currentPointId, plan.points[1].id);
   });
 
+  test('persists the last selected plan group', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.loadActivePlan();
+    final groupId = plan.groups.last.id;
+
+    await repository.setCurrentGroup(planId: plan.id, groupId: groupId);
+    final reloaded = await repository.loadActivePlan();
+    expect(reloaded.currentGroupId, groupId);
+
+    await repository.setCurrentGroup(planId: plan.id, groupId: 'ungrouped');
+    final ungrouped = await repository.loadActivePlan();
+    expect(ungrouped.currentGroupId, 'ungrouped');
+  });
+
   test('persists work type and cover metadata', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);
@@ -155,6 +171,114 @@ void main() {
       },
     );
   }
+
+  test('schema 29 to 30 adds clustering settings without losing data', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.createPlan(name: '聚合迁移计划', area: '京都');
+    await repository.saveAppSettings(
+      const AppSettings(
+        customXyzTileUrl: 'https://example.com/{z}/{x}/{y}.png',
+      ),
+    );
+
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN map_marker_clustering_enabled',
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries DROP COLUMN map_marker_cluster_radius',
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN map_marker_cluster_max_zoom',
+    );
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      29,
+      database.schemaVersion,
+    );
+
+    final settingColumns = await _tableColumnNames(
+      database,
+      'app_settings_entries',
+    );
+    expect(
+      settingColumns,
+      containsAll([
+        'map_marker_clustering_enabled',
+        'map_marker_cluster_radius',
+        'map_marker_cluster_max_zoom',
+      ]),
+    );
+    final migratedPlan = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    final settings = await repository.loadAppSettings();
+    expect(migratedPlan.name, plan.name);
+    expect(settings.customXyzTileUrl, 'https://example.com/{z}/{x}/{y}.png');
+    expect(settings.mapMarkerClusteringEnabled, isTrue);
+    expect(settings.mapMarkerClusterRadius, 64);
+    expect(settings.mapMarkerClusterMaxZoom, 18);
+  });
+
+  test(
+    'pending-coordinate point is never promoted to current target',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqlitePilgrimageRepository(database: database);
+      final plan = await repository.createPlan(name: '待补坐标', area: '未设置');
+      const work = PilgrimageWork(
+        id: 'pending-work',
+        title: '测试作品',
+        subtitle: '',
+        city: '',
+        source: WorkSource.manual,
+      );
+      const pendingPoint = PilgrimagePoint(
+        id: 'pending-point',
+        work: work,
+        name: '待补充',
+        subtitle: '',
+        position: PilgrimagePoint.pendingPosition,
+        episodeLabel: '',
+        referenceLabel: '',
+      );
+      const positionedPoint = PilgrimagePoint(
+        id: 'positioned-point',
+        work: work,
+        name: '有坐标',
+        subtitle: '',
+        position: LatLng(35, 135),
+        episodeLabel: '',
+        referenceLabel: '',
+      );
+
+      final onlyPending = await repository.addPointToPlan(
+        planId: plan.id,
+        point: pendingPoint,
+      );
+      expect(onlyPending.currentPointId, isNull);
+
+      final withPositioned = await repository.addPointToPlan(
+        planId: plan.id,
+        point: positionedPoint,
+      );
+      expect(withPositioned.currentPointId, positionedPoint.id);
+
+      await repository.setCurrentPoint(
+        planId: plan.id,
+        pointId: pendingPoint.id,
+      );
+      final reloaded = (await repository.loadPlans()).singleWhere(
+        (candidate) => candidate.id == plan.id,
+      );
+      expect(reloaded.currentPointId, positionedPoint.id);
+    },
+  );
 
   test('deletes current point and promotes first pending point', () async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -318,6 +442,87 @@ void main() {
       expect(repaired.referenceImagePath, currentReference.path);
     },
   );
+
+  test(
+    'repairs old container point reference paths without losing data',
+    () async {
+      final tempDirectory = await Directory.systemTemp.createTemp(
+        'miriago_point_path_repair_',
+      );
+      addTearDown(() async {
+        setAppManagedFileBaseDirectoriesForTesting(null);
+        if (tempDirectory.existsSync()) {
+          await tempDirectory.delete(recursive: true);
+        }
+      });
+      final documentsPath = p.join(tempDirectory.path, 'Documents');
+      PathProviderPlatform.instance = _FakePathProviderPlatform(documentsPath);
+      setAppManagedFileBaseDirectoriesForTesting(null);
+
+      final currentThumbnail = File(
+        p.join(documentsPath, 'reference_thumbnails', 'point_hash.jpg'),
+      );
+      final currentFull = File(
+        p.join(documentsPath, 'user_reference_images', 'full', 'point.jpg'),
+      );
+      for (final file in [currentThumbnail, currentFull]) {
+        await file.parent.create(recursive: true);
+        await file.writeAsBytes(<int>[1, 2, 3], flush: true);
+      }
+
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqlitePilgrimageRepository(database: database);
+      final plan = await repository.loadActivePlan();
+      final point = plan.points.first;
+      const oldPrefix = '/var/mobile/Containers/Data/Application/OLD/Documents';
+      await repository.updatePointInPlan(
+        planId: plan.id,
+        point: point.copyWith(
+          referenceThumbnailPath:
+              '$oldPrefix/reference_thumbnails/point_hash.jpg',
+          referenceFullImagePath:
+              '$oldPrefix/user_reference_images/full/point.jpg',
+        ),
+      );
+
+      final repairingRepository = SqlitePilgrimageRepository(
+        database: database,
+      );
+      final repaired =
+          (await repairingRepository.loadActivePlan()).points.first;
+
+      expect(repaired.referenceThumbnailPath, currentThumbnail.path);
+      expect(repaired.referenceFullImagePath, currentFull.path);
+    },
+  );
+
+  test('keeps missing old container point paths for later recovery', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.loadActivePlan();
+    final point = plan.points.first;
+    const missingThumbnail =
+        '/var/mobile/Containers/Data/Application/OLD/Documents/'
+        'reference_thumbnails/missing.jpg';
+    const missingFull =
+        '/var/mobile/Containers/Data/Application/OLD/Documents/'
+        'reference_full/missing.jpg';
+    await repository.updatePointInPlan(
+      planId: plan.id,
+      point: point.copyWith(
+        referenceThumbnailPath: missingThumbnail,
+        referenceFullImagePath: missingFull,
+      ),
+    );
+
+    final repairingRepository = SqlitePilgrimageRepository(database: database);
+    final repaired = (await repairingRepository.loadActivePlan()).points.first;
+
+    expect(repaired.referenceThumbnailPath, missingThumbnail);
+    expect(repaired.referenceFullImagePath, missingFull);
+  });
 
   test('keeps same Bangumi work independent across plans', () async {
     final database = AppDatabase(NativeDatabase.memory());
@@ -1037,6 +1242,9 @@ void main() {
         customCameraAspectRatioHeight: 9,
         mapThumbnailVisibleThreshold: 55,
         mapThumbnailConcurrentLoads: 12,
+        mapMarkerClusteringEnabled: false,
+        mapMarkerClusterRadius: 88,
+        mapMarkerClusterMaxZoom: 20,
       ),
     );
 
@@ -1073,6 +1281,9 @@ void main() {
     expect(settings.customCameraAspectRatioHeight, 9);
     expect(settings.mapThumbnailVisibleThreshold, 55);
     expect(settings.mapThumbnailConcurrentLoads, 12);
+    expect(settings.mapMarkerClusteringEnabled, isFalse);
+    expect(settings.mapMarkerClusterRadius, 88);
+    expect(settings.mapMarkerClusterMaxZoom, 20);
   });
 
   test(

@@ -12,7 +12,6 @@ import '../data/user_reference_image_stub.dart'
 import '../point_detail/point_detail_sheet.dart';
 import '../utils/selected_item_order.dart';
 import '../widgets/confirm_action_dialog.dart';
-import '../widgets/constrained_menu_anchor.dart';
 import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_models.dart';
 import 'plan_group_utils.dart';
@@ -45,7 +44,7 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
   var _didUpdate = false;
 
   List<PilgrimagePoint> get _ungroupedPoints => _plan.points
-      .where((point) => point.groupId == null)
+      .where((point) => point.groupId == null && point.hasCoordinate)
       .toList(growable: false);
 
   List<PilgrimagePlanGroup> get _targetGroups => sortGroupsByPlanOrder(
@@ -340,6 +339,7 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
       onReplaceReference: _replaceReferenceImage,
       actionScope: PointDetailActionScope.assign,
       groups: _plan.groups,
+      groupBuckets: planGroupBuckets(_plan, _plan.completedPointIds),
       onMoveToGroup: _movePointToGroup,
       navigationApp: widget.settings.navigationApp,
     );
@@ -412,7 +412,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
   Offset? _selectionEnd;
 
   List<PilgrimagePoint> get _ungroupedPoints => _plan.points
-      .where((point) => point.groupId == null)
+      .where((point) => point.groupId == null && point.hasCoordinate)
       .toList(growable: false);
 
   List<PilgrimagePlanGroup> get _groups => sortGroupsByPlanOrder(_plan.groups);
@@ -574,6 +574,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
                       _targetGroupId = group.id;
                     });
                   },
+                  onCreateGroup: _createGroup,
                   onToggleBoxSelection: () {
                     setState(() {
                       _isBoxSelecting = !_isBoxSelecting;
@@ -634,6 +635,59 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
     setState(() {
       _selectedPoint = point;
     });
+  }
+
+  Future<void> _createGroup() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const _BoxAssignCreateGroupDialog(),
+    );
+    final trimmedName = name?.trim();
+    if (trimmedName == null || trimmedName.isEmpty || !mounted) {
+      return;
+    }
+
+    final nextOrderIndex = _groups.isEmpty
+        ? 0
+        : _groups
+                  .map((group) => group.orderIndex)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
+    final now = DateTime.now();
+    final group = PilgrimagePlanGroup(
+      id: 'group-${now.microsecondsSinceEpoch}',
+      name: trimmedName,
+      orderIndex: nextOrderIndex,
+      createdAt: now,
+    );
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      final updatedPlan = await widget.repository.createPlanGroup(
+        planId: _plan.id,
+        group: group,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _plan = updatedPlan;
+        _targetGroupId = group.id;
+        _didUpdate = true;
+        _isSaving = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSaving = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showReplacingSnackBar(const SnackBar(content: Text('片区创建失败')));
+    }
   }
 
   Future<void> _confirmAssignBox() async {
@@ -716,6 +770,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
       onReplaceReference: _replaceReferenceImage,
       actionScope: PointDetailActionScope.assign,
       groups: _plan.groups,
+      groupBuckets: planGroupBuckets(_plan, _plan.completedPointIds),
       onMoveToGroup: _movePointToGroup,
       navigationApp: widget.settings.navigationApp,
     );
@@ -760,6 +815,345 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
   }
 }
 
+class _BoxAssignGroupPicker extends StatefulWidget {
+  const _BoxAssignGroupPicker({
+    required this.groups,
+    required this.selectedGroup,
+    required this.enabled,
+    required this.onSelected,
+    required this.onCreateGroup,
+  });
+
+  final List<PilgrimagePlanGroup> groups;
+  final PilgrimagePlanGroup? selectedGroup;
+  final bool enabled;
+  final ValueChanged<PilgrimagePlanGroup> onSelected;
+  final Future<void> Function() onCreateGroup;
+
+  @override
+  State<_BoxAssignGroupPicker> createState() => _BoxAssignGroupPickerState();
+}
+
+class _BoxAssignGroupPickerState extends State<_BoxAssignGroupPicker> {
+  final _menuController = MenuController();
+  var _isOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accentColor = Theme.of(context).colorScheme.primary;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = MediaQuery.sizeOf(context).width - 32;
+        final menuWidth = math.min(availableWidth, constraints.maxWidth);
+        return MenuAnchor(
+          key: const ValueKey('box-assign-group-picker'),
+          controller: _menuController,
+          onOpen: () => setState(() => _isOpen = true),
+          onClose: () => setState(() => _isOpen = false),
+          alignmentOffset: const Offset(0, 2),
+          style: MenuStyle(
+            padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+            backgroundColor: const WidgetStatePropertyAll(AppColors.surface),
+            elevation: const WidgetStatePropertyAll(8),
+            shadowColor: WidgetStatePropertyAll(
+              AppColors.textPrimary.withValues(alpha: 0.16),
+            ),
+            side: const WidgetStatePropertyAll(
+              BorderSide(color: AppColors.border),
+            ),
+            shape: const WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(8),
+                  top: Radius.circular(4),
+                ),
+              ),
+            ),
+          ),
+          builder: (context, controller, child) {
+            return Material(
+              color: AppColors.surface,
+              shape: RoundedRectangleBorder(
+                side: const BorderSide(color: AppColors.border),
+                borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(8),
+                  bottom: Radius.circular(_isOpen ? 4 : 8),
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                key: const ValueKey('box-assign-group-picker-button'),
+                onTap: widget.enabled
+                    ? () {
+                        if (controller.isOpen) {
+                          controller.close();
+                        } else {
+                          controller.open();
+                        }
+                      }
+                    : null,
+                child: SizedBox(
+                  height: AppButtonStyles.compactHeight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.folder_outlined, size: 19),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.selectedGroup?.name ?? '选择片区',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          _isOpen
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+          menuChildren: [
+            SizedBox(
+              key: const ValueKey('box-assign-group-menu'),
+              width: menuWidth,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.58,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              '选择片区',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '共 ${widget.groups.length} 个片区',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        primary: false,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final group in widget.groups)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 2),
+                                child: MenuItemButton(
+                                  key: ValueKey(
+                                    'box-assign-group-option-${group.id}',
+                                  ),
+                                  onPressed: () => widget.onSelected(group),
+                                  leadingIcon:
+                                      group.id == widget.selectedGroup?.id
+                                      ? Icon(
+                                          Icons.check,
+                                          color: accentColor,
+                                          size: 19,
+                                        )
+                                      : const SizedBox(width: 19),
+                                  style: ButtonStyle(
+                                    minimumSize: const WidgetStatePropertyAll(
+                                      Size.fromHeight(42),
+                                    ),
+                                    padding: const WidgetStatePropertyAll(
+                                      EdgeInsets.symmetric(horizontal: 10),
+                                    ),
+                                    backgroundColor: WidgetStatePropertyAll(
+                                      group.id == widget.selectedGroup?.id
+                                          ? accentColor.withValues(alpha: 0.09)
+                                          : Colors.transparent,
+                                    ),
+                                    overlayColor:
+                                        WidgetStateProperty.resolveWith((
+                                          states,
+                                        ) {
+                                          if (group.id ==
+                                              widget.selectedGroup?.id) {
+                                            return Colors.transparent;
+                                          }
+                                          return states.contains(
+                                                WidgetState.hovered,
+                                              )
+                                              ? accentColor.withValues(
+                                                  alpha: 0.035,
+                                                )
+                                              : Colors.transparent;
+                                        }),
+                                    foregroundColor: WidgetStatePropertyAll(
+                                      group.id == widget.selectedGroup?.id
+                                          ? accentColor
+                                          : AppColors.textPrimary,
+                                    ),
+                                    shape: WidgetStatePropertyAll(
+                                      RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    group.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Divider(
+                      height: 1,
+                      indent: 16,
+                      endIndent: 16,
+                      color: AppColors.border,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 2, 8, 4),
+                      child: MenuItemButton(
+                        key: const ValueKey('box-assign-create-group'),
+                        onPressed: widget.enabled
+                            ? () async {
+                                _menuController.close();
+                                await widget.onCreateGroup();
+                              }
+                            : null,
+                        leadingIcon: Icon(
+                          Icons.add,
+                          color: accentColor,
+                          size: 20,
+                        ),
+                        style: ButtonStyle(
+                          minimumSize: const WidgetStatePropertyAll(
+                            Size.fromHeight(42),
+                          ),
+                          foregroundColor: WidgetStatePropertyAll(accentColor),
+                          overlayColor: WidgetStateProperty.resolveWith(
+                            (states) => states.contains(WidgetState.hovered)
+                                ? accentColor.withValues(alpha: 0.035)
+                                : Colors.transparent,
+                          ),
+                          padding: const WidgetStatePropertyAll(
+                            EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          shape: WidgetStatePropertyAll(
+                            RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                        child: const Text(
+                          '新建片区',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BoxAssignCreateGroupDialog extends StatefulWidget {
+  const _BoxAssignCreateGroupDialog();
+
+  @override
+  State<_BoxAssignCreateGroupDialog> createState() =>
+      _BoxAssignCreateGroupDialogState();
+}
+
+class _BoxAssignCreateGroupDialogState
+    extends State<_BoxAssignCreateGroupDialog> {
+  final _controller = TextEditingController();
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorText = '片区名不能为空');
+      return;
+    }
+    Navigator.of(context).pop(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新建片区'),
+      content: TextField(
+        key: const ValueKey('box-assign-group-name-field'),
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(labelText: '片区名称', errorText: _errorText),
+        textInputAction: TextInputAction.done,
+        onChanged: (_) {
+          if (_errorText != null) {
+            setState(() => _errorText = null);
+          }
+        },
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('创建')),
+      ],
+    );
+  }
+}
+
 class _BoxAssignPanel extends StatelessWidget {
   const _BoxAssignPanel({
     required this.groups,
@@ -769,6 +1163,7 @@ class _BoxAssignPanel extends StatelessWidget {
     required this.isBoxSelecting,
     required this.isSaving,
     required this.onSelectGroup,
+    required this.onCreateGroup,
     required this.onToggleBoxSelection,
     required this.onAssign,
   });
@@ -780,11 +1175,13 @@ class _BoxAssignPanel extends StatelessWidget {
   final bool isBoxSelecting;
   final bool isSaving;
   final ValueChanged<PilgrimagePlanGroup> onSelectGroup;
+  final Future<void> Function() onCreateGroup;
   final VoidCallback onToggleBoxSelection;
   final VoidCallback onAssign;
 
   @override
   Widget build(BuildContext context) {
+    const actionButtonWidth = 112.0;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surface.withValues(alpha: 0.96),
@@ -799,48 +1196,18 @@ class _BoxAssignPanel extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: SizedBox(
-                    height: AppButtonStyles.compactHeight,
-                    child: ConstrainedMenuAnchor(
-                      builder: (context, controller, child) {
-                        return OutlinedButton.icon(
-                          onPressed: groups.isEmpty
-                              ? null
-                              : () {
-                                  if (controller.isOpen) {
-                                    controller.close();
-                                  } else {
-                                    controller.open();
-                                  }
-                                },
-                          icon: const Icon(Icons.folder_outlined, size: 18),
-                          style: AppButtonStyles.compactOutlinedButton(),
-                          label: Text(
-                            targetGroup?.name ?? '选择片区',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      },
-                      menuChildrenBuilder: (context, itemWidth) => [
-                        for (final group in groups)
-                          MenuItemButton(
-                            onPressed: () => onSelectGroup(group),
-                            child: SizedBox(
-                              width: itemWidth,
-                              child: Text(
-                                group.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+                  child: _BoxAssignGroupPicker(
+                    groups: groups,
+                    selectedGroup: targetGroup,
+                    enabled: !isSaving,
+                    onSelected: onSelectGroup,
+                    onCreateGroup: onCreateGroup,
                   ),
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
+                  key: const ValueKey('box-assign-toggle-button'),
+                  width: actionButtonWidth,
                   height: AppButtonStyles.compactHeight,
                   child: OutlinedButton.icon(
                     onPressed: isSaving ? null : onToggleBoxSelection,
@@ -859,7 +1226,7 @@ class _BoxAssignPanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '已框选 $selectedCount / 未分组 $ungroupedCount',
+                    '已框选 $selectedCount / 待分配 $ungroupedCount',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -872,6 +1239,8 @@ class _BoxAssignPanel extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
+                  key: const ValueKey('box-assign-submit-button'),
+                  width: actionButtonWidth,
                   height: AppButtonStyles.compactHeight,
                   child: FilledButton(
                     onPressed:

@@ -85,7 +85,22 @@ class PilgrimagePlanController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCurrentGroup(String? groupId) {
+    if (_plan.currentGroupId == groupId) {
+      return;
+    }
+    _plan = _plan.copyWith(currentGroupId: groupId);
+    final repository = _repository;
+    if (repository != null) {
+      unawaited(repository.setCurrentGroup(planId: _plan.id, groupId: groupId));
+    }
+    notifyListeners();
+  }
+
   void setCurrentPoint(PilgrimagePoint point) {
+    if (!point.hasCoordinate) {
+      return;
+    }
     if (_completedPointIds.contains(point.id)) {
       _completedPointIds.remove(point.id);
     }
@@ -115,7 +130,9 @@ class PilgrimagePlanController extends ChangeNotifier {
 
   void reopenPoint(PilgrimagePoint point) {
     _completedPointIds.remove(point.id);
-    _currentPointId = point.id;
+    if (point.hasCoordinate) {
+      _currentPointId = point.id;
+    }
     _selectedPointId = point.id;
     _persistReopen(point);
     notifyListeners();
