@@ -21,7 +21,6 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
   List<PilgrimagePlan>? _plans;
   PilgrimagePlan? _activePlan;
   Object? _error;
-  bool _sortingEnabled = false;
   String? _switchingPlanId;
 
   @override
@@ -225,28 +224,7 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
     final plans = _plans;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('切换计划'),
-        actions: [
-          IconButton(
-            key: const ValueKey('plan-sort-toggle'),
-            tooltip: _sortingEnabled ? '退出计划排序' : '计划排序',
-            onPressed: () {
-              setState(() => _sortingEnabled = !_sortingEnabled);
-            },
-            style: IconButton.styleFrom(
-              foregroundColor: _sortingEnabled
-                  ? AppColors.accent
-                  : AppColors.textSecondary,
-              backgroundColor: _sortingEnabled
-                  ? AppColors.accent.withValues(alpha: 0.08)
-                  : Colors.transparent,
-            ),
-            icon: const Icon(Icons.sort),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: AppBar(title: const Text('切换计划')),
       body: Builder(
         builder: (context) {
           if (_error != null) {
@@ -269,7 +247,6 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
                 _PlanCard(
                   plan: activePlan,
                   selected: true,
-                  showDragHandle: false,
                   canDelete: plans.length > 1,
                   onSwitch: () => _switchPlan(activePlan),
                   onRename: () => _editPlanInfo(activePlan),
@@ -288,7 +265,6 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
                   _PlanCard(
                     plan: plan,
                     selected: plan.id == activePlan?.id,
-                    showDragHandle: _sortingEnabled,
                     canDelete: plans.length > 1,
                     onSwitch: () => _switchPlan(plan),
                     onRename: () => _editPlanInfo(plan),
@@ -363,7 +339,6 @@ class _PlanCard extends StatefulWidget {
   const _PlanCard({
     required this.plan,
     required this.selected,
-    required this.showDragHandle,
     required this.canDelete,
     required this.onSwitch,
     required this.onRename,
@@ -374,7 +349,6 @@ class _PlanCard extends StatefulWidget {
 
   final PilgrimagePlan plan;
   final bool selected;
-  final bool showDragHandle;
   final bool canDelete;
   final VoidCallback onSwitch;
   final VoidCallback onRename;
@@ -445,12 +419,7 @@ class _PlanCardState extends State<_PlanCard> {
           child: Stack(
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(
-                  widget.showDragHandle ? 50 : 16,
-                  10,
-                  10,
-                  4,
-                ),
+                padding: EdgeInsets.fromLTRB(16, 10, 10, 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -563,30 +532,6 @@ class _PlanCardState extends State<_PlanCard> {
                   ],
                 ),
               ),
-              if (widget.showDragHandle)
-                Positioned(
-                  left: selected ? 3 : 0,
-                  top: 0,
-                  bottom: 0,
-                  // TODO(plan-order): Persist ordered plan IDs and wire the moved
-                  // plan ID plus source/target indexes before enabling dragging.
-                  child: SizedBox(
-                    width: 44,
-                    child: Tooltip(
-                      message: '拖动排序（待接入）',
-                      child: Center(
-                        child: Icon(
-                          Icons.drag_indicator,
-                          key: ValueKey('plan-card-drag-handle-${plan.id}'),
-                          size: 22,
-                          color: AppColors.textSecondary.withValues(
-                            alpha: 0.56,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               Positioned(
                 right: 9,
                 bottom: 4,

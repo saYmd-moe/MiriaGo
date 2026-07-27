@@ -94,12 +94,21 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
   }) async {
     final now = DateTime.now();
     final existingNames = _plans.map((plan) => plan.name).toSet();
+    final importedCurrentPointId = plan.currentPointId;
+    final currentPointCanBeRestored =
+        importedCurrentPointId != null &&
+        !plan.completedPointIds.contains(importedCurrentPointId) &&
+        plan.points.any(
+          (point) => point.id == importedCurrentPointId && point.hasCoordinate,
+        );
     final importedPlan = plan.copyWith(
       id: 'imported-${now.microsecondsSinceEpoch}',
       name: _uniquePlanName(plan.name, existingNames),
       createdAt: now,
       updatedAt: now,
-      currentPointId: plan.currentPointId,
+      currentPointId: currentPointCanBeRestored
+          ? importedCurrentPointId
+          : _firstPendingPointId(plan.points, plan.completedPointIds),
       completedPointIds: plan.completedPointIds,
     );
     _plans.add(importedPlan);
@@ -564,6 +573,10 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
   }) async {
     final index = _planIndex(planId);
     final plan = _plans[index];
+    final point = plan.points.where((point) => point.id == pointId).firstOrNull;
+    if (point == null || !point.hasCoordinate) {
+      return;
+    }
     _plans[index] = plan.copyWith(
       currentPointId: pointId,
       completedPointIds: {...plan.completedPointIds}..remove(pointId),
@@ -592,8 +605,14 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
   }) async {
     final index = _planIndex(planId);
     final plan = _plans[index];
+    final safeNextCurrentPointId =
+        plan.points.any(
+          (point) => point.id == nextCurrentPointId && point.hasCoordinate,
+        )
+        ? nextCurrentPointId
+        : null;
     _plans[index] = plan.copyWith(
-      currentPointId: nextCurrentPointId,
+      currentPointId: safeNextCurrentPointId,
       completedPointIds: {...plan.completedPointIds, pointId},
       updatedAt: DateTime.now(),
     );
@@ -610,7 +629,11 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
     final currentPointId =
         plan.currentPointId != null && pointIds.contains(plan.currentPointId)
         ? plan.points
-              .where((point) => !completedPointIds.contains(point.id))
+              .where(
+                (point) =>
+                    point.hasCoordinate &&
+                    !completedPointIds.contains(point.id),
+              )
               .firstOrNull
               ?.id
         : plan.currentPointId;
@@ -626,7 +649,17 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
     required String planId,
     required String pointId,
   }) async {
-    await setCurrentPoint(planId: planId, pointId: pointId);
+    final index = _planIndex(planId);
+    final plan = _plans[index];
+    final point = plan.points.where((point) => point.id == pointId).firstOrNull;
+    if (point == null) {
+      return;
+    }
+    _plans[index] = plan.copyWith(
+      currentPointId: point.hasCoordinate ? point.id : plan.currentPointId,
+      completedPointIds: {...plan.completedPointIds}..remove(point.id),
+      updatedAt: DateTime.now(),
+    );
   }
 
   @override
@@ -640,10 +673,14 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
 
     final index = _planIndex(planId);
     final plan = _plans[index];
-    final currentPointId = plan.points
-        .where((point) => pointIds.contains(point.id))
-        .firstOrNull
-        ?.id;
+    final currentPointId =
+        plan.points
+            .where(
+              (point) => point.hasCoordinate && pointIds.contains(point.id),
+            )
+            .firstOrNull
+            ?.id ??
+        plan.currentPointId;
     _plans[index] = plan.copyWith(
       currentPointId: currentPointId,
       completedPointIds: {...plan.completedPointIds}..removeAll(pointIds),
@@ -825,7 +862,10 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
     Set<String> completedPointIds,
   ) {
     return points
-        .where((point) => !completedPointIds.contains(point.id))
+        .where(
+          (point) =>
+              point.hasCoordinate && !completedPointIds.contains(point.id),
+        )
         .firstOrNull
         ?.id;
   }

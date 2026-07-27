@@ -88,5 +88,16 @@ void main() {
         expect(workTitleUri.queryParameters['to'], '139.700476,35.659521,测试作品');
       },
     );
+
+    test('rejects a point whose coordinate is still pending', () {
+      final pendingPoint = point.copyWith(
+        position: PilgrimagePoint.pendingPosition,
+      );
+
+      expect(
+        () => walkingNavigationUri(pendingPoint, NavigationApp.googleMaps),
+        throwsArgumentError,
+      );
+    });
   });
 }

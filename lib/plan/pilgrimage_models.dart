@@ -477,6 +477,14 @@ class PilgrimagePoint {
   final String? groupId;
   final int? groupOrderIndex;
 
+  static const pendingPosition = LatLng(-90, 0);
+
+  bool get hasCoordinate => !isPendingPosition(position);
+
+  static bool isPendingPosition(LatLng position) =>
+      position.latitude == pendingPosition.latitude &&
+      position.longitude == pendingPosition.longitude;
+
   String get displayEpisodeLabel => formatEpisodeLabelForDisplay(episodeLabel);
 
   PilgrimagePoint copyWith({

@@ -1184,7 +1184,7 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
       return null;
     }
     for (final point in widget.group.points) {
-      if (point.id == selectedPointId) {
+      if (point.id == selectedPointId && point.hasCoordinate) {
         return point;
       }
     }
@@ -1205,7 +1205,7 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
   @override
   Widget build(BuildContext context) {
     final mapPoints = selectedItemsLast<PilgrimagePoint>(
-      widget.group.points,
+      widget.group.points.where((point) => point.hasCoordinate),
       isSelected: (point) => point.id == widget.selectedPointId,
     );
 

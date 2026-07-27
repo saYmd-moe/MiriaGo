@@ -44,7 +44,7 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
   var _didUpdate = false;
 
   List<PilgrimagePoint> get _ungroupedPoints => _plan.points
-      .where((point) => point.groupId == null)
+      .where((point) => point.groupId == null && point.hasCoordinate)
       .toList(growable: false);
 
   List<PilgrimagePlanGroup> get _targetGroups => sortGroupsByPlanOrder(
@@ -412,7 +412,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
   Offset? _selectionEnd;
 
   List<PilgrimagePoint> get _ungroupedPoints => _plan.points
-      .where((point) => point.groupId == null)
+      .where((point) => point.groupId == null && point.hasCoordinate)
       .toList(growable: false);
 
   List<PilgrimagePlanGroup> get _groups => sortGroupsByPlanOrder(_plan.groups);

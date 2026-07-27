@@ -403,7 +403,13 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
         extension: myMapsCsvExtension,
         destination: destination,
       );
-      return _PlanExportRunResult(result);
+      return _PlanExportRunResult(
+        result,
+        export.skippedPointCount == 0 ? const [] : const ['存在坐标待补充的点位'],
+        export.skippedPointCount == 0
+            ? const {}
+            : {'pendingCoordinate': export.skippedPointCount},
+      );
     }, successMessage: 'My Maps CSV 已导出');
   }
 
@@ -496,6 +502,10 @@ String _warningSummary(Map<String, int> counts) {
   add(PlanExportWarningType.fullReferenceMissing, '张完整参考图缺失');
   add(PlanExportWarningType.visitPhotoMissing, '张巡礼照片缺失');
   add(PlanExportWarningType.gradedPhotoMissing, '张调色照片缺失');
+  final pendingCoordinateCount = counts['pendingCoordinate'] ?? 0;
+  if (pendingCoordinateCount > 0) {
+    parts.add('$pendingCoordinateCount 个坐标待补充点位未导出');
+  }
 
   return parts.isEmpty ? '' : parts.join('，');
 }

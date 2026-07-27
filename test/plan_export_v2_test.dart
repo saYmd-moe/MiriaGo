@@ -13,6 +13,44 @@ import 'package:miriago/plan_transfer/plan_export_size_estimator.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'keeps pending coordinate in plan data but leaves CSV cells blank',
+    () async {
+      final repository = SamplePilgrimageRepository();
+      final plan = await repository.loadActivePlan();
+      final pendingPoint = plan.points.first.copyWith(
+        position: PilgrimagePoint.pendingPosition,
+      );
+      final exportPlan = plan.copyWith(
+        points: [pendingPoint],
+        currentPointId: null,
+      );
+
+      final package = await buildPlanExportV2Package(
+        plan: exportPlan,
+        visitRecords: const [],
+        options: const PlanExportV2Options(
+          mode: PlanExportV2Mode.planOnly,
+          includeFullReferenceCache: false,
+        ),
+      );
+      final archive = ZipDecoder().decodeBytes(package.bytes);
+      final planJson =
+          jsonDecode(utf8.decode(archive.findFile('plan.json')!.readBytes()!))
+              as Map<String, Object?>;
+      final planRoot = planJson['plan'] as Map<String, Object?>;
+      final points = planRoot['points'] as List<Object?>;
+      final pointJson = points.single as Map<String, Object?>;
+      final csv = utf8.decode(archive.findFile('points.csv')!.readBytes()!);
+      final dataLine = const LineSplitter().convert(csv)[1];
+
+      expect(pointJson['latitude'], -90);
+      expect(pointJson['longitude'], 0);
+      expect(dataLine, contains(',,,'));
+      expect(dataLine, isNot(contains(',-90,0,')));
+    },
+  );
+
   test('exports bundled reference assets and record photos', () async {
     final repository = SamplePilgrimageRepository();
     final plan = await repository.loadActivePlan();

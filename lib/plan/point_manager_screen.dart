@@ -1854,7 +1854,7 @@ class _GroupAnchorMapPickerScreenState
     final anchorPointId = widget.group.anchorPointId;
     if (anchorPointId != null) {
       _selectedPoint = widget.points
-          .where((point) => point.id == anchorPointId)
+          .where((point) => point.id == anchorPointId && point.hasCoordinate)
           .firstOrNull;
     }
     if (_selectedPoint == null &&
@@ -1871,7 +1871,7 @@ class _GroupAnchorMapPickerScreenState
   Widget build(BuildContext context) {
     final selectedPosition = _selectedPoint?.position ?? _manualPosition;
     final mapPoints = selectedItemsLast<PilgrimagePoint>(
-      widget.points,
+      widget.points.where((point) => point.hasCoordinate),
       isSelected: (point) => point.id == _selectedPoint?.id,
     );
 
@@ -1978,19 +1978,22 @@ class _GroupAnchorMapPickerScreenState
   }
 
   LatLng get _pointsCenter {
-    if (widget.points.isEmpty) {
+    final positionedPoints = widget.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    if (positionedPoints.isEmpty) {
       return const LatLng(35, 135);
     }
     final latitude =
-        widget.points
+        positionedPoints
             .map((point) => point.position.latitude)
             .reduce((a, b) => a + b) /
-        widget.points.length;
+        positionedPoints.length;
     final longitude =
-        widget.points
+        positionedPoints
             .map((point) => point.position.longitude)
             .reduce((a, b) => a + b) /
-        widget.points.length;
+        positionedPoints.length;
     return LatLng(latitude, longitude);
   }
 

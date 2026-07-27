@@ -98,6 +98,9 @@ class PilgrimagePlanController extends ChangeNotifier {
   }
 
   void setCurrentPoint(PilgrimagePoint point) {
+    if (!point.hasCoordinate) {
+      return;
+    }
     if (_completedPointIds.contains(point.id)) {
       _completedPointIds.remove(point.id);
     }
@@ -127,7 +130,9 @@ class PilgrimagePlanController extends ChangeNotifier {
 
   void reopenPoint(PilgrimagePoint point) {
     _completedPointIds.remove(point.id);
-    _currentPointId = point.id;
+    if (point.hasCoordinate) {
+      _currentPointId = point.id;
+    }
     _selectedPointId = point.id;
     _persistReopen(point);
     notifyListeners();

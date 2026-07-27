@@ -141,6 +141,9 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
   }
 
   void _centerPoint(PilgrimagePoint point) {
+    if (!point.hasCoordinate) {
+      return;
+    }
     _mapController.move(point.position, _mapController.camera.zoom);
   }
 
@@ -156,7 +159,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     setState(() {
       _selectedGroupIndex = nextIndex;
     });
-    if (group.points.isNotEmpty) {
+    if (group.points.any((point) => point.hasCoordinate)) {
       _mapController.move(groupMapCenter(group), 15);
     }
   }
@@ -412,8 +415,14 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
         )
         ? _controller.currentPoint
         : null;
-    final initialFocusPoint =
-        selectedPoint ?? currentPoint ?? _controller.points.firstOrNull;
+    final positionedPoints = _controller.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    final initialFocusPoint = (selectedPoint?.hasCoordinate ?? false)
+        ? selectedPoint
+        : (currentPoint?.hasCoordinate ?? false)
+        ? currentPoint
+        : positionedPoints.firstOrNull;
     final initialCenter =
         initialFocusPoint?.position ??
         (selectedGroup == null
@@ -421,7 +430,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
             : groupMapCenter(selectedGroup));
     final selectedGroupId = selectedGroup?.id ?? '';
     final mapPoints = selectedItemsLast<PilgrimagePoint>(
-      _controller.points,
+      positionedPoints,
       isSelected: (point) => point.id == selectedPoint?.id,
     );
 
@@ -455,7 +464,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                 builder: (context, visibleBounds, _) {
                   final camera = MapCamera.of(context);
                   final thumbnailPointIds = _thumbnailPointIdsForCurrentView(
-                    _controller.points,
+                    positionedPoints,
                     visibleBounds,
                   );
                   final clusteringEnabled =
@@ -600,9 +609,13 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                     recordCount: _controller
                         .recordsForPoint(selectedPoint.id)
                         .length,
-                    onSetCurrent: () => _setCurrentPoint(selectedPoint),
+                    onSetCurrent: selectedPoint.hasCoordinate
+                        ? () => _setCurrentPoint(selectedPoint)
+                        : null,
                     onOpenDetail: () => _showPointDetail(selectedPoint),
-                    onOpenNavigation: () => _openNavigation(selectedPoint),
+                    onOpenNavigation: selectedPoint.hasCoordinate
+                        ? () => _openNavigation(selectedPoint)
+                        : null,
                     onOpenCamera: () => _openCamera(selectedPoint),
                     onComplete: () =>
                         _controller.statusFor(selectedPoint) ==
@@ -795,9 +808,9 @@ class _PointCard extends StatelessWidget {
   final PilgrimagePoint point;
   final VisitStatus status;
   final int recordCount;
-  final VoidCallback onSetCurrent;
+  final VoidCallback? onSetCurrent;
   final VoidCallback onOpenDetail;
-  final VoidCallback onOpenNavigation;
+  final VoidCallback? onOpenNavigation;
   final VoidCallback onOpenCamera;
   final VoidCallback onComplete;
 
@@ -874,7 +887,7 @@ class _PointCard extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: onOpenNavigation,
                   icon: const Icon(Icons.near_me_outlined, size: 18),
-                  label: const Text('导航'),
+                  label: Text(point.hasCoordinate ? '导航' : '坐标待补充'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -902,7 +915,8 @@ class _PointCard extends StatelessWidget {
                   onPressed: onComplete,
                   icon: const Icon(Icons.check_circle_outline),
                 ),
-              if (status != VisitStatus.current &&
+              if (point.hasCoordinate &&
+                  status != VisitStatus.current &&
                   status != VisitStatus.completed) ...[
                 const SizedBox(width: 4),
                 IconButton.outlined(
@@ -932,7 +946,9 @@ class _PointCard extends StatelessWidget {
       '${point.work.title} / ${point.work.subtitle}',
       point.subtitle,
       point.displayEpisodeLabel,
-      '${point.position.latitude.toStringAsFixed(5)},${point.position.longitude.toStringAsFixed(5)}',
+      point.hasCoordinate
+          ? '${point.position.latitude.toStringAsFixed(5)},${point.position.longitude.toStringAsFixed(5)}'
+          : '坐标待补充',
     ].where((value) => value.trim().isNotEmpty).join('\n');
   }
 }

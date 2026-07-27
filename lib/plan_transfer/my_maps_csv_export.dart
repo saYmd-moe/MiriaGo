@@ -10,11 +10,13 @@ class MyMapsCsvExportResult {
     required this.bytes,
     required this.fileName,
     required this.mimeType,
+    required this.skippedPointCount,
   });
 
   final List<int> bytes;
   final String fileName;
   final String mimeType;
+  final int skippedPointCount;
 }
 
 MyMapsCsvExportResult buildMyMapsCsvExport({
@@ -39,7 +41,12 @@ MyMapsCsvExportResult buildMyMapsCsvExport({
   ];
 
   final groupsById = {for (final group in plan.groups) group.id: group};
+  var skippedPointCount = 0;
   for (final point in plan.points) {
+    if (!point.hasCoordinate) {
+      skippedPointCount += 1;
+      continue;
+    }
     final group = point.groupId == null ? null : groupsById[point.groupId];
     final groupName = group?.name ?? '未分组';
     rows.add([
@@ -62,6 +69,7 @@ MyMapsCsvExportResult buildMyMapsCsvExport({
     bytes: utf8.encode(csv),
     fileName: suggestMyMapsCsvFileName(plan: plan, exportedAt: exportTime),
     mimeType: myMapsCsvMimeType,
+    skippedPointCount: skippedPointCount,
   );
 }
 

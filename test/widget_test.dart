@@ -644,6 +644,31 @@ void main() {
     );
   });
 
+  testWidgets('records can filter by work and plan group', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('记录').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-filter-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('筛选记录'), findsOneWidget);
+    expect(find.text('作品'), findsOneWidget);
+    expect(find.text('片区'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, '大吉山'));
+    await tester.tap(find.widgetWithText(FilledButton, '应用筛选'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('records-group-sample-group-daikichiyama')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('records-group-sample-group-uji-station')),
+      findsNothing,
+    );
+  });
+
   testWidgets('records app bar toggles all group sections', (tester) async {
     await _pumpApp(tester);
 
@@ -1240,9 +1265,13 @@ void main() {
     _invokeKeyedAction(tester, 'quick-point-submit');
     await tester.pumpAndSettle();
 
-    expect(find.text('添加内容'), findsOneWidget);
-    final unchangedPlan = await repository.loadActivePlan();
-    expect(unchangedPlan.points.length, initialPlan.points.length);
+    final updatedPlan = await repository.loadActivePlan();
+    expect(updatedPlan.points.length, initialPlan.points.length + 1);
+    final addedPoint = updatedPlan.points.last;
+    expect(addedPoint.name, '待补充坐标的点位');
+    expect(addedPoint.position, PilgrimagePoint.pendingPosition);
+    expect(addedPoint.hasCoordinate, isFalse);
+    expect(updatedPlan.currentPointId, initialPlan.currentPointId);
   });
 
   testWidgets('creates a new plan from the plan manager', (tester) async {
@@ -1271,7 +1300,7 @@ void main() {
     expect(tester.getSize(find.byTooltip('更多计划操作').first), const Size(38, 34));
     expect(find.text('导入导出'), findsNothing);
     expect(find.byTooltip('编辑计划信息'), findsNWidgets(3));
-    expect(find.byTooltip('计划排序'), findsOneWidget);
+    expect(find.byTooltip('计划排序'), findsNothing);
     expect(find.byTooltip('拖动排序（待接入）'), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -1284,10 +1313,6 @@ void main() {
       ),
       findsNothing,
     );
-    await tester.tap(find.byTooltip('计划排序'));
-    await tester.pumpAndSettle();
-    expect(find.byTooltip('退出计划排序'), findsOneWidget);
-    expect(find.byTooltip('拖动排序（待接入）'), findsNWidgets(2));
     expect(find.byTooltip('删除计划'), findsNothing);
     expect(find.widgetWithText(TextButton, '切换'), findsNothing);
     final editIcon = tester.widget<Icon>(
@@ -1429,11 +1454,6 @@ void main() {
     expect(summaryRect.top - titleRect.bottom, closeTo(5, 0.1));
     expect(emptyWorkRowRect.top - summaryRect.bottom, closeTo(3, 0.1));
     expect(titleRect.left, closeTo(summaryRect.left, 0.1));
-    expect(
-      tester.getRect(dragHandles.first).right,
-      lessThanOrEqualTo(tester.getRect(planTitleTexts.at(1)).left),
-    );
-
     await tester.tap(find.byTooltip('更多计划操作').first);
     await tester.pumpAndSettle();
     final menuPointer = find.byKey(const ValueKey('plan-actions-menu-pointer'));

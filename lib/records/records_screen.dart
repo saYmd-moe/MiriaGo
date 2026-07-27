@@ -29,6 +29,8 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
+  String? _selectedWorkId;
+  String? _selectedGroupFilterId;
   String _searchQuery = '';
   _RecordStatusFilter _statusFilter = _RecordStatusFilter.all;
   var _expandedSectionsInitialized = false;
@@ -90,6 +92,9 @@ class _RecordsScreenState extends State<RecordsScreen> {
                 _RecordFilters(
                   statusFilter: _statusFilter,
                   searchQuery: _searchQuery,
+                  activeScopeFilterCount:
+                      (_selectedWorkId == null ? 0 : 1) +
+                      (_selectedGroupFilterId == null ? 0 : 1),
                   onSearchChanged: (query) {
                     setState(() {
                       _searchQuery = query;
@@ -102,6 +107,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                       _resetExpandedSections();
                     });
                   },
+                  onOpenScopeFilters: _openScopeFilters,
                 ),
                 const SizedBox(height: 16),
                 _RecordsSectionHeader(
@@ -188,6 +194,12 @@ class _RecordsScreenState extends State<RecordsScreen> {
     return controller.visitRecords
         .where((record) {
           final point = controller.pointById(record.pointId);
+          if (_selectedWorkId != null && record.workId != _selectedWorkId) {
+            return false;
+          }
+          if (!_matchesGroupFilter(point)) {
+            return false;
+          }
           if (!_matchesSearch(record, point)) {
             return false;
           }
@@ -273,6 +285,41 @@ class _RecordsScreenState extends State<RecordsScreen> {
       ..sort((a, b) => b.record.capturedAt.compareTo(a.record.capturedAt));
   }
 
+  bool _matchesGroupFilter(PilgrimagePoint? point) {
+    final filterId = _selectedGroupFilterId;
+    if (filterId == null) {
+      return true;
+    }
+    if (filterId == _orphanRecordFilterId) {
+      return point == null;
+    }
+    if (filterId == _ungroupedRecordFilterId) {
+      return point != null && point.groupId == null;
+    }
+    return point != null && point.groupId == filterId;
+  }
+
+  Future<void> _openScopeFilters() async {
+    final result = await showModalBottomSheet<_RecordScopeSelection>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _RecordScopeFilterSheet(
+        works: widget.controller.plan.works,
+        groups: widget.controller.plan.groups,
+        selectedWorkId: _selectedWorkId,
+        selectedGroupFilterId: _selectedGroupFilterId,
+      ),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _selectedWorkId = result.workId;
+      _selectedGroupFilterId = result.groupId;
+      _resetExpandedSections();
+    });
+  }
+
   bool _matchesSearch(PilgrimageVisitRecord record, PilgrimagePoint? point) {
     final query = _searchQuery.trim().toLowerCase();
     if (query.isEmpty) {
@@ -300,8 +347,11 @@ class _RecordsScreenState extends State<RecordsScreen> {
         point.sourceUrl ?? '',
         point.referenceImageUrl ?? '',
         _groupNameFor(point),
-        point.position.latitude.toStringAsFixed(6),
-        point.position.longitude.toStringAsFixed(6),
+        if (point.hasCoordinate) ...[
+          point.position.latitude.toStringAsFixed(6),
+          point.position.longitude.toStringAsFixed(6),
+        ] else
+          '坐标待补充',
         point.work.id,
         point.work.title,
         point.work.subtitle,
@@ -338,14 +388,18 @@ class _RecordFilters extends StatelessWidget {
   const _RecordFilters({
     required this.statusFilter,
     required this.searchQuery,
+    required this.activeScopeFilterCount,
     required this.onSearchChanged,
     required this.onStatusSelected,
+    required this.onOpenScopeFilters,
   });
 
   final _RecordStatusFilter statusFilter;
   final String searchQuery;
+  final int activeScopeFilterCount;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<_RecordStatusFilter> onStatusSelected;
+  final VoidCallback onOpenScopeFilters;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +424,185 @@ class _RecordFilters extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: _recordsToolbarControlHeight,
+          height: _recordsToolbarControlHeight,
+          child: Badge(
+            isLabelVisible: activeScopeFilterCount > 0,
+            label: Text('$activeScopeFilterCount'),
+            child: IconButton.outlined(
+              key: const ValueKey('records-scope-filter-button'),
+              tooltip: '按作品和片区筛选',
+              onPressed: onOpenScopeFilters,
+              icon: const Icon(Icons.tune),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _RecordScopeSelection {
+  const _RecordScopeSelection({required this.workId, required this.groupId});
+
+  final String? workId;
+  final String? groupId;
+}
+
+class _RecordScopeFilterSheet extends StatefulWidget {
+  const _RecordScopeFilterSheet({
+    required this.works,
+    required this.groups,
+    required this.selectedWorkId,
+    required this.selectedGroupFilterId,
+  });
+
+  final List<PilgrimageWork> works;
+  final List<PilgrimagePlanGroup> groups;
+  final String? selectedWorkId;
+  final String? selectedGroupFilterId;
+
+  @override
+  State<_RecordScopeFilterSheet> createState() =>
+      _RecordScopeFilterSheetState();
+}
+
+class _RecordScopeFilterSheetState extends State<_RecordScopeFilterSheet> {
+  late String? _workId = widget.selectedWorkId;
+  late String? _groupId = widget.selectedGroupFilterId;
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = sortGroupsByPlanOrder(widget.groups);
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 8),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '筛选记录',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _workId = null;
+                      _groupId = null;
+                    }),
+                    child: const Text('清除'),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '作品',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('全部作品'),
+                          selected: _workId == null,
+                          onSelected: (_) => setState(() => _workId = null),
+                        ),
+                        for (final work in widget.works)
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: ChoiceChip(
+                              label: Text(
+                                work.title,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              selected: _workId == work.id,
+                              onSelected: (_) =>
+                                  setState(() => _workId = work.id),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      '片区',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('全部片区'),
+                          selected: _groupId == null,
+                          onSelected: (_) => setState(() => _groupId = null),
+                        ),
+                        for (final group in groups)
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 280),
+                            child: ChoiceChip(
+                              label: Text(
+                                group.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              selected: _groupId == group.id,
+                              onSelected: (_) =>
+                                  setState(() => _groupId = group.id),
+                            ),
+                          ),
+                        ChoiceChip(
+                          label: const Text('未分组'),
+                          selected: _groupId == _ungroupedRecordFilterId,
+                          onSelected: (_) => setState(
+                            () => _groupId = _ungroupedRecordFilterId,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('孤立记录'),
+                          selected: _groupId == _orphanRecordFilterId,
+                          onSelected: (_) =>
+                              setState(() => _groupId = _orphanRecordFilterId),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(
+                  _RecordScopeSelection(workId: _workId, groupId: _groupId),
+                ),
+                child: const Text('应用筛选'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

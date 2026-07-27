@@ -6,6 +6,9 @@ class MapNavigationLauncher {
   const MapNavigationLauncher();
 
   Future<bool> openWalking(PilgrimagePoint point, NavigationApp app) {
+    if (!point.hasCoordinate) {
+      return Future.value(false);
+    }
     return launchUrl(
       walkingNavigationUri(point, app),
       mode: LaunchMode.externalApplication,
@@ -14,6 +17,9 @@ class MapNavigationLauncher {
 }
 
 Uri walkingNavigationUri(PilgrimagePoint point, NavigationApp app) {
+  if (!point.hasCoordinate) {
+    throw ArgumentError.value(point.id, 'point', 'Point has no coordinate.');
+  }
   final latitude = _coordinate(point.position.latitude);
   final longitude = _coordinate(point.position.longitude);
   final destination = '$latitude,$longitude';

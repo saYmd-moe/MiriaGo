@@ -172,6 +172,114 @@ void main() {
     );
   }
 
+  test('schema 29 to 30 adds clustering settings without losing data', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.createPlan(name: '聚合迁移计划', area: '京都');
+    await repository.saveAppSettings(
+      const AppSettings(
+        customXyzTileUrl: 'https://example.com/{z}/{x}/{y}.png',
+      ),
+    );
+
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN map_marker_clustering_enabled',
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries DROP COLUMN map_marker_cluster_radius',
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN map_marker_cluster_max_zoom',
+    );
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      29,
+      database.schemaVersion,
+    );
+
+    final settingColumns = await _tableColumnNames(
+      database,
+      'app_settings_entries',
+    );
+    expect(
+      settingColumns,
+      containsAll([
+        'map_marker_clustering_enabled',
+        'map_marker_cluster_radius',
+        'map_marker_cluster_max_zoom',
+      ]),
+    );
+    final migratedPlan = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    final settings = await repository.loadAppSettings();
+    expect(migratedPlan.name, plan.name);
+    expect(settings.customXyzTileUrl, 'https://example.com/{z}/{x}/{y}.png');
+    expect(settings.mapMarkerClusteringEnabled, isTrue);
+    expect(settings.mapMarkerClusterRadius, 64);
+    expect(settings.mapMarkerClusterMaxZoom, 18);
+  });
+
+  test(
+    'pending-coordinate point is never promoted to current target',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqlitePilgrimageRepository(database: database);
+      final plan = await repository.createPlan(name: '待补坐标', area: '未设置');
+      const work = PilgrimageWork(
+        id: 'pending-work',
+        title: '测试作品',
+        subtitle: '',
+        city: '',
+        source: WorkSource.manual,
+      );
+      const pendingPoint = PilgrimagePoint(
+        id: 'pending-point',
+        work: work,
+        name: '待补充',
+        subtitle: '',
+        position: PilgrimagePoint.pendingPosition,
+        episodeLabel: '',
+        referenceLabel: '',
+      );
+      const positionedPoint = PilgrimagePoint(
+        id: 'positioned-point',
+        work: work,
+        name: '有坐标',
+        subtitle: '',
+        position: LatLng(35, 135),
+        episodeLabel: '',
+        referenceLabel: '',
+      );
+
+      final onlyPending = await repository.addPointToPlan(
+        planId: plan.id,
+        point: pendingPoint,
+      );
+      expect(onlyPending.currentPointId, isNull);
+
+      final withPositioned = await repository.addPointToPlan(
+        planId: plan.id,
+        point: positionedPoint,
+      );
+      expect(withPositioned.currentPointId, positionedPoint.id);
+
+      await repository.setCurrentPoint(
+        planId: plan.id,
+        pointId: pendingPoint.id,
+      );
+      final reloaded = (await repository.loadPlans()).singleWhere(
+        (candidate) => candidate.id == plan.id,
+      );
+      expect(reloaded.currentPointId, positionedPoint.id);
+    },
+  );
+
   test('deletes current point and promotes first pending point', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

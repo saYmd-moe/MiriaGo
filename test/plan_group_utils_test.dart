@@ -64,6 +64,40 @@ void main() {
     expect(controller.currentPoint?.id, fixture.groupASecond.id);
     expect(controller.selectedPoint?.id, fixture.groupASecond.id);
   });
+
+  test('pending-coordinate points stay out of map and target calculations', () {
+    final fixture = _buildGroupedPlanFixture();
+    final pendingPoint = fixture.groupASecond.copyWith(
+      id: 'pending-coordinate',
+      position: PilgrimagePoint.pendingPosition,
+      groupOrderIndex: 2,
+    );
+    final group = PlanGroupBucket(
+      id: fixture.plan.groups.first.id,
+      name: fixture.plan.groups.first.name,
+      group: fixture.plan.groups.first,
+      points: [fixture.groupAFirst, pendingPoint],
+      completedCount: 0,
+    );
+
+    expect(groupMapCenter(group), fixture.groupAFirst.position);
+    expect(
+      nextPendingPointAfterCompletion(
+        points: [fixture.groupAFirst, pendingPoint, fixture.groupBFirst],
+        completedPoint: fixture.groupAFirst,
+        completedPointIds: {fixture.groupAFirst.id},
+      )?.id,
+      fixture.groupBFirst.id,
+    );
+    expect(
+      displayPointsForGroup(
+        group,
+        sortMode: PointSortMode.distance,
+        descending: true,
+      ).last.id,
+      pendingPoint.id,
+    );
+  });
 }
 
 _GroupedPlanFixture _buildGroupedPlanFixture() {

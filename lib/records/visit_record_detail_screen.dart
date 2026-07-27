@@ -345,9 +345,11 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
       meta[ComparisonMetadataField.workTitle] = resolvedPoint.work.title;
       meta[ComparisonMetadataField.episodeLabel] =
           resolvedPoint.displayEpisodeLabel;
-      meta[ComparisonMetadataField.coordinates] =
-          '${resolvedPoint.position.latitude.toStringAsFixed(5)}, '
-          '${resolvedPoint.position.longitude.toStringAsFixed(5)}';
+      if (resolvedPoint.hasCoordinate) {
+        meta[ComparisonMetadataField.coordinates] =
+            '${resolvedPoint.position.latitude.toStringAsFixed(5)}, '
+            '${resolvedPoint.position.longitude.toStringAsFixed(5)}';
+      }
       if (resolvedPoint.sourceId != null) {
         meta[ComparisonMetadataField.anitabiId] = resolvedPoint.sourceId!;
       }

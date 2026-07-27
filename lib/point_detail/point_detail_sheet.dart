@@ -279,8 +279,9 @@ class PointDetailSheet extends StatelessWidget {
                 _InfoRow(
                   icon: Icons.location_on_outlined,
                   label: '坐标',
-                  value:
-                      '${point.position.latitude.toStringAsFixed(5)}, ${point.position.longitude.toStringAsFixed(5)}',
+                  value: point.hasCoordinate
+                      ? '${point.position.latitude.toStringAsFixed(5)}, ${point.position.longitude.toStringAsFixed(5)}'
+                      : '待补充',
                 ),
                 const SizedBox(height: 8),
                 _GroupInfoRow(
@@ -348,14 +349,16 @@ class PointDetailSheet extends StatelessWidget {
                 _PointDetailActions(
                   scope: actionScope,
                   status: status,
-                  onOpenNavigation: () => _openNavigation(context),
+                  onOpenNavigation: point.hasCoordinate
+                      ? () => _openNavigation(context)
+                      : null,
                   onOpenCamera: onOpenCamera == null
                       ? null
                       : () {
                           Navigator.of(context).pop();
                           onOpenCamera!();
                         },
-                  onSetCurrent: onSetCurrent == null
+                  onSetCurrent: onSetCurrent == null || !point.hasCoordinate
                       ? null
                       : () {
                           Navigator.of(context).pop();
@@ -449,7 +452,7 @@ class _PointDetailActions extends StatelessWidget {
 
   final PointDetailActionScope scope;
   final VisitStatus status;
-  final VoidCallback onOpenNavigation;
+  final VoidCallback? onOpenNavigation;
   final VoidCallback? onOpenCamera;
   final VoidCallback? onSetCurrent;
   final _PointStatusAction? statusAction;
@@ -462,7 +465,7 @@ class _PointDetailActions extends StatelessWidget {
         child: FilledButton.icon(
           onPressed: onOpenNavigation,
           icon: const Icon(Icons.near_me_outlined, size: 18),
-          label: const Text('导航'),
+          label: Text(onOpenNavigation == null ? '坐标待补充' : '导航'),
         ),
       ),
       if (scope == PointDetailActionScope.visit && onOpenCamera != null) ...[

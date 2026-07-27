@@ -118,9 +118,10 @@ Map<ComparisonMetadataField, String> comparisonMetadataForRecord({
     ComparisonMetadataField.pointName: point.name,
     ComparisonMetadataField.workTitle: point.work.title,
     ComparisonMetadataField.episodeLabel: point.displayEpisodeLabel,
-    ComparisonMetadataField.coordinates:
-        '${point.position.latitude.toStringAsFixed(5)}, '
-        '${point.position.longitude.toStringAsFixed(5)}',
+    if (point.hasCoordinate)
+      ComparisonMetadataField.coordinates:
+          '${point.position.latitude.toStringAsFixed(5)}, '
+          '${point.position.longitude.toStringAsFixed(5)}',
   };
   if (point.sourceId != null) {
     meta[ComparisonMetadataField.anitabiId] = point.sourceId!;

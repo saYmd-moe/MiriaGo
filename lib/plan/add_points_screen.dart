@@ -335,13 +335,47 @@ class _AddPointsScreenState extends State<AddPointsScreen> {
     BuildContext context,
     PilgrimagePlan plan,
   ) async {
-    await Navigator.of(context).push<_QuickManualPointDraft>(
+    final draft = await Navigator.of(context).push<_QuickManualPointDraft>(
       appScaledMaterialPageRoute<_QuickManualPointDraft>(
         settings: widget.settings,
         builder: (_) =>
             _QuickManualPointFormScreen(plan: plan, settings: widget.settings),
       ),
     );
+    if (draft == null || !context.mounted) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final point = PilgrimagePoint(
+      id: 'manual-${now.microsecondsSinceEpoch}',
+      work: draft.work,
+      name: draft.name,
+      subtitle: '',
+      position: draft.position ?? PilgrimagePoint.pendingPosition,
+      episodeLabel: '',
+      referenceLabel: '手动录入',
+      source: PointSource.manual,
+    );
+    try {
+      await widget.repository.addPointToPlan(planId: plan.id, point: point);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showReplacingSnackBar(const SnackBar(content: Text('点位保存失败，请稍后重试。')));
+      }
+      return;
+    }
+    if (!context.mounted) {
+      return;
+    }
+
+    final changed = await _reloadPlan(plan.id);
+    if (!context.mounted || !changed) {
+      return;
+    }
+    Navigator.of(context).pop(true);
   }
 
   Future<bool> _reloadPlan(String planId) async {
@@ -2103,19 +2137,22 @@ class _QuickManualPointFormScreenState
   }
 
   LatLng get _planCenter {
-    if (widget.plan.points.isEmpty) {
+    final positionedPoints = widget.plan.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    if (positionedPoints.isEmpty) {
       return const LatLng(35, 135);
     }
     final latitude =
-        widget.plan.points
+        positionedPoints
             .map((point) => point.position.latitude)
             .reduce((a, b) => a + b) /
-        widget.plan.points.length;
+        positionedPoints.length;
     final longitude =
-        widget.plan.points
+        positionedPoints
             .map((point) => point.position.longitude)
             .reduce((a, b) => a + b) /
-        widget.plan.points.length;
+        positionedPoints.length;
     return LatLng(latitude, longitude);
   }
 
@@ -2633,11 +2670,12 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
       _subtitleController.text = editingPoint.subtitle;
       _episodeController.text = editingPoint.episodeLabel;
       _referenceController.text = editingPoint.referenceLabel;
-      _latitudeController.text = editingPoint.position.latitude.toStringAsFixed(
-        6,
-      );
-      _longitudeController.text = editingPoint.position.longitude
-          .toStringAsFixed(6);
+      if (editingPoint.hasCoordinate) {
+        _latitudeController.text = editingPoint.position.latitude
+            .toStringAsFixed(6);
+        _longitudeController.text = editingPoint.position.longitude
+            .toStringAsFixed(6);
+      }
       _noteController.text = editingPoint.note ?? '';
     }
   }
@@ -2679,10 +2717,11 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
       final pointId =
           editingPoint?.id ?? 'manual-${now.microsecondsSinceEpoch}';
       final storedReference = _pendingReferenceImage;
-      final position = LatLng(
-        double.parse(_latitudeController.text.trim()),
-        double.parse(_longitudeController.text.trim()),
-      );
+      final latitudeText = _latitudeController.text.trim();
+      final longitudeText = _longitudeController.text.trim();
+      final position = latitudeText.isEmpty && longitudeText.isEmpty
+          ? PilgrimagePoint.pendingPosition
+          : LatLng(double.parse(latitudeText), double.parse(longitudeText));
       final noteText = _noteController.text.trim();
       final point = editingPoint == null
           ? PilgrimagePoint(
@@ -2939,19 +2978,22 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
   }
 
   LatLng get _planCenter {
-    if (widget.plan.points.isEmpty) {
+    final positionedPoints = widget.plan.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    if (positionedPoints.isEmpty) {
       return const LatLng(35, 135);
     }
     final latitude =
-        widget.plan.points
+        positionedPoints
             .map((point) => point.position.latitude)
             .reduce((a, b) => a + b) /
-        widget.plan.points.length;
+        positionedPoints.length;
     final longitude =
-        widget.plan.points
+        positionedPoints
             .map((point) => point.position.longitude)
             .reduce((a, b) => a + b) /
-        widget.plan.points.length;
+        positionedPoints.length;
     return LatLng(latitude, longitude);
   }
 
@@ -3196,6 +3238,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                         child: _CoordinateLabeledField(
                           label: '纬度',
                           focusNode: _latitudeFocusNode,
+                          required: !_canKeepCoordinatePending,
                           child: TextFormField(
                             key: const ValueKey('point-form-latitude'),
                             controller: _latitudeController,
@@ -3223,6 +3266,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                         child: _CoordinateLabeledField(
                           label: '经度',
                           focusNode: _longitudeFocusNode,
+                          required: !_canKeepCoordinatePending,
                           child: TextFormField(
                             key: const ValueKey('point-form-longitude'),
                             controller: _longitudeController,
@@ -3374,12 +3418,19 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
   }
 
   String? _validateLatitude(String? value) {
-    return _validateCoordinate(value, min: -90, max: 90, emptyMessage: '请填写纬度');
+    return _validateCoordinate(
+      value,
+      otherValue: _longitudeController.text,
+      min: -90,
+      max: 90,
+      emptyMessage: '请填写纬度',
+    );
   }
 
   String? _validateLongitude(String? value) {
     return _validateCoordinate(
       value,
+      otherValue: _latitudeController.text,
       min: -180,
       max: 180,
       emptyMessage: '请填写经度',
@@ -3388,12 +3439,16 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
 
   String? _validateCoordinate(
     String? value, {
+    required String otherValue,
     required double min,
     required double max,
     required String emptyMessage,
   }) {
     final text = value?.trim() ?? '';
     if (text.isEmpty) {
+      if (_canKeepCoordinatePending && otherValue.trim().isEmpty) {
+        return null;
+      }
       return emptyMessage;
     }
 
@@ -3404,6 +3459,9 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
 
     return null;
   }
+
+  bool get _canKeepCoordinatePending =>
+      _editingPoint != null && !_editingPoint!.hasCoordinate;
 }
 
 class _CoordinateLabeledField extends StatelessWidget {
