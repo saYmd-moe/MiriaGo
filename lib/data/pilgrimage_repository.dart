@@ -11,6 +11,8 @@ abstract interface class PilgrimageRepository {
 
   Future<void> setActivePlan(String id);
 
+  Future<void> reorderPlans({required List<String> orderedPlanIds});
+
   Future<PilgrimagePlan> createPlan({
     required String name,
     required String area,

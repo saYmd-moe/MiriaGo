@@ -127,6 +127,24 @@ void main() {
     expect(updatedIds.map((point) => point.id), reorderedIds);
   });
 
+  test('sample repository persists complete plan ordering', () async {
+    final repository = SamplePilgrimageRepository();
+    final second = await repository.createPlan(name: '第二计划', area: '京都');
+    final third = await repository.createPlan(name: '第三计划', area: '东京');
+    final original = await repository.loadPlans();
+    final reorderedIds = [third.id, original.first.id, second.id];
+
+    await repository.reorderPlans(orderedPlanIds: reorderedIds);
+
+    expect((await repository.loadPlans()).map((plan) => plan.id), reorderedIds);
+    expect(
+      () => repository.reorderPlans(
+        orderedPlanIds: [third.id, third.id, second.id],
+      ),
+      throwsArgumentError,
+    );
+  });
+
   testWidgets('sample record photos render bundled assets on IO platforms', (
     tester,
   ) async {

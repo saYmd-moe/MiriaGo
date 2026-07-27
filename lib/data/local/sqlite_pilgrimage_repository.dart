@@ -23,9 +23,13 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
   Future<List<PilgrimagePlan>> loadPlans() async {
     await _seedIfNeeded();
     await _repairManagedFilePathsIfNeeded();
-    final planRows = await (_database.select(
-      _database.plans,
-    )..orderBy([(table) => OrderingTerm.asc(table.createdAt)])).get();
+    final planRows =
+        await (_database.select(_database.plans)..orderBy([
+              (table) => OrderingTerm.asc(table.orderIndex),
+              (table) => OrderingTerm.asc(table.createdAt),
+              (table) => OrderingTerm.asc(table.id),
+            ]))
+            .get();
 
     return Future.wait(planRows.map(_loadPlanWithCurrentTargetRepair));
   }
@@ -126,6 +130,30 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
       await (_database.update(_database.plans)
             ..where((table) => table.id.equals(id)))
           .write(const PlansCompanion(active: Value(true)));
+    });
+  }
+
+  @override
+  Future<void> reorderPlans({required List<String> orderedPlanIds}) async {
+    final rows = await _database.select(_database.plans).get();
+    final currentIds = rows.map((row) => row.id).toSet();
+    final orderedIds = orderedPlanIds.toSet();
+    if (orderedPlanIds.length != rows.length ||
+        orderedIds.length != orderedPlanIds.length ||
+        !orderedIds.containsAll(currentIds)) {
+      throw ArgumentError.value(
+        orderedPlanIds,
+        'orderedPlanIds',
+        'Plan order must contain every existing plan exactly once.',
+      );
+    }
+
+    await _database.transaction(() async {
+      for (var index = 0; index < orderedPlanIds.length; index += 1) {
+        await (_database.update(_database.plans)
+              ..where((table) => table.id.equals(orderedPlanIds[index])))
+            .write(PlansCompanion(orderIndex: Value(index)));
+      }
     });
   }
 
@@ -982,9 +1010,15 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
                 ..limit(1))
               .getSingleOrNull();
       if (activeExists == null) {
-        final nextPlan = await (_database.select(
-          _database.plans,
-        )..limit(1)).getSingle();
+        final nextPlan =
+            await (_database.select(_database.plans)
+                  ..orderBy([
+                    (table) => OrderingTerm.asc(table.orderIndex),
+                    (table) => OrderingTerm.asc(table.createdAt),
+                    (table) => OrderingTerm.asc(table.id),
+                  ])
+                  ..limit(1))
+                .getSingle();
         await (_database.update(_database.plans)
               ..where((table) => table.id.equals(nextPlan.id)))
             .write(const PlansCompanion(active: Value(true)));
@@ -1295,6 +1329,7 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
   }
 
   Future<void> _insertPlan(PilgrimagePlan plan, {required bool active}) async {
+    final orderIndex = await _nextPlanOrderIndex();
     await _database
         .into(_database.plans)
         .insert(
@@ -1305,6 +1340,7 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
             memo: Value(plan.memo),
             currentGroupId: Value(plan.currentGroupId),
             active: Value(active),
+            orderIndex: Value(orderIndex),
             createdAt: plan.createdAt,
             updatedAt: plan.updatedAt,
           ),
@@ -1339,6 +1375,17 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
     if (plan.points.isNotEmpty && plan.currentPointId == null) {
       await _setFirstPendingPointCurrent(plan.id);
     }
+  }
+
+  Future<int> _nextPlanOrderIndex() async {
+    final result = await _database
+        .customSelect(
+          'SELECT COALESCE(MAX(order_index), -1) + 1 AS next_order_index '
+          'FROM plans',
+          readsFrom: {_database.plans},
+        )
+        .getSingle();
+    return result.read<int>('next_order_index');
   }
 
   Future<void> _upsertWork({

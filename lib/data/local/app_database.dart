@@ -9,6 +9,7 @@ class Plans extends Table {
   TextColumn get memo => text().withDefault(const Constant(''))();
   TextColumn get currentGroupId => text().nullable()();
   BoolColumn get active => boolean().withDefault(const Constant(false))();
+  IntColumn get orderIndex => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 
@@ -167,7 +168,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -467,6 +468,27 @@ class AppDatabase extends _$AppDatabase {
           appSettingsEntries,
           appSettingsEntries.mapMarkerClusterMaxZoom,
         );
+      }
+      if (from < 31) {
+        await _addColumnIfMissing(
+          migrator,
+          'plans',
+          'order_index',
+          plans,
+          plans.orderIndex,
+        );
+        await customStatement('''
+          UPDATE plans
+          SET order_index = (
+            SELECT COUNT(*)
+            FROM plans AS earlier
+            WHERE earlier.created_at < plans.created_at
+              OR (
+                earlier.created_at = plans.created_at
+                AND earlier.id < plans.id
+              )
+          )
+        ''');
       }
     },
   );

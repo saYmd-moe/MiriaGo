@@ -22,6 +22,8 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
   PilgrimagePlan? _activePlan;
   Object? _error;
   String? _switchingPlanId;
+  bool _sorting = false;
+  bool _savingOrder = false;
 
   @override
   void initState() {
@@ -219,12 +221,70 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
     }
   }
 
+  Future<void> _reorderPlans(int sourceIndex, int targetIndex) async {
+    final plans = _plans;
+    if (plans == null ||
+        _savingOrder ||
+        sourceIndex == targetIndex ||
+        sourceIndex < 0 ||
+        sourceIndex >= plans.length ||
+        targetIndex < 0 ||
+        targetIndex >= plans.length) {
+      return;
+    }
+
+    final previousPlans = List<PilgrimagePlan>.of(plans);
+    final reorderedPlans = List<PilgrimagePlan>.of(plans);
+    final movedPlan = reorderedPlans.removeAt(sourceIndex);
+    reorderedPlans.insert(targetIndex, movedPlan);
+    setState(() {
+      _plans = reorderedPlans;
+      _savingOrder = true;
+    });
+
+    try {
+      await widget.repository.reorderPlans(
+        orderedPlanIds: reorderedPlans.map((plan) => plan.id).toList(),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _plans = previousPlans);
+      ScaffoldMessenger.of(context).showReplacingSnackBar(
+        const SnackBar(content: Text('保存计划顺序失败，已恢复原来的顺序。')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _savingOrder = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final plans = _plans;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('切换计划')),
+      appBar: AppBar(
+        title: Text(_sorting ? '调整计划顺序' : '切换计划'),
+        actions: [
+          if (plans != null && plans.length > 1)
+            IconButton(
+              key: const ValueKey('plan-order-toggle'),
+              tooltip: _sorting ? '完成排序' : '计划排序',
+              onPressed: _savingOrder
+                  ? null
+                  : () => setState(() => _sorting = !_sorting),
+              icon: _savingOrder
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(_sorting ? Icons.done : Icons.sort),
+            ),
+        ],
+      ),
       body: Builder(
         builder: (context) {
           if (_error != null) {
@@ -241,18 +301,24 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              _CreatePlanButton(onPressed: _createEmptyPlan),
+              _CreatePlanButton(
+                onPressed: _sorting || _savingOrder ? null : _createEmptyPlan,
+              ),
               const SizedBox(height: 14),
               if (activePlan != null) ...[
                 _PlanCard(
                   plan: activePlan,
                   selected: true,
                   canDelete: plans.length > 1,
-                  onSwitch: () => _switchPlan(activePlan),
-                  onRename: () => _editPlanInfo(activePlan),
-                  onExport: () => _openImportExport(activePlan),
-                  onDuplicate: () => _duplicatePlan(activePlan),
-                  onDelete: () => _deletePlan(activePlan),
+                  onSwitch: _sorting ? null : () => _switchPlan(activePlan),
+                  onRename: _sorting ? null : () => _editPlanInfo(activePlan),
+                  onExport: _sorting
+                      ? null
+                      : () => _openImportExport(activePlan),
+                  onDuplicate: _sorting
+                      ? null
+                      : () => _duplicatePlan(activePlan),
+                  onDelete: _sorting ? null : () => _deletePlan(activePlan),
                 ),
                 const SizedBox(height: 10),
               ],
@@ -261,19 +327,37 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
                   key: ValueKey('all-plans-section'),
                   label: '全部计划',
                 ),
-                for (final plan in plans) ...[
-                  _PlanCard(
-                    plan: plan,
-                    selected: plan.id == activePlan?.id,
-                    canDelete: plans.length > 1,
-                    onSwitch: () => _switchPlan(plan),
-                    onRename: () => _editPlanInfo(plan),
-                    onExport: () => _openImportExport(plan),
-                    onDuplicate: () => _duplicatePlan(plan),
-                    onDelete: () => _deletePlan(plan),
-                  ),
-                  const SizedBox(height: 8),
-                ],
+                ReorderableListView.builder(
+                  key: const ValueKey('reorderable-plan-list'),
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  onReorderItem: _savingOrder ? (_, _) {} : _reorderPlans,
+                  itemCount: plans.length,
+                  itemBuilder: (context, index) {
+                    final plan = plans[index];
+                    return Padding(
+                      key: ValueKey('reorder-plan-${plan.id}'),
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _PlanCard(
+                        plan: plan,
+                        selected: plan.id == activePlan?.id,
+                        canDelete: plans.length > 1,
+                        reorderIndex: _sorting ? index : null,
+                        reorderEnabled: !_savingOrder,
+                        onSwitch: _sorting ? null : () => _switchPlan(plan),
+                        onRename: _sorting ? null : () => _editPlanInfo(plan),
+                        onExport: _sorting
+                            ? null
+                            : () => _openImportExport(plan),
+                        onDuplicate: _sorting
+                            ? null
+                            : () => _duplicatePlan(plan),
+                        onDelete: _sorting ? null : () => _deletePlan(plan),
+                      ),
+                    );
+                  },
+                ),
               ],
             ],
           );
@@ -293,7 +377,7 @@ class _PlanInfoFormResult {
 class _CreatePlanButton extends StatelessWidget {
   const _CreatePlanButton({required this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -345,16 +429,20 @@ class _PlanCard extends StatefulWidget {
     required this.onExport,
     required this.onDuplicate,
     required this.onDelete,
+    this.reorderIndex,
+    this.reorderEnabled = true,
   });
 
   final PilgrimagePlan plan;
   final bool selected;
   final bool canDelete;
-  final VoidCallback onSwitch;
-  final VoidCallback onRename;
-  final VoidCallback onExport;
-  final VoidCallback onDuplicate;
-  final VoidCallback onDelete;
+  final VoidCallback? onSwitch;
+  final VoidCallback? onRename;
+  final VoidCallback? onExport;
+  final VoidCallback? onDuplicate;
+  final VoidCallback? onDelete;
+  final int? reorderIndex;
+  final bool reorderEnabled;
 
   @override
   State<_PlanCard> createState() => _PlanCardState();
@@ -419,7 +507,12 @@ class _PlanCardState extends State<_PlanCard> {
           child: Stack(
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(16, 10, 10, 4),
+                padding: EdgeInsets.fromLTRB(
+                  widget.reorderIndex == null ? 16 : 50,
+                  10,
+                  10,
+                  4,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -498,7 +591,11 @@ class _PlanCardState extends State<_PlanCard> {
                       child: Row(
                         children: [
                           Icon(
-                            selected ? Icons.check_circle : Icons.swap_horiz,
+                            widget.reorderIndex != null
+                                ? Icons.sort
+                                : selected
+                                ? Icons.check_circle
+                                : Icons.swap_horiz,
                             color: selected
                                 ? AppColors.accent
                                 : AppColors.textSecondary.withValues(
@@ -508,7 +605,11 @@ class _PlanCardState extends State<_PlanCard> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            selected ? '当前计划' : '可切换',
+                            widget.reorderIndex != null
+                                ? '拖动调整顺序'
+                                : selected
+                                ? '当前计划'
+                                : '可切换',
                             key: ValueKey(
                               selected
                                   ? 'plan-status-current'
@@ -532,6 +633,32 @@ class _PlanCardState extends State<_PlanCard> {
                   ],
                 ),
               ),
+              if (widget.reorderIndex case final index?)
+                Positioned(
+                  left: selected ? 3 : 0,
+                  top: 0,
+                  bottom: 0,
+                  child: ReorderableDragStartListener(
+                    index: index,
+                    enabled: widget.reorderEnabled,
+                    child: SizedBox(
+                      key: ValueKey('plan-card-drag-handle-${plan.id}'),
+                      width: 44,
+                      child: Tooltip(
+                        message: '拖动排序',
+                        child: Center(
+                          child: Icon(
+                            Icons.drag_indicator,
+                            size: 22,
+                            color: AppColors.textSecondary.withValues(
+                              alpha: widget.reorderEnabled ? 0.7 : 0.35,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 right: 9,
                 bottom: 4,
@@ -550,14 +677,17 @@ class _PlanCardState extends State<_PlanCard> {
                         iconSize: 21,
                       ),
                       const SizedBox(width: 2),
-                      _PlanMoreButton(
-                        plan: plan,
-                        canDelete: widget.canDelete,
-                        onExport: widget.onExport,
-                        onDuplicate: widget.onDuplicate,
-                        onDelete: widget.onDelete,
-                        onMenuOpenChanged: _setMenuOpen,
-                      ),
+                      if (widget.onExport != null &&
+                          widget.onDuplicate != null &&
+                          widget.onDelete != null)
+                        _PlanMoreButton(
+                          plan: plan,
+                          canDelete: widget.canDelete,
+                          onExport: widget.onExport!,
+                          onDuplicate: widget.onDuplicate!,
+                          onDelete: widget.onDelete!,
+                          onMenuOpenChanged: _setMenuOpen,
+                        ),
                     ],
                   ),
                 ),
