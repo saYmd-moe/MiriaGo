@@ -1,6 +1,6 @@
 import 'package:package_info_plus/package_info_plus.dart';
 
-const miriagoAppVersion = '1.1.3+20';
+const miriagoAppVersion = '1.1.4+21';
 
 Future<String> loadAppVersionLabel() async {
   final info = await PackageInfo.fromPlatform();
