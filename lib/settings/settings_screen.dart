@@ -247,10 +247,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: '数据源设置',
               subtitle: '地图源、图片源等',
               onTap: () => _pushDetail(
-                _MapSettingsPage(
+                _DataSourceSettingsPage(
                   settings: settings,
                   onChanged: widget.onChanged,
                   showMapUrlDialog: _showMapUrlDialog,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _SettingsCard(
+            header: _SettingsCardHeader(
+              icon: Icons.layers_outlined,
+              title: '地图显示',
+              subtitle: '点位、片区、聚合与缩略图',
+              onTap: () => _pushDetail(
+                _MapDisplaySettingsPage(
+                  settings: settings,
+                  onChanged: widget.onChanged,
                 ),
               ),
             ),
@@ -1065,8 +1079,8 @@ class _ComparisonStyleSettingsPageState
   }
 }
 
-class _MapSettingsPage extends StatefulWidget {
-  const _MapSettingsPage({
+class _DataSourceSettingsPage extends StatefulWidget {
+  const _DataSourceSettingsPage({
     required this.settings,
     required this.onChanged,
     required this.showMapUrlDialog,
@@ -1084,10 +1098,11 @@ class _MapSettingsPage extends StatefulWidget {
   showMapUrlDialog;
 
   @override
-  State<_MapSettingsPage> createState() => _MapSettingsPageState();
+  State<_DataSourceSettingsPage> createState() =>
+      _DataSourceSettingsPageState();
 }
 
-class _MapSettingsPageState extends State<_MapSettingsPage> {
+class _DataSourceSettingsPageState extends State<_DataSourceSettingsPage> {
   late AppSettings _settings;
 
   @override
@@ -1238,23 +1253,227 @@ class _MapSettingsPageState extends State<_MapSettingsPage> {
         ),
         const SizedBox(height: 12),
         _SettingsSection(
+          title: '图片加载',
+          children: [
+            _NumberStepperSetting(
+              icon: Icons.download_for_offline_outlined,
+              title: '图片同时请求数',
+              subtitle: '用于地图缩略图显示、导入点位时缓存缩略图，以及批量缓存参考图。数值越大速度可能越快，但网络压力也更高。',
+              value: settings.mapThumbnailConcurrentLoads,
+              min: 1,
+              max: 30,
+              step: 1,
+              valueLabel: '${settings.mapThumbnailConcurrentLoads} 个',
+              onChanged: (value) {
+                _update(settings.copyWith(mapThumbnailConcurrentLoads: value));
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _MapDisplaySettingsPage extends StatefulWidget {
+  const _MapDisplaySettingsPage({
+    required this.settings,
+    required this.onChanged,
+  });
+
+  final AppSettings settings;
+  final ValueChanged<AppSettings> onChanged;
+
+  @override
+  State<_MapDisplaySettingsPage> createState() =>
+      _MapDisplaySettingsPageState();
+}
+
+class _MapDisplaySettingsPageState extends State<_MapDisplaySettingsPage> {
+  late AppSettings _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = widget.settings;
+  }
+
+  void _update(AppSettings settings) {
+    setState(() {
+      _settings = settings;
+    });
+    widget.onChanged(settings);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = _settings;
+
+    return _ScaledDetailScaffold(
+      title: '地图显示',
+      uiScale: settings.uiScale,
+      fontScale: settings.fontScale,
+      children: [
+        _SettingsSection(
+          title: '地图缩放',
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.zoom_in_outlined,
+                  color: AppColors.textSecondary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text('最大缩放倍率', style: _titleTextStyle),
+                          ),
+                          Text(
+                            '${settings.mapMaxZoom} 级',
+                            style: TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        '控制所有地图能够放大的最大级别。',
+                        style: _secondaryTextStyle,
+                      ),
+                      Slider(
+                        key: const ValueKey('map-max-zoom-slider'),
+                        min: 16,
+                        max: 24,
+                        divisions: 8,
+                        value: settings.mapMaxZoom.toDouble().clamp(16, 24),
+                        label: '${settings.mapMaxZoom} 级',
+                        onChanged: (value) {
+                          final mapMaxZoom = value.round();
+                          final clusterMaxZoom =
+                              settings.mapMarkerClusterMaxZoom > mapMaxZoom
+                              ? mapMaxZoom
+                              : settings.mapMarkerClusterMaxZoom;
+                          _update(
+                            settings.copyWith(
+                              mapMaxZoom: mapMaxZoom,
+                              mapMarkerClusterMaxZoom: clusterMaxZoom,
+                            ),
+                          );
+                        },
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('16', style: _captionTextStyle),
+                            Text('18', style: _captionTextStyle),
+                            Text('20', style: _captionTextStyle),
+                            Text('22', style: _captionTextStyle),
+                            Text('24', style: _captionTextStyle),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '地图标记',
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  color: AppColors.textSecondary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('地图标记大小', style: _titleTextStyle),
+                      const SizedBox(height: 3),
+                      const Text(
+                        '统一调整点位、缩略图、聚合标记、当前位置和片区关键点的大小。',
+                        style: _secondaryTextStyle,
+                      ),
+                      const SizedBox(height: 8),
+                      _PercentScaleControl(
+                        value: settings.mapMarkerScale,
+                        min: 0.6,
+                        max: 1.2,
+                        divisions: 12,
+                        tickLabels: const ['60%', '80%', '100%', '120%'],
+                        onChanged: (value) {
+                          _update(settings.copyWith(mapMarkerScale: value));
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '片区范围',
+          children: [
+            _NumberStepperSetting(
+              icon: Icons.gesture_outlined,
+              title: '片区范围半径',
+              subtitle: '每个点位向外扩张的距离，用于生成地图上的片区轮廓。',
+              value: settings.mapGroupAreaRadiusMeters,
+              min: 25,
+              max: 500,
+              step: 25,
+              valueLabel: '${settings.mapGroupAreaRadiusMeters} m',
+              onChanged: (value) {
+                _update(settings.copyWith(mapGroupAreaRadiusMeters: value));
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
           title: '地图点位聚合',
           children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              secondary: const Icon(
-                Icons.hub_outlined,
-                color: AppColors.textSecondary,
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(
+                  Icons.hub_outlined,
+                  color: AppColors.textSecondary,
+                ),
+                title: const Text('自动聚合密集点位', style: _titleTextStyle),
+                subtitle: const Text(
+                  '仅合并地图标记的显示；点位数据、选择和导入功能不受影响。',
+                  style: _secondaryTextStyle,
+                ),
+                value: settings.mapMarkerClusteringEnabled,
+                onChanged: (value) {
+                  _update(settings.copyWith(mapMarkerClusteringEnabled: value));
+                },
               ),
-              title: const Text('自动聚合密集点位', style: _titleTextStyle),
-              subtitle: const Text(
-                '仅合并地图标记的显示；点位数据、选择和导入功能不受影响。',
-                style: _secondaryTextStyle,
-              ),
-              value: settings.mapMarkerClusteringEnabled,
-              onChanged: (value) {
-                _update(settings.copyWith(mapMarkerClusteringEnabled: value));
-              },
             ),
             if (settings.mapMarkerClusteringEnabled) ...[
               const SizedBox(height: 8),
@@ -1278,7 +1497,7 @@ class _MapSettingsPageState extends State<_MapSettingsPage> {
                 subtitle: '地图放大超过该级别后显示每个原始点位。',
                 value: settings.mapMarkerClusterMaxZoom,
                 min: 10,
-                max: 22,
+                max: settings.mapMaxZoom.clamp(10, 22),
                 step: 1,
                 valueLabel: '${settings.mapMarkerClusterMaxZoom} 级',
                 onChanged: (value) {
@@ -1304,20 +1523,6 @@ class _MapSettingsPageState extends State<_MapSettingsPage> {
               valueLabel: '${settings.mapThumbnailVisibleThreshold} 个',
               onChanged: (value) {
                 _update(settings.copyWith(mapThumbnailVisibleThreshold: value));
-              },
-            ),
-            const SizedBox(height: 12),
-            _NumberStepperSetting(
-              icon: Icons.download_for_offline_outlined,
-              title: '图片同时请求数',
-              subtitle: '用于地图缩略图显示、导入点位时缓存缩略图，以及批量缓存参考图。数值越大速度可能越快，但网络压力也更高。',
-              value: settings.mapThumbnailConcurrentLoads,
-              min: 1,
-              max: 30,
-              step: 1,
-              valueLabel: '${settings.mapThumbnailConcurrentLoads} 个',
-              onChanged: (value) {
-                _update(settings.copyWith(mapThumbnailConcurrentLoads: value));
               },
             ),
             const SizedBox(height: 8),

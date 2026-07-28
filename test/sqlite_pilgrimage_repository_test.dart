@@ -220,8 +220,8 @@ void main() {
     expect(migratedPlan.name, plan.name);
     expect(settings.customXyzTileUrl, 'https://example.com/{z}/{x}/{y}.png');
     expect(settings.mapMarkerClusteringEnabled, isTrue);
-    expect(settings.mapMarkerClusterRadius, 64);
-    expect(settings.mapMarkerClusterMaxZoom, 18);
+    expect(settings.mapMarkerClusterRadius, 40);
+    expect(settings.mapMarkerClusterMaxZoom, 21);
   });
 
   test('schema 30 to 31 backfills deterministic plan order', () async {
@@ -258,6 +258,80 @@ void main() {
       first.id,
     ]);
   });
+
+  test('schema 31 to 32 adds map display settings without data loss', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.createPlan(name: '地图显示迁移', area: '东京');
+    await repository.saveAppSettings(
+      const AppSettings(
+        mapMarkerClusteringEnabled: false,
+        mapMarkerClusterRadius: 88,
+      ),
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN map_group_area_radius_meters',
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries DROP COLUMN map_marker_scale',
+    );
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      31,
+      database.schemaVersion,
+    );
+
+    expect(
+      await _tableColumnNames(database, 'app_settings_entries'),
+      containsAll(['map_group_area_radius_meters', 'map_marker_scale']),
+    );
+    final migratedPlan = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    final settings = await repository.loadAppSettings();
+    expect(migratedPlan.name, plan.name);
+    expect(settings.mapMarkerClusteringEnabled, isFalse);
+    expect(settings.mapMarkerClusterRadius, 88);
+    expect(settings.mapGroupAreaRadiusMeters, 160);
+    expect(settings.mapMarkerScale, 0.9);
+    expect(settings.mapMaxZoom, 22);
+  });
+
+  test(
+    'schema 32 to 34 adds updated map zoom defaults without data loss',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqlitePilgrimageRepository(database: database);
+      final plan = await repository.createPlan(name: '地图倍率迁移', area: '东京');
+      await repository.saveAppSettings(const AppSettings(mapMarkerScale: 1.1));
+      await database.customStatement(
+        'ALTER TABLE app_settings_entries DROP COLUMN map_max_zoom',
+      );
+
+      await database.migration.onUpgrade(
+        database.createMigrator(),
+        32,
+        database.schemaVersion,
+      );
+
+      expect(
+        await _tableColumnNames(database, 'app_settings_entries'),
+        contains('map_max_zoom'),
+      );
+      final migratedPlan = (await repository.loadPlans()).singleWhere(
+        (candidate) => candidate.id == plan.id,
+      );
+      final settings = await repository.loadAppSettings();
+      expect(migratedPlan.name, plan.name);
+      expect(settings.mapMarkerScale, 1.1);
+      expect(settings.mapMaxZoom, 22);
+      expect(settings.mapMarkerClusterMaxZoom, 21);
+    },
+  );
 
   test(
     'pending-coordinate point is never promoted to current target',
@@ -1304,6 +1378,9 @@ void main() {
         mapMarkerClusteringEnabled: false,
         mapMarkerClusterRadius: 88,
         mapMarkerClusterMaxZoom: 20,
+        mapGroupAreaRadiusMeters: 225,
+        mapMarkerScale: 1.1,
+        mapMaxZoom: 23,
       ),
     );
 
@@ -1343,6 +1420,9 @@ void main() {
     expect(settings.mapMarkerClusteringEnabled, isFalse);
     expect(settings.mapMarkerClusterRadius, 88);
     expect(settings.mapMarkerClusterMaxZoom, 20);
+    expect(settings.mapGroupAreaRadiusMeters, 225);
+    expect(settings.mapMarkerScale, 1.1);
+    expect(settings.mapMaxZoom, 23);
   });
 
   test(

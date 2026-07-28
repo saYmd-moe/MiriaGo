@@ -172,8 +172,11 @@ class AppSettings {
     this.mapThumbnailVisibleThreshold = 40,
     this.mapThumbnailConcurrentLoads = 10,
     this.mapMarkerClusteringEnabled = true,
-    this.mapMarkerClusterRadius = 64,
-    this.mapMarkerClusterMaxZoom = 18,
+    this.mapMarkerClusterRadius = 40,
+    this.mapMarkerClusterMaxZoom = 21,
+    this.mapGroupAreaRadiusMeters = 160,
+    this.mapMarkerScale = 0.9,
+    this.mapMaxZoom = 22,
   });
 
   final double uiScale;
@@ -206,6 +209,9 @@ class AppSettings {
   final bool mapMarkerClusteringEnabled;
   final int mapMarkerClusterRadius;
   final int mapMarkerClusterMaxZoom;
+  final int mapGroupAreaRadiusMeters;
+  final double mapMarkerScale;
+  final int mapMaxZoom;
 
   AppSettings copyWith({
     double? uiScale,
@@ -238,6 +244,9 @@ class AppSettings {
     bool? mapMarkerClusteringEnabled,
     int? mapMarkerClusterRadius,
     int? mapMarkerClusterMaxZoom,
+    int? mapGroupAreaRadiusMeters,
+    double? mapMarkerScale,
+    int? mapMaxZoom,
   }) {
     return AppSettings(
       uiScale: uiScale ?? this.uiScale,
@@ -286,6 +295,10 @@ class AppSettings {
           mapMarkerClusterRadius ?? this.mapMarkerClusterRadius,
       mapMarkerClusterMaxZoom:
           mapMarkerClusterMaxZoom ?? this.mapMarkerClusterMaxZoom,
+      mapGroupAreaRadiusMeters:
+          mapGroupAreaRadiusMeters ?? this.mapGroupAreaRadiusMeters,
+      mapMarkerScale: mapMarkerScale ?? this.mapMarkerScale,
+      mapMaxZoom: mapMaxZoom ?? this.mapMaxZoom,
     );
   }
 }

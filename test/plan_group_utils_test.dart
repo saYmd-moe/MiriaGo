@@ -98,6 +98,72 @@ void main() {
       pendingPoint.id,
     );
   });
+
+  test('rounded group hull uses a smooth meter-based radius', () {
+    const center = LatLng(35.681236, 139.767125);
+    const point = PilgrimagePoint(
+      id: 'area-center',
+      work: PilgrimageWork(
+        id: 'area-work',
+        title: '片区测试',
+        subtitle: '',
+        city: '东京',
+        source: WorkSource.manual,
+      ),
+      name: '中心点',
+      subtitle: '',
+      position: center,
+      episodeLabel: '',
+      referenceLabel: '',
+    );
+
+    final hull = roundedGroupHull(const [point], radiusMeters: 160);
+    final distances = hull
+        .map((position) => const Distance()(center, position))
+        .toList(growable: false);
+
+    expect(hull.length, greaterThanOrEqualTo(40));
+    expect(
+      distances.reduce((a, b) => a + b) / distances.length,
+      closeTo(160, 2),
+    );
+  });
+
+  test('larger group radius expands the generated hull', () {
+    const center = LatLng(34.693725, 135.502254);
+    const point = PilgrimagePoint(
+      id: 'radius-point',
+      work: PilgrimageWork(
+        id: 'radius-work',
+        title: '半径测试',
+        subtitle: '',
+        city: '大阪',
+        source: WorkSource.manual,
+      ),
+      name: '测试点位',
+      subtitle: '',
+      position: center,
+      episodeLabel: '',
+      referenceLabel: '',
+    );
+    final smallHull = roundedGroupHull(const [point], radiusMeters: 80);
+    final largeHull = roundedGroupHull(const [point], radiusMeters: 240);
+    final distance = const Distance();
+    final smallAverage =
+        smallHull
+            .map((position) => distance(center, position))
+            .reduce((a, b) => a + b) /
+        smallHull.length;
+    final largeAverage =
+        largeHull
+            .map((position) => distance(center, position))
+            .reduce((a, b) => a + b) /
+        largeHull.length;
+
+    expect(smallAverage, closeTo(80, 2));
+    expect(largeAverage, closeTo(240, 3));
+    expect(largeAverage, greaterThan(smallAverage * 2.9));
+  });
 }
 
 _GroupedPlanFixture _buildGroupedPlanFixture() {

@@ -8,6 +8,7 @@ import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../records/point_visit_records_screen.dart';
 import '../records/visit_record_detail_screen.dart';
+import '../map/map_marker_scale.dart';
 import '../map/map_tile_config.dart';
 import '../map/current_location_resolver.dart';
 import '../utils/selected_item_order.dart';
@@ -1228,7 +1229,7 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
                   initialCenter: _initialCenter,
                   initialZoom: 15.2,
                   minZoom: 4,
-                  maxZoom: 24,
+                  maxZoom: widget.settings.mapMaxZoom.toDouble(),
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
@@ -1240,15 +1241,30 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
                       for (final point in mapPoints)
                         Marker(
                           point: point.position,
-                          width: point.id == widget.selectedPointId ? 34 : 28,
-                          height: point.id == widget.selectedPointId ? 34 : 28,
-                          child: GestureDetector(
-                            onTap: () => widget.onSelectPoint(point),
-                            child: _MapPointMarker(
-                              key: ValueKey('plan-map-marker-${point.id}'),
-                              selected: point.id == widget.selectedPointId,
-                              completed: widget.completedPointIds.contains(
-                                point.id,
+                          width: scaledMapMarkerDimension(
+                            point.id == widget.selectedPointId ? 34 : 28,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          height: scaledMapMarkerDimension(
+                            point.id == widget.selectedPointId ? 34 : 28,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          child: ScaledMapMarker(
+                            scale: widget.settings.mapMarkerScale,
+                            baseWidth: point.id == widget.selectedPointId
+                                ? 34
+                                : 28,
+                            baseHeight: point.id == widget.selectedPointId
+                                ? 34
+                                : 28,
+                            child: GestureDetector(
+                              onTap: () => widget.onSelectPoint(point),
+                              child: _MapPointMarker(
+                                key: ValueKey('plan-map-marker-${point.id}'),
+                                selected: point.id == widget.selectedPointId,
+                                completed: widget.completedPointIds.contains(
+                                  point.id,
+                                ),
                               ),
                             ),
                           ),
@@ -1257,9 +1273,20 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
                           widget.currentLocation != null)
                         Marker(
                           point: widget.currentLocation!,
-                          width: 36,
-                          height: 36,
-                          child: const _CurrentLocationDot(),
+                          width: scaledMapMarkerDimension(
+                            36,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          height: scaledMapMarkerDimension(
+                            36,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          child: ScaledMapMarker(
+                            scale: widget.settings.mapMarkerScale,
+                            baseWidth: 36,
+                            baseHeight: 36,
+                            child: const _CurrentLocationDot(),
+                          ),
                         ),
                     ],
                   ),

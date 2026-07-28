@@ -106,6 +106,9 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
       mapMarkerClusteringEnabled: row.mapMarkerClusteringEnabled,
       mapMarkerClusterRadius: row.mapMarkerClusterRadius.clamp(32, 120),
       mapMarkerClusterMaxZoom: row.mapMarkerClusterMaxZoom.clamp(10, 22),
+      mapGroupAreaRadiusMeters: row.mapGroupAreaRadiusMeters.clamp(25, 500),
+      mapMarkerScale: row.mapMarkerScale.clamp(0.6, 1.2),
+      mapMaxZoom: row.mapMaxZoom.clamp(16, 24),
     );
   }
 
@@ -1095,6 +1098,11 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
             mapMarkerClusterMaxZoom: Value(
               settings.mapMarkerClusterMaxZoom.clamp(10, 22),
             ),
+            mapGroupAreaRadiusMeters: Value(
+              settings.mapGroupAreaRadiusMeters.clamp(25, 500),
+            ),
+            mapMarkerScale: Value(settings.mapMarkerScale.clamp(0.6, 1.2)),
+            mapMaxZoom: Value(settings.mapMaxZoom.clamp(16, 24)),
           ),
         );
   }

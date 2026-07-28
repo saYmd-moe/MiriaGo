@@ -112,22 +112,25 @@ class MapMarkerClusterBadge extends StatelessWidget {
   const MapMarkerClusterBadge({
     required this.count,
     required this.onTap,
+    this.opensPointBrowser = false,
     super.key,
   });
 
   final int count;
   final VoidCallback onTap;
+  final bool opensPointBrowser;
 
   @override
   Widget build(BuildContext context) {
     final label = count > 999 ? '999+' : '$count';
     final fontSize = label.length >= 4 ? 13.0 : 15.0;
+    final actionLabel = opensPointBrowser ? '点击浏览' : '点击放大';
 
     return Semantics(
       button: true,
-      label: '$count 个聚合点位，点击放大',
+      label: '$count 个聚合点位，$actionLabel',
       child: Tooltip(
-        message: '$count 个点位',
+        message: opensPointBrowser ? '浏览 $count 个重合点位' : '$count 个点位',
         child: Material(
           color: Colors.transparent,
           child: InkResponse(
@@ -171,6 +174,105 @@ class MapMarkerClusterBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class MapOverlapPointPager extends StatelessWidget {
+  const MapOverlapPointPager({
+    required this.currentIndex,
+    required this.total,
+    required this.onPrevious,
+    required this.onNext,
+    super.key,
+  });
+
+  final int currentIndex;
+  final int total;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      key: const ValueKey('map-overlap-point-pager'),
+      children: [
+        IconButton(
+          key: const ValueKey('map-overlap-previous'),
+          tooltip: '上一个重合点位',
+          visualDensity: VisualDensity.compact,
+          onPressed: onPrevious,
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Expanded(
+          child: Text(
+            '重合点位  ${currentIndex + 1} / $total',
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
+          ),
+        ),
+        IconButton(
+          key: const ValueKey('map-overlap-next'),
+          tooltip: '下一个重合点位',
+          visualDensity: VisualDensity.compact,
+          onPressed: onNext,
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
+    );
+  }
+}
+
+bool isAtMaximumMapZoom(MapCamera camera, {double tolerance = 0.01}) {
+  final maxZoom = camera.maxZoom;
+  if (maxZoom == null) {
+    return false;
+  }
+  return camera.zoom >= maxZoom - tolerance;
+}
+
+List<T> orderMapClusterItems<T>({
+  required Iterable<T> items,
+  required Iterable<T> planOrder,
+  required String Function(T item) idOf,
+}) {
+  final orderById = <String, int>{};
+  var index = 0;
+  for (final item in planOrder) {
+    orderById.putIfAbsent(idOf(item), () => index);
+    index += 1;
+  }
+
+  final ordered = items.toList(growable: false);
+  ordered.sort((a, b) {
+    final orderA = orderById[idOf(a)] ?? (1 << 30);
+    final orderB = orderById[idOf(b)] ?? (1 << 30);
+    final orderCompare = orderA.compareTo(orderB);
+    if (orderCompare != 0) {
+      return orderCompare;
+    }
+    return idOf(a).compareTo(idOf(b));
+  });
+  return ordered;
+}
+
+int nextMapOverlapIndex({
+  required int currentIndex,
+  required int offset,
+  required int total,
+}) {
+  if (total <= 0) {
+    return 0;
+  }
+  return (currentIndex + offset) % total;
+}
+
+double nextOverlapClusterZoom(MapCamera camera) {
+  return math.min(camera.maxZoom ?? 24, camera.zoom + 2);
 }
 
 double nextClusterZoom(MapCamera camera, int maxClusterZoom) {

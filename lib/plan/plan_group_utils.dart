@@ -238,6 +238,7 @@ LatLng groupMapCenter(PlanGroupBucket group) {
 List<Polygon> groupAreaPolygons(
   List<PlanGroupBucket> groups, {
   required String selectedGroupId,
+  required double radiusMeters,
 }) {
   final polygons = <Polygon>[];
   for (var index = 0; index < groups.length; index += 1) {
@@ -246,7 +247,7 @@ List<Polygon> groupAreaPolygons(
         !group.points.any((point) => point.hasCoordinate)) {
       continue;
     }
-    final points = roundedGroupHull(group.points);
+    final points = roundedGroupHull(group.points, radiusMeters: radiusMeters);
     if (points.length < 3) {
       continue;
     }
@@ -264,17 +265,22 @@ List<Polygon> groupAreaPolygons(
   return polygons;
 }
 
-List<LatLng> roundedGroupHull(List<PilgrimagePoint> points) {
+List<LatLng> roundedGroupHull(
+  List<PilgrimagePoint> points, {
+  required double radiusMeters,
+}) {
   const zoom = 15.0;
-  const radiusPixels = 42.0;
-  const circleSegments = 24;
-  final pixels = points
+  const circleSegments = 48;
+  final positionedPoints = points
       .where((point) => point.hasCoordinate)
-      .map((point) => _latLngToWorldPixel(point.position, zoom))
       .toList(growable: false);
 
   final circleSamples = <math.Point<double>>[];
-  for (final pixel in pixels) {
+  for (final point in positionedPoints) {
+    final pixel = _latLngToWorldPixel(point.position, zoom);
+    final radiusPixels =
+        radiusMeters.clamp(25, 500) /
+        _metersPerPixel(point.position.latitude, zoom);
     for (var index = 0; index < circleSegments; index += 1) {
       final angle = math.pi * 2 * index / circleSegments;
       circleSamples.add(
@@ -293,6 +299,16 @@ List<LatLng> roundedGroupHull(List<PilgrimagePoint> points) {
   return hull
       .map((point) => _worldPixelToLatLng(point, zoom))
       .toList(growable: false);
+}
+
+double _metersPerPixel(double latitude, double zoom) {
+  const earthRadiusMeters = 6378137.0;
+  final scale = 256 * math.pow(2, zoom).toDouble();
+  return 2 *
+      math.pi *
+      earthRadiusMeters *
+      math.cos(latitude * math.pi / 180) /
+      scale;
 }
 
 List<math.Point<double>> _convexHull(List<math.Point<double>> points) {

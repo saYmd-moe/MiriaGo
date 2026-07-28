@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
 import '../map/map_tile_config.dart';
+import '../map/map_marker_scale.dart';
 import '../utils/selected_item_order.dart';
 import 'pilgrimage_models.dart';
 
@@ -95,7 +96,7 @@ class _GroupAnchorPickerScreenState extends State<GroupAnchorPickerScreen> {
               initialCenter: selectedPosition ?? _pointsCenter,
               initialZoom: 15,
               minZoom: 4,
-              maxZoom: 24,
+              maxZoom: widget.settings.mapMaxZoom.toDouble(),
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),
@@ -116,19 +117,41 @@ class _GroupAnchorPickerScreenState extends State<GroupAnchorPickerScreen> {
                   for (final point in mapPoints)
                     Marker(
                       point: point.position,
-                      width: 42,
-                      height: 42,
-                      child: _AnchorPointMarker(
-                        selected: _selectedPoint?.id == point.id,
-                        onTap: () => _selectPoint(point),
+                      width: scaledMapMarkerDimension(
+                        42,
+                        widget.settings.mapMarkerScale,
+                      ),
+                      height: scaledMapMarkerDimension(
+                        42,
+                        widget.settings.mapMarkerScale,
+                      ),
+                      child: ScaledMapMarker(
+                        baseWidth: 42,
+                        baseHeight: 42,
+                        scale: widget.settings.mapMarkerScale,
+                        child: _AnchorPointMarker(
+                          selected: _selectedPoint?.id == point.id,
+                          onTap: () => _selectPoint(point),
+                        ),
                       ),
                     ),
                   if (_manualPosition != null)
                     Marker(
                       point: _manualPosition!,
-                      width: 46,
-                      height: 46,
-                      child: const _ManualAnchorMarker(),
+                      width: scaledMapMarkerDimension(
+                        46,
+                        widget.settings.mapMarkerScale,
+                      ),
+                      height: scaledMapMarkerDimension(
+                        46,
+                        widget.settings.mapMarkerScale,
+                      ),
+                      child: ScaledMapMarker(
+                        baseWidth: 46,
+                        baseHeight: 46,
+                        scale: widget.settings.mapMarkerScale,
+                        child: const _ManualAnchorMarker(),
+                      ),
                     ),
                 ],
               ),

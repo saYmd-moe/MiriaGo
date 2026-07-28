@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
+import '../map/map_marker_scale.dart';
 import '../map/map_tile_config.dart';
 import '../data/user_reference_image_stub.dart'
     if (dart.library.io) '../data/user_reference_image_io.dart';
@@ -106,7 +107,7 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
                 initialCenter: _mapCenter,
                 initialZoom: 14.5,
                 minZoom: 4,
-                maxZoom: 24,
+                maxZoom: widget.settings.mapMaxZoom.toDouble(),
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
@@ -139,19 +140,41 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
                           group.anchorLatitude!,
                           group.anchorLongitude!,
                         ),
-                        width: 38,
-                        height: 38,
-                        child: _AnchorMarker(name: group.name),
+                        width: scaledMapMarkerDimension(
+                          38,
+                          widget.settings.mapMarkerScale,
+                        ),
+                        height: scaledMapMarkerDimension(
+                          38,
+                          widget.settings.mapMarkerScale,
+                        ),
+                        child: ScaledMapMarker(
+                          scale: widget.settings.mapMarkerScale,
+                          baseWidth: 38,
+                          baseHeight: 38,
+                          child: _AnchorMarker(name: group.name),
+                        ),
                       ),
                     for (final point in mapPoints)
                       Marker(
                         point: point.position,
-                        width: point.id == _selectedPoint?.id ? 42 : 36,
-                        height: point.id == _selectedPoint?.id ? 42 : 36,
-                        child: _AssignPointMarker(
-                          selected: point.id == _selectedPoint?.id,
-                          assignable: _isAssignable(point),
-                          onTap: () => _selectPoint(point),
+                        width: scaledMapMarkerDimension(
+                          point.id == _selectedPoint?.id ? 42 : 36,
+                          widget.settings.mapMarkerScale,
+                        ),
+                        height: scaledMapMarkerDimension(
+                          point.id == _selectedPoint?.id ? 42 : 36,
+                          widget.settings.mapMarkerScale,
+                        ),
+                        child: ScaledMapMarker(
+                          scale: widget.settings.mapMarkerScale,
+                          baseWidth: point.id == _selectedPoint?.id ? 42 : 36,
+                          baseHeight: point.id == _selectedPoint?.id ? 42 : 36,
+                          child: _AssignPointMarker(
+                            selected: point.id == _selectedPoint?.id,
+                            assignable: _isAssignable(point),
+                            onTap: () => _selectPoint(point),
+                          ),
                         ),
                       ),
                   ],
@@ -497,7 +520,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
                 initialCenter: _mapCenter,
                 initialZoom: 14.5,
                 minZoom: 4,
-                maxZoom: 24,
+                maxZoom: widget.settings.mapMaxZoom.toDouble(),
                 interactionOptions: const InteractionOptions(
                   flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                 ),
@@ -514,21 +537,43 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
                             group.anchorLatitude!,
                             group.anchorLongitude!,
                           ),
-                          width: 38,
-                          height: 38,
-                          child: _AnchorMarker(name: group.name),
+                          width: scaledMapMarkerDimension(
+                            38,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          height: scaledMapMarkerDimension(
+                            38,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          child: ScaledMapMarker(
+                            scale: widget.settings.mapMarkerScale,
+                            baseWidth: 38,
+                            baseHeight: 38,
+                            child: _AnchorMarker(name: group.name),
+                          ),
                         ),
                     for (final point in mapPoints)
                       Marker(
                         point: point.position,
-                        width: point.id == _selectedPoint?.id ? 42 : 36,
-                        height: point.id == _selectedPoint?.id ? 42 : 36,
-                        child: _AssignPointMarker(
-                          selected: point.id == _selectedPoint?.id,
-                          assignable: selectedBoxPoints.any(
-                            (candidate) => candidate.id == point.id,
+                        width: scaledMapMarkerDimension(
+                          point.id == _selectedPoint?.id ? 42 : 36,
+                          widget.settings.mapMarkerScale,
+                        ),
+                        height: scaledMapMarkerDimension(
+                          point.id == _selectedPoint?.id ? 42 : 36,
+                          widget.settings.mapMarkerScale,
+                        ),
+                        child: ScaledMapMarker(
+                          scale: widget.settings.mapMarkerScale,
+                          baseWidth: point.id == _selectedPoint?.id ? 42 : 36,
+                          baseHeight: point.id == _selectedPoint?.id ? 42 : 36,
+                          child: _AssignPointMarker(
+                            selected: point.id == _selectedPoint?.id,
+                            assignable: selectedBoxPoints.any(
+                              (candidate) => candidate.id == point.id,
+                            ),
+                            onTap: () => _selectPoint(point),
                           ),
-                          onTap: () => _selectPoint(point),
                         ),
                       ),
                   ],
