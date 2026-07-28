@@ -44,6 +44,13 @@ class PilgrimageMapScreen extends StatefulWidget {
   State<PilgrimageMapScreen> createState() => _PilgrimageMapScreenState();
 }
 
+class _OverlapPointBrowser {
+  _OverlapPointBrowser({required List<String> pointIds})
+    : pointIds = List.unmodifiable(pointIds);
+
+  final List<String> pointIds;
+}
+
 class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
   static const Duration _thumbnailBoundsDebounceDuration = Duration(
     milliseconds: 180,
@@ -57,6 +64,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
   bool _isLocating = false;
   bool _showThumbnailMarkers = false;
   int _selectedGroupIndex = 0;
+  _OverlapPointBrowser? _overlapPointBrowser;
   final ValueNotifier<LatLngBounds?> _visibleBoundsNotifier = ValueNotifier(
     null,
   );
@@ -122,7 +130,11 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     }
   }
 
-  void _selectPoint(PilgrimagePoint point) {
+  void _selectPoint(
+    PilgrimagePoint point, {
+    bool preserveOverlapBrowser = false,
+    _OverlapPointBrowser? overlapPointBrowser,
+  }) {
     final groups = planGroupBuckets(
       _controller.plan,
       _controller.completedPointIds,
@@ -133,12 +145,72 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
       }
       return group.id == point.groupId;
     });
-    if (groupIndex >= 0) {
-      setState(() {
+    setState(() {
+      if (overlapPointBrowser != null) {
+        _overlapPointBrowser = overlapPointBrowser;
+      } else if (!preserveOverlapBrowser) {
+        _overlapPointBrowser = null;
+      }
+      if (groupIndex >= 0) {
         _selectedGroupIndex = groupIndex;
-      });
-    }
+      }
+    });
     _controller.selectPoint(point);
+  }
+
+  void _openOverlapPointBrowser(
+    List<PilgrimagePoint> points,
+    List<PlanGroupBucket> groups,
+  ) {
+    final orderedPoints = orderMapClusterItems<PilgrimagePoint>(
+      items: points,
+      planOrder: groups.expand((group) => group.points),
+      idOf: (point) => point.id,
+    );
+    if (orderedPoints.isEmpty) {
+      return;
+    }
+    if (orderedPoints.length == 1) {
+      _selectPoint(orderedPoints.single);
+      return;
+    }
+
+    _selectPoint(
+      orderedPoints.first,
+      overlapPointBrowser: _OverlapPointBrowser(
+        pointIds: orderedPoints.map((point) => point.id).toList(),
+      ),
+    );
+  }
+
+  void _moveOverlapPoint(int offset) {
+    final browser = _overlapPointBrowser;
+    if (browser == null || browser.pointIds.length < 2) {
+      return;
+    }
+    final points = <PilgrimagePoint>[];
+    for (final pointId in browser.pointIds) {
+      final point = _controller.pointById(pointId);
+      if (point != null && point.hasCoordinate) {
+        points.add(point);
+      }
+    }
+    if (points.length < 2) {
+      setState(() {
+        _overlapPointBrowser = null;
+      });
+      return;
+    }
+
+    final selectedId = _controller.selectedPoint?.id;
+    final selectedIndex = points.indexWhere((point) => point.id == selectedId);
+    final currentIndex = selectedIndex < 0 ? 0 : selectedIndex;
+    final nextIndex = nextMapOverlapIndex(
+      currentIndex: currentIndex,
+      offset: offset,
+      total: points.length,
+    );
+    _selectPoint(points[nextIndex], preserveOverlapBrowser: true);
   }
 
   void _centerPoint(PilgrimagePoint point) {
@@ -159,6 +231,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     final group = groups[nextIndex];
     setState(() {
       _selectedGroupIndex = nextIndex;
+      _overlapPointBrowser = null;
     });
     if (group.points.any((point) => point.hasCoordinate)) {
       _mapController.move(groupMapCenter(group), 15);
@@ -166,6 +239,11 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
   }
 
   void _handleMapEvent(MapEvent event) {
+    if (_overlapPointBrowser != null && !isAtMaximumMapZoom(event.camera)) {
+      setState(() {
+        _overlapPointBrowser = null;
+      });
+    }
     if (!_showThumbnailMarkers) {
       return;
     }
@@ -248,7 +326,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
       return;
     }
 
-    _controller.selectPoint(currentPoint);
+    _selectPoint(currentPoint);
     _centerPoint(currentPoint);
   }
 
@@ -446,6 +524,18 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
       positionedPoints,
       isSelected: (point) => point.id == selectedPoint?.id,
     );
+    final overlapPoints = <PilgrimagePoint>[];
+    for (final pointId in _overlapPointBrowser?.pointIds ?? const <String>[]) {
+      final point = _controller.pointById(pointId);
+      if (point != null && point.hasCoordinate) {
+        overlapPoints.add(point);
+      }
+    }
+    final overlapPointIndex = overlapPoints.indexWhere(
+      (point) => point.id == selectedPoint?.id,
+    );
+    final hasActiveOverlapBrowser =
+        overlapPoints.length > 1 && overlapPointIndex >= 0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -457,7 +547,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
               initialCenter: initialCenter,
               initialZoom: 15,
               minZoom: 4,
-              maxZoom: 24,
+              maxZoom: widget.settings.mapMaxZoom.toDouble(),
               onMapEvent: _handleMapEvent,
               keepAlive: true,
               interactionOptions: const InteractionOptions(
@@ -483,26 +573,71 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                     positionedPoints,
                     visibleBounds,
                   );
-                  final clusteringEnabled =
+                  final atMaximumZoom = isAtMaximumMapZoom(camera);
+                  final normalClusteringEnabled =
                       widget.settings.mapMarkerClusteringEnabled &&
                       camera.zoom <= widget.settings.mapMarkerClusterMaxZoom;
+                  final overlapClusteringEnabled =
+                      widget.settings.mapMarkerClusteringEnabled &&
+                      camera.zoom > widget.settings.mapMarkerClusterMaxZoom;
+                  final clusteringEnabled =
+                      normalClusteringEnabled || overlapClusteringEnabled;
+                  final activeOverlapPointIds =
+                      hasActiveOverlapBrowser && atMaximumZoom
+                      ? overlapPoints.map((point) => point.id).toSet()
+                      : const <String>{};
+                  final clusterItems = activeOverlapPointIds.isEmpty
+                      ? mapPoints
+                      : mapPoints
+                            .where(
+                              (point) =>
+                                  !activeOverlapPointIds.contains(point.id),
+                            )
+                            .toList(growable: false);
+                  final terminalRadiusLimit = scaledMapMarkerDimension(
+                    _showThumbnailMarkers ? 52 : 44,
+                    widget.settings.mapMarkerScale,
+                  );
+                  final clusterRadius = normalClusteringEnabled
+                      ? widget.settings.mapMarkerClusterRadius.toDouble()
+                      : widget.settings.mapMarkerClusterRadius
+                            .toDouble()
+                            .clamp(1, terminalRadiusLimit)
+                            .toDouble();
                   final markerClusters = clusteringEnabled
                       ? clusterMapMarkers<PilgrimagePoint>(
-                          items: mapPoints,
+                          items: clusterItems,
                           positionOf: (point) => point.position,
                           camera: camera,
-                          radiusPixels: widget.settings.mapMarkerClusterRadius
-                              .toDouble(),
+                          radiusPixels: clusterRadius,
                           keepSeparate: (point) =>
+                              activeOverlapPointIds.isEmpty &&
+                              normalClusteringEnabled &&
                               point.id == selectedPoint?.id,
                         )
                       : [
-                          for (final point in mapPoints)
+                          for (final point in clusterItems)
                             MapMarkerCluster(
                               items: [point],
                               position: point.position,
                             ),
+                          if (activeOverlapPointIds.isNotEmpty &&
+                              selectedPoint != null)
+                            MapMarkerCluster(
+                              items: [selectedPoint],
+                              position: selectedPoint.position,
+                            ),
                         ];
+                  if (clusteringEnabled &&
+                      activeOverlapPointIds.isNotEmpty &&
+                      selectedPoint != null) {
+                    markerClusters.add(
+                      MapMarkerCluster(
+                        items: [selectedPoint],
+                        position: selectedPoint.position,
+                      ),
+                    );
+                  }
                   return MarkerLayer(
                     markers: [
                       for (final cluster in markerClusters)
@@ -527,13 +662,23 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                               child: Center(
                                 child: MapMarkerClusterBadge(
                                   count: cluster.items.length,
-                                  onTap: () => _mapController.move(
-                                    cluster.position,
-                                    nextClusterZoom(
-                                      camera,
-                                      widget.settings.mapMarkerClusterMaxZoom,
-                                    ),
-                                  ),
+                                  opensPointBrowser: atMaximumZoom,
+                                  onTap: atMaximumZoom
+                                      ? () => _openOverlapPointBrowser(
+                                          cluster.items,
+                                          groups,
+                                        )
+                                      : () => _mapController.move(
+                                          cluster.position,
+                                          normalClusteringEnabled
+                                              ? nextClusterZoom(
+                                                  camera,
+                                                  widget
+                                                      .settings
+                                                      .mapMarkerClusterMaxZoom,
+                                                )
+                                              : nextOverlapClusterZoom(camera),
+                                        ),
                                 ),
                               ),
                             ),
@@ -662,6 +807,18 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                             VisitStatus.completed
                         ? _controller.reopenPoint(selectedPoint)
                         : _controller.completePoint(selectedPoint),
+                    overlapPointIndex: hasActiveOverlapBrowser
+                        ? overlapPointIndex
+                        : null,
+                    overlapPointCount: hasActiveOverlapBrowser
+                        ? overlapPoints.length
+                        : null,
+                    onPreviousOverlapPoint: hasActiveOverlapBrowser
+                        ? () => _moveOverlapPoint(-1)
+                        : null,
+                    onNextOverlapPoint: hasActiveOverlapBrowser
+                        ? () => _moveOverlapPoint(1)
+                        : null,
                   ),
           ),
         ],
@@ -842,6 +999,10 @@ class _PointCard extends StatelessWidget {
     required this.onOpenNavigation,
     required this.onOpenCamera,
     required this.onComplete,
+    this.overlapPointIndex,
+    this.overlapPointCount,
+    this.onPreviousOverlapPoint,
+    this.onNextOverlapPoint,
   });
 
   final PilgrimagePlanController controller;
@@ -853,14 +1014,23 @@ class _PointCard extends StatelessWidget {
   final VoidCallback? onOpenNavigation;
   final VoidCallback onOpenCamera;
   final VoidCallback onComplete;
+  final int? overlapPointIndex;
+  final int? overlapPointCount;
+  final VoidCallback? onPreviousOverlapPoint;
+  final VoidCallback? onNextOverlapPoint;
 
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final showOverlapPager =
+        overlapPointIndex != null &&
+        overlapPointCount != null &&
+        onPreviousOverlapPoint != null &&
+        onNextOverlapPoint != null;
 
     return Container(
       margin: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottomInset),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(16, showOverlapPager ? 6 : 16, 16, 16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
@@ -870,6 +1040,16 @@ class _PointCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (showOverlapPager) ...[
+            MapOverlapPointPager(
+              currentIndex: overlapPointIndex!,
+              total: overlapPointCount!,
+              onPrevious: onPreviousOverlapPoint!,
+              onNext: onNextOverlapPoint!,
+            ),
+            const Divider(height: 1),
+            const SizedBox(height: 6),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

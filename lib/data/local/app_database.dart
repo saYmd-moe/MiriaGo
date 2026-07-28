@@ -155,10 +155,11 @@ class AppSettingsEntries extends Table {
   IntColumn get mapMarkerClusterRadius =>
       integer().withDefault(const Constant(40))();
   IntColumn get mapMarkerClusterMaxZoom =>
-      integer().withDefault(const Constant(18))();
+      integer().withDefault(const Constant(21))();
   IntColumn get mapGroupAreaRadiusMeters =>
       integer().withDefault(const Constant(160))();
   RealColumn get mapMarkerScale => real().withDefault(const Constant(0.9))();
+  IntColumn get mapMaxZoom => integer().withDefault(const Constant(22))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -171,7 +172,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 32;
+  int get schemaVersion => 34;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -508,6 +509,27 @@ class AppDatabase extends _$AppDatabase {
           appSettingsEntries,
           appSettingsEntries.mapMarkerScale,
         );
+      }
+      if (from < 33) {
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'map_max_zoom',
+          appSettingsEntries,
+          appSettingsEntries.mapMaxZoom,
+        );
+      }
+      if (from < 34) {
+        await customStatement('''
+          UPDATE app_settings_entries
+          SET map_max_zoom = 22
+          WHERE map_max_zoom = 20
+        ''');
+        await customStatement('''
+          UPDATE app_settings_entries
+          SET map_marker_cluster_max_zoom = 21
+          WHERE map_marker_cluster_max_zoom = 18
+        ''');
       }
     },
   );

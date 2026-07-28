@@ -1341,7 +1341,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
                           selectedPoint: selectedPoint,
                         ),
                         minZoom: 4,
-                        maxZoom: 24,
+                        maxZoom: _settings.mapMaxZoom.toDouble(),
                         onMapReady: _handleMapReady,
                         onMapEvent: _handleMapEvent,
                         keepAlive: true,

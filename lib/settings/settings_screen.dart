@@ -1315,6 +1315,85 @@ class _MapDisplaySettingsPageState extends State<_MapDisplaySettingsPage> {
       fontScale: settings.fontScale,
       children: [
         _SettingsSection(
+          title: '地图缩放',
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  Icons.zoom_in_outlined,
+                  color: AppColors.textSecondary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text('最大缩放倍率', style: _titleTextStyle),
+                          ),
+                          Text(
+                            '${settings.mapMaxZoom} 级',
+                            style: TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        '控制所有地图能够放大的最大级别。',
+                        style: _secondaryTextStyle,
+                      ),
+                      Slider(
+                        key: const ValueKey('map-max-zoom-slider'),
+                        min: 16,
+                        max: 24,
+                        divisions: 8,
+                        value: settings.mapMaxZoom.toDouble().clamp(16, 24),
+                        label: '${settings.mapMaxZoom} 级',
+                        onChanged: (value) {
+                          final mapMaxZoom = value.round();
+                          final clusterMaxZoom =
+                              settings.mapMarkerClusterMaxZoom > mapMaxZoom
+                              ? mapMaxZoom
+                              : settings.mapMarkerClusterMaxZoom;
+                          _update(
+                            settings.copyWith(
+                              mapMaxZoom: mapMaxZoom,
+                              mapMarkerClusterMaxZoom: clusterMaxZoom,
+                            ),
+                          );
+                        },
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('16', style: _captionTextStyle),
+                            Text('18', style: _captionTextStyle),
+                            Text('20', style: _captionTextStyle),
+                            Text('22', style: _captionTextStyle),
+                            Text('24', style: _captionTextStyle),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
           title: '地图标记',
           children: [
             Row(
@@ -1418,7 +1497,7 @@ class _MapDisplaySettingsPageState extends State<_MapDisplaySettingsPage> {
                 subtitle: '地图放大超过该级别后显示每个原始点位。',
                 value: settings.mapMarkerClusterMaxZoom,
                 min: 10,
-                max: 22,
+                max: settings.mapMaxZoom.clamp(10, 22),
                 step: 1,
                 valueLabel: '${settings.mapMarkerClusterMaxZoom} 级',
                 onChanged: (value) {

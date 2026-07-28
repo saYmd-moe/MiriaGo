@@ -1229,7 +1229,7 @@ class _PlanInlineMapState extends State<_PlanInlineMap> {
                   initialCenter: _initialCenter,
                   initialZoom: 15.2,
                   minZoom: 4,
-                  maxZoom: 24,
+                  maxZoom: widget.settings.mapMaxZoom.toDouble(),
                   interactionOptions: const InteractionOptions(
                     flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),

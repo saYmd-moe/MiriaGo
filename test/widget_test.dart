@@ -1193,11 +1193,17 @@ void main() {
     await tester.tap(find.text('地图显示'));
     await tester.pumpAndSettle();
 
+    expect(find.text('最大缩放倍率'), findsOneWidget);
     expect(find.text('地图标记大小'), findsOneWidget);
     expect(find.text('片区范围半径'), findsOneWidget);
     expect(find.text('自动聚合密集点位'), findsOneWidget);
     expect(find.text('90%'), findsOneWidget);
     expect(find.text('40 px'), findsOneWidget);
+    final maxZoomSlider = tester.widget<Slider>(
+      find.byKey(const ValueKey('map-max-zoom-slider')),
+    );
+    expect(maxZoomSlider.value, 22);
+    expect(maxZoomSlider.max, 24);
     await tester.scrollUntilVisible(
       find.text('缩略图显示阈值'),
       280,

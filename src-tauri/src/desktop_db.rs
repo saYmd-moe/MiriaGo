@@ -252,9 +252,10 @@ impl DesktopDatabase {
                   map_thumbnail_concurrent_loads INTEGER NOT NULL DEFAULT 10,
                   map_marker_clustering_enabled INTEGER NOT NULL DEFAULT 1,
                   map_marker_cluster_radius INTEGER NOT NULL DEFAULT 40,
-                  map_marker_cluster_max_zoom INTEGER NOT NULL DEFAULT 18,
+                  map_marker_cluster_max_zoom INTEGER NOT NULL DEFAULT 21,
                   map_group_area_radius_meters INTEGER NOT NULL DEFAULT 160,
-                  map_marker_scale REAL NOT NULL DEFAULT 0.9
+                  map_marker_scale REAL NOT NULL DEFAULT 0.9,
+                  map_max_zoom INTEGER NOT NULL DEFAULT 22
                 );
                 CREATE TABLE IF NOT EXISTS asset_metadata (
                   path TEXT PRIMARY KEY NOT NULL,
@@ -269,6 +270,7 @@ impl DesktopDatabase {
             )
             .map_err(|error| error.to_string())?;
         self.ensure_app_settings_columns()?;
+        self.migrate_map_zoom_defaults()?;
         self.ensure_plan_columns()?;
         self.ensure_points_columns()?;
         self.normalize_anitabi_image_urls()?;
@@ -286,6 +288,47 @@ impl DesktopDatabase {
                     .map_err(|error| error.to_string())?;
             }
         }
+        Ok(())
+    }
+
+    fn migrate_map_zoom_defaults(&self) -> Result<(), String> {
+        let already_applied = self
+            .connection
+            .query_row(
+                "SELECT 1 FROM app_meta WHERE key = 'map_zoom_defaults_v2'",
+                [],
+                |_| Ok(()),
+            )
+            .optional()
+            .map_err(|error| error.to_string())?
+            .is_some();
+        if already_applied {
+            return Ok(());
+        }
+
+        self.connection
+            .execute(
+                "UPDATE app_settings
+                 SET map_max_zoom = 22
+                 WHERE map_max_zoom = 20",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
+        self.connection
+            .execute(
+                "UPDATE app_settings
+                 SET map_marker_cluster_max_zoom = 21
+                 WHERE map_marker_cluster_max_zoom = 18",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
+        self.connection
+            .execute(
+                "INSERT INTO app_meta (key, value)
+                 VALUES ('map_zoom_defaults_v2', '1')",
+                [],
+            )
+            .map_err(|error| error.to_string())?;
         Ok(())
     }
 
@@ -344,12 +387,13 @@ impl DesktopDatabase {
                 "INTEGER NOT NULL DEFAULT 1",
             ),
             ("map_marker_cluster_radius", "INTEGER NOT NULL DEFAULT 40"),
-            ("map_marker_cluster_max_zoom", "INTEGER NOT NULL DEFAULT 18"),
+            ("map_marker_cluster_max_zoom", "INTEGER NOT NULL DEFAULT 21"),
             (
                 "map_group_area_radius_meters",
                 "INTEGER NOT NULL DEFAULT 160",
             ),
             ("map_marker_scale", "REAL NOT NULL DEFAULT 0.9"),
+            ("map_max_zoom", "INTEGER NOT NULL DEFAULT 22"),
         ] {
             if columns.iter().any(|column| column == name) {
                 continue;
@@ -483,7 +527,8 @@ impl DesktopDatabase {
                         map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
                         map_marker_clustering_enabled, map_marker_cluster_radius,
                         map_marker_cluster_max_zoom,
-                        map_group_area_radius_meters, map_marker_scale
+                        map_group_area_radius_meters, map_marker_scale,
+                        map_max_zoom
                  FROM app_settings WHERE id = 'default'",
                 [],
                 |row| {
@@ -509,6 +554,7 @@ impl DesktopDatabase {
                         "mapMarkerClusterMaxZoom": row.get::<_, i64>(18)?,
                         "mapGroupAreaRadiusMeters": row.get::<_, i64>(19)?,
                         "mapMarkerScale": row.get::<_, f64>(20)?,
+                        "mapMaxZoom": row.get::<_, i64>(21)?,
                     }))
                 },
             )
@@ -844,8 +890,8 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
            map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
            map_marker_clustering_enabled, map_marker_cluster_radius,
            map_marker_cluster_max_zoom, map_group_area_radius_meters,
-           map_marker_scale
-         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+           map_marker_scale, map_max_zoom
+         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
         params![
             f64_value(settings, "uiScale", 1.0),
             string_value(settings, "cameraCaptureAspectRatio", "auto"),
@@ -865,9 +911,10 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
             i64_value(settings, "mapThumbnailConcurrentLoads", 10).clamp(1, 30),
             bool_value(settings, "mapMarkerClusteringEnabled", true),
             i64_value(settings, "mapMarkerClusterRadius", 40).clamp(32, 120),
-            i64_value(settings, "mapMarkerClusterMaxZoom", 18).clamp(10, 22),
+            i64_value(settings, "mapMarkerClusterMaxZoom", 21).clamp(10, 22),
             i64_value(settings, "mapGroupAreaRadiusMeters", 160).clamp(25, 500),
             f64_value(settings, "mapMarkerScale", 0.9).clamp(0.6, 1.2),
+            i64_value(settings, "mapMaxZoom", 22).clamp(16, 24),
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -1074,9 +1121,10 @@ fn default_settings_json() -> Value {
         "mapThumbnailConcurrentLoads": 10,
         "mapMarkerClusteringEnabled": true,
         "mapMarkerClusterRadius": 40,
-        "mapMarkerClusterMaxZoom": 18,
+        "mapMarkerClusterMaxZoom": 21,
         "mapGroupAreaRadiusMeters": 160,
         "mapMarkerScale": 0.9,
+        "mapMaxZoom": 22,
     })
 }
 
@@ -1164,7 +1212,8 @@ mod tests {
                   "mapMarkerClusterRadius": 56,
                   "mapMarkerClusterMaxZoom": 20,
                   "mapGroupAreaRadiusMeters": 225,
-                  "mapMarkerScale": 1.1
+                  "mapMarkerScale": 1.1,
+                  "mapMaxZoom": 23
                 }"#,
             )
             .expect("save settings");
@@ -1176,6 +1225,7 @@ mod tests {
         assert_eq!(settings["mapMarkerClusterMaxZoom"], 20);
         assert_eq!(settings["mapGroupAreaRadiusMeters"], 225);
         assert_eq!(settings["mapMarkerScale"], 1.1);
+        assert_eq!(settings["mapMaxZoom"], 23);
     }
 
     #[test]
@@ -1195,6 +1245,10 @@ mod tests {
             .connection
             .execute("ALTER TABLE app_settings DROP COLUMN map_marker_scale", [])
             .expect("drop scale column");
+        database
+            .connection
+            .execute("ALTER TABLE app_settings DROP COLUMN map_max_zoom", [])
+            .expect("drop max zoom column");
         database
             .connection
             .execute("ALTER TABLE app_settings DROP COLUMN navigation_app", [])
@@ -1229,8 +1283,47 @@ mod tests {
         assert_eq!(settings["navigationApp"], "googleMaps");
         assert_eq!(settings["mapMarkerClusteringEnabled"], true);
         assert_eq!(settings["mapMarkerClusterRadius"], 40);
-        assert_eq!(settings["mapMarkerClusterMaxZoom"], 18);
+        assert_eq!(settings["mapMarkerClusterMaxZoom"], 21);
         assert_eq!(settings["mapGroupAreaRadiusMeters"], 160);
         assert_eq!(settings["mapMarkerScale"], 0.9);
+        assert_eq!(settings["mapMaxZoom"], 22);
+    }
+
+    #[test]
+    fn previous_map_zoom_defaults_are_migrated_once() {
+        let mut database = memory_database();
+        database
+            .connection
+            .execute(
+                "INSERT OR REPLACE INTO app_settings (
+                   id, map_marker_cluster_max_zoom, map_max_zoom
+                 ) VALUES ('default', 18, 20)",
+                [],
+            )
+            .expect("insert old defaults");
+        database
+            .connection
+            .execute(
+                "DELETE FROM app_meta WHERE key = 'map_zoom_defaults_v2'",
+                [],
+            )
+            .expect("reset migration marker");
+
+        database
+            .migrate_map_zoom_defaults()
+            .expect("migrate old defaults");
+        let settings = database.load_settings_json().expect("load settings");
+        assert_eq!(settings["mapMarkerClusterMaxZoom"], 21);
+        assert_eq!(settings["mapMaxZoom"], 22);
+
+        database
+            .save_settings_json(r#"{"mapMarkerClusterMaxZoom":18,"mapMaxZoom":20}"#)
+            .expect("save explicit settings");
+        database
+            .migrate_map_zoom_defaults()
+            .expect("skip completed migration");
+        let explicit = database.load_settings_json().expect("reload settings");
+        assert_eq!(explicit["mapMarkerClusterMaxZoom"], 18);
+        assert_eq!(explicit["mapMaxZoom"], 20);
     }
 }

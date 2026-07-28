@@ -27,6 +27,7 @@ void main() {
         mapMarkerClusterMaxZoom: 20,
         mapGroupAreaRadiusMeters: 225,
         mapMarkerScale: 1.1,
+        mapMaxZoom: 23,
       ),
     );
     final source = repository.snapshot();
@@ -88,6 +89,7 @@ void main() {
     expect(decoded.settings.mapMarkerClusterMaxZoom, 20);
     expect(decoded.settings.mapGroupAreaRadiusMeters, 225);
     expect(decoded.settings.mapMarkerScale, 1.1);
+    expect(decoded.settings.mapMaxZoom, 23);
     expect(decoded.plans.single.id, source.plans.single.id);
     expect(decoded.plans.single.memo, '桌面端备忘录');
     expect(

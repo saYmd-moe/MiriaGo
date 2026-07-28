@@ -861,6 +861,7 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
         500,
       ),
       mapMarkerScale: settings.mapMarkerScale.clamp(0.6, 1.2),
+      mapMaxZoom: settings.mapMaxZoom.clamp(16, 24),
     );
   }
 

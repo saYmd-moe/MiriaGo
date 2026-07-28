@@ -1895,7 +1895,7 @@ class _GroupAnchorMapPickerScreenState
               initialCenter: selectedPosition ?? _pointsCenter,
               initialZoom: 15,
               minZoom: 4,
-              maxZoom: 24,
+              maxZoom: widget.settings.mapMaxZoom.toDouble(),
               interactionOptions: const InteractionOptions(
                 flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
               ),
