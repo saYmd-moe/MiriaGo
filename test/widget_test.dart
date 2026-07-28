@@ -1000,6 +1000,12 @@ void main() {
     expect(find.text('井用机前步行道'), findsWidgets);
     expect(find.text('吹响吧！上低音号 / EP 1 / 2:08'), findsOneWidget);
     expect(find.textContaining('あじろぎの道 / 34.'), findsNothing);
+    expect(
+      tester
+          .widgetList<PolygonLayer>(find.byType(PolygonLayer))
+          .any((layer) => layer.simplificationTolerance == 0),
+      isTrue,
+    );
 
     await tester.tap(find.byKey(const ValueKey('map-group-filter-bar')));
     await tester.pumpAndSettle();
@@ -1166,6 +1172,54 @@ void main() {
     expect(find.text('设置'), findsWidgets);
     expect(find.text('桌面端'), findsNothing);
     expect(find.textContaining('桌面启动器'), findsNothing);
+  });
+
+  testWidgets('separates map display settings from data sources', (
+    tester,
+  ) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('数据源设置'),
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('数据源设置'), findsOneWidget);
+    expect(find.text('地图显示'), findsOneWidget);
+
+    await tester.tap(find.text('地图显示'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('地图标记大小'), findsOneWidget);
+    expect(find.text('片区范围半径'), findsOneWidget);
+    expect(find.text('自动聚合密集点位'), findsOneWidget);
+    expect(find.text('90%'), findsOneWidget);
+    expect(find.text('40 px'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('缩略图显示阈值'),
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('缩略图显示阈值'), findsOneWidget);
+    expect(find.text('图片同时请求数'), findsNothing);
+
+    Navigator.of(tester.element(find.text('地图显示').first)).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('数据源设置'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('图片同时请求数'),
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('图片同时请求数'), findsOneWidget);
+    expect(find.text('地图标记大小'), findsNothing);
+    expect(find.text('片区范围半径'), findsNothing);
+    expect(find.text('自动聚合密集点位'), findsNothing);
   });
 
   testWidgets('creates empty plan and shows add-points shell', (tester) async {

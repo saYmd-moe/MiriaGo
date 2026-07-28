@@ -13,6 +13,7 @@ import '../data/pilgrimage_repository.dart';
 import '../data/user_reference_image_stub.dart'
     if (dart.library.io) '../data/user_reference_image_io.dart';
 import '../map/map_tile_config.dart';
+import '../map/map_marker_scale.dart';
 import '../widgets/snackbar_helper.dart';
 import '../widgets/reference_thumbnail_stub.dart'
     if (dart.library.io) '../widgets/reference_thumbnail_io.dart';
@@ -3582,9 +3583,20 @@ class _ManualPointMapPickerScreenState
                   if (selectedPosition != null)
                     Marker(
                       point: selectedPosition,
-                      width: 48,
-                      height: 48,
-                      child: const _ManualPointPositionMarker(),
+                      width: scaledMapMarkerDimension(
+                        48,
+                        widget.settings.mapMarkerScale,
+                      ),
+                      height: scaledMapMarkerDimension(
+                        48,
+                        widget.settings.mapMarkerScale,
+                      ),
+                      child: ScaledMapMarker(
+                        baseWidth: 48,
+                        baseHeight: 48,
+                        scale: widget.settings.mapMarkerScale,
+                        child: const _ManualPointPositionMarker(),
+                      ),
                     ),
                 ],
               ),

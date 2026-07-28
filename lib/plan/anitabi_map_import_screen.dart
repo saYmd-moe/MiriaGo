@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
 import '../map/map_marker_clustering.dart';
+import '../map/map_marker_scale.dart';
 import '../map/map_navigation_launcher.dart';
 import '../map/map_tile_config.dart';
 import '../widgets/snackbar_helper.dart';
@@ -1181,35 +1182,47 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
     final showThumbnail =
         _showThumbnailMarkers &&
         (isSelected || thumbnailPointIds.contains(point.id));
+    final scale = normalizedMapMarkerScale(_settings.mapMarkerScale);
+    final baseWidth = _showThumbnailMarkers
+        ? (showThumbnail ? 84.0 : 24.0)
+        : 40.0;
+    final baseHeight = _showThumbnailMarkers
+        ? (showThumbnail ? 82.0 : 24.0)
+        : 40.0;
     return Marker(
       key: ValueKey('anitabi-import-marker-${point.id}'),
       point: point.position,
-      width: _showThumbnailMarkers ? (showThumbnail ? 84 : 24) : 40,
-      height: _showThumbnailMarkers ? (showThumbnail ? 82 : 24) : 40,
+      width: scaledMapMarkerDimension(baseWidth, scale),
+      height: scaledMapMarkerDimension(baseHeight, scale),
       alignment: _showThumbnailMarkers
           ? (showThumbnail ? Alignment.topCenter : Alignment.center)
           : Alignment.center,
-      child: _showThumbnailMarkers
-          ? MapThumbnailMarker(
-              key: ValueKey('anitabi-import-thumbnail-marker-${point.id}'),
-              selected: isSelected,
-              imported: imported,
-              showThumbnail: showThumbnail,
-              markerColor: imported
-                  ? AppColors.textSecondary
-                  : AppColors.accent,
-              imageLoadLimiter: _thumbnailLoadLimiter,
-              localPath: _importedPointFor(point)?.referenceThumbnailPath,
-              imageUrl: _anitabiThumbnailUrl(point.referenceImageUrl),
-              imageSource: _settings.anitabiImageSource,
-              tooltip: 'Anitabi 点位',
-              onTap: _isImporting ? null : () => _selectPoint(point),
-            )
-          : _ImportMarker(
-              selected: isSelected,
-              imported: imported,
-              onTap: _isImporting ? null : () => _selectPoint(point),
-            ),
+      child: ScaledMapMarker(
+        baseWidth: baseWidth,
+        baseHeight: baseHeight,
+        scale: scale,
+        child: _showThumbnailMarkers
+            ? MapThumbnailMarker(
+                key: ValueKey('anitabi-import-thumbnail-marker-${point.id}'),
+                selected: isSelected,
+                imported: imported,
+                showThumbnail: showThumbnail,
+                markerColor: imported
+                    ? AppColors.textSecondary
+                    : AppColors.accent,
+                imageLoadLimiter: _thumbnailLoadLimiter,
+                localPath: _importedPointFor(point)?.referenceThumbnailPath,
+                imageUrl: _anitabiThumbnailUrl(point.referenceImageUrl),
+                imageSource: _settings.anitabiImageSource,
+                tooltip: 'Anitabi 点位',
+                onTap: _isImporting ? null : () => _selectPoint(point),
+              )
+            : _ImportMarker(
+                selected: isSelected,
+                imported: imported,
+                onTap: _isImporting ? null : () => _selectPoint(point),
+              ),
+      ),
     );
   }
 
@@ -1378,15 +1391,29 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
                                         'anitabi-import-cluster-${cluster.items.first.id}-${cluster.items.length}',
                                       ),
                                       point: cluster.position,
-                                      width: 50,
-                                      height: 50,
-                                      child: MapMarkerClusterBadge(
-                                        count: cluster.items.length,
-                                        onTap: () => _mapController.move(
-                                          cluster.position,
-                                          nextClusterZoom(
-                                            camera,
-                                            _settings.mapMarkerClusterMaxZoom,
+                                      width: scaledMapMarkerDimension(
+                                        50,
+                                        _settings.mapMarkerScale,
+                                      ),
+                                      height: scaledMapMarkerDimension(
+                                        50,
+                                        _settings.mapMarkerScale,
+                                      ),
+                                      child: ScaledMapMarker(
+                                        baseWidth: 50,
+                                        baseHeight: 50,
+                                        scale: _settings.mapMarkerScale,
+                                        child: Center(
+                                          child: MapMarkerClusterBadge(
+                                            count: cluster.items.length,
+                                            onTap: () => _mapController.move(
+                                              cluster.position,
+                                              nextClusterZoom(
+                                                camera,
+                                                _settings
+                                                    .mapMarkerClusterMaxZoom,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),

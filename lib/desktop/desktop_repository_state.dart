@@ -97,6 +97,8 @@ Map<String, Object?> _settingsJson(AppSettings settings) {
     'mapMarkerClusteringEnabled': settings.mapMarkerClusteringEnabled,
     'mapMarkerClusterRadius': settings.mapMarkerClusterRadius,
     'mapMarkerClusterMaxZoom': settings.mapMarkerClusterMaxZoom,
+    'mapGroupAreaRadiusMeters': settings.mapGroupAreaRadiusMeters,
+    'mapMarkerScale': settings.mapMarkerScale,
   };
 }
 
@@ -171,8 +173,11 @@ AppSettings _settingsFromJson(Map<String, Object?> json) {
         _intValue(json['mapThumbnailConcurrentLoads']) ?? 10,
     mapMarkerClusteringEnabled:
         _boolValue(json['mapMarkerClusteringEnabled']) ?? true,
-    mapMarkerClusterRadius: _intValue(json['mapMarkerClusterRadius']) ?? 64,
+    mapMarkerClusterRadius: _intValue(json['mapMarkerClusterRadius']) ?? 40,
     mapMarkerClusterMaxZoom: _intValue(json['mapMarkerClusterMaxZoom']) ?? 18,
+    mapGroupAreaRadiusMeters:
+        _intValue(json['mapGroupAreaRadiusMeters']) ?? 160,
+    mapMarkerScale: _doubleValue(json['mapMarkerScale']) ?? 0.9,
   );
 }
 

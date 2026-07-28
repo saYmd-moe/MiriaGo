@@ -25,6 +25,8 @@ void main() {
         mapMarkerClusteringEnabled: false,
         mapMarkerClusterRadius: 88,
         mapMarkerClusterMaxZoom: 20,
+        mapGroupAreaRadiusMeters: 225,
+        mapMarkerScale: 1.1,
       ),
     );
     final source = repository.snapshot();
@@ -84,6 +86,8 @@ void main() {
     expect(decoded.settings.mapMarkerClusteringEnabled, isFalse);
     expect(decoded.settings.mapMarkerClusterRadius, 88);
     expect(decoded.settings.mapMarkerClusterMaxZoom, 20);
+    expect(decoded.settings.mapGroupAreaRadiusMeters, 225);
+    expect(decoded.settings.mapMarkerScale, 1.1);
     expect(decoded.plans.single.id, source.plans.single.id);
     expect(decoded.plans.single.memo, '桌面端备忘录');
     expect(

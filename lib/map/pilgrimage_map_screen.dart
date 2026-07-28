@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
+import 'map_marker_scale.dart';
 import '../widgets/snackbar_helper.dart';
 import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
@@ -362,34 +363,46 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
     final showThumbnail =
         _showThumbnailMarkers &&
         (isSelected || thumbnailPointIds.contains(point.id));
+    final scale = normalizedMapMarkerScale(widget.settings.mapMarkerScale);
+    final baseWidth = _showThumbnailMarkers
+        ? (showThumbnail ? 84.0 : 24.0)
+        : 44.0;
+    final baseHeight = _showThumbnailMarkers
+        ? (showThumbnail ? 82.0 : 24.0)
+        : 44.0;
     return Marker(
       key: ValueKey('plan-map-marker-${point.id}'),
       point: point.position,
-      width: _showThumbnailMarkers ? (showThumbnail ? 84 : 24) : 44,
-      height: _showThumbnailMarkers ? (showThumbnail ? 82 : 24) : 44,
+      width: scaledMapMarkerDimension(baseWidth, scale),
+      height: scaledMapMarkerDimension(baseHeight, scale),
       alignment: _showThumbnailMarkers
           ? (showThumbnail ? Alignment.topCenter : Alignment.center)
           : Alignment.center,
-      child: _showThumbnailMarkers
-          ? MapThumbnailMarker(
-              key: ValueKey('plan-map-thumbnail-marker-${point.id}'),
-              selected: isSelected,
-              imported: _controller.statusFor(point) == VisitStatus.completed,
-              showThumbnail: showThumbnail,
-              markerColor: mapColorForPoint(point, groups),
-              imageLoadLimiter: _thumbnailLoadLimiter,
-              localPath: point.referenceThumbnailPath,
-              imageUrl: hasRemoteReferenceImage(point)
-                  ? point.referenceImageUrl
-                  : null,
-              imageSource: widget.settings.anitabiImageSource,
-              onTap: () => _selectPoint(point),
-            )
-          : _PointMarker(
-              selected: isSelected,
-              status: _controller.statusFor(point),
-              onTap: () => _selectPoint(point),
-            ),
+      child: ScaledMapMarker(
+        baseWidth: baseWidth,
+        baseHeight: baseHeight,
+        scale: scale,
+        child: _showThumbnailMarkers
+            ? MapThumbnailMarker(
+                key: ValueKey('plan-map-thumbnail-marker-${point.id}'),
+                selected: isSelected,
+                imported: _controller.statusFor(point) == VisitStatus.completed,
+                showThumbnail: showThumbnail,
+                markerColor: mapColorForPoint(point, groups),
+                imageLoadLimiter: _thumbnailLoadLimiter,
+                localPath: point.referenceThumbnailPath,
+                imageUrl: hasRemoteReferenceImage(point)
+                    ? point.referenceImageUrl
+                    : null,
+                imageSource: widget.settings.anitabiImageSource,
+                onTap: () => _selectPoint(point),
+              )
+            : _PointMarker(
+                selected: isSelected,
+                status: _controller.statusFor(point),
+                onTap: () => _selectPoint(point),
+              ),
+      ),
     );
   }
 
@@ -454,9 +467,12 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
             children: [
               configuredMapTileLayer(widget.settings),
               PolygonLayer(
+                simplificationTolerance: 0,
                 polygons: groupAreaPolygons(
                   groups,
                   selectedGroupId: selectedGroupId,
+                  radiusMeters: widget.settings.mapGroupAreaRadiusMeters
+                      .toDouble(),
                 ),
               ),
               ValueListenableBuilder<LatLngBounds?>(
@@ -496,15 +512,28 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                               'plan-map-cluster-${cluster.items.first.id}-${cluster.items.length}',
                             ),
                             point: cluster.position,
-                            width: 50,
-                            height: 50,
-                            child: MapMarkerClusterBadge(
-                              count: cluster.items.length,
-                              onTap: () => _mapController.move(
-                                cluster.position,
-                                nextClusterZoom(
-                                  camera,
-                                  widget.settings.mapMarkerClusterMaxZoom,
+                            width: scaledMapMarkerDimension(
+                              50,
+                              widget.settings.mapMarkerScale,
+                            ),
+                            height: scaledMapMarkerDimension(
+                              50,
+                              widget.settings.mapMarkerScale,
+                            ),
+                            child: ScaledMapMarker(
+                              baseWidth: 50,
+                              baseHeight: 50,
+                              scale: widget.settings.mapMarkerScale,
+                              child: Center(
+                                child: MapMarkerClusterBadge(
+                                  count: cluster.items.length,
+                                  onTap: () => _mapController.move(
+                                    cluster.position,
+                                    nextClusterZoom(
+                                      camera,
+                                      widget.settings.mapMarkerClusterMaxZoom,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -519,9 +548,20 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
                       if (_currentLocation != null)
                         Marker(
                           point: _currentLocation!,
-                          width: 44,
-                          height: 44,
-                          child: const _CurrentLocationMarker(),
+                          width: scaledMapMarkerDimension(
+                            44,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          height: scaledMapMarkerDimension(
+                            44,
+                            widget.settings.mapMarkerScale,
+                          ),
+                          child: ScaledMapMarker(
+                            baseWidth: 44,
+                            baseHeight: 44,
+                            scale: widget.settings.mapMarkerScale,
+                            child: const _CurrentLocationMarker(),
+                          ),
                         ),
                     ],
                   );

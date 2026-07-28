@@ -245,10 +245,16 @@ impl DesktopDatabase {
                   map_tile_provider TEXT NOT NULL DEFAULT 'openFreeMap',
                   open_free_map_style TEXT NOT NULL DEFAULT 'liberty',
                   anitabi_image_source TEXT NOT NULL DEFAULT 'auto',
+                  navigation_app TEXT NOT NULL DEFAULT 'googleMaps',
                   custom_xyz_tile_url TEXT NOT NULL DEFAULT '',
                   custom_maplibre_style_url TEXT NOT NULL DEFAULT '',
                   map_thumbnail_visible_threshold INTEGER NOT NULL DEFAULT 40,
-                  map_thumbnail_concurrent_loads INTEGER NOT NULL DEFAULT 10
+                  map_thumbnail_concurrent_loads INTEGER NOT NULL DEFAULT 10,
+                  map_marker_clustering_enabled INTEGER NOT NULL DEFAULT 1,
+                  map_marker_cluster_radius INTEGER NOT NULL DEFAULT 40,
+                  map_marker_cluster_max_zoom INTEGER NOT NULL DEFAULT 18,
+                  map_group_area_radius_meters INTEGER NOT NULL DEFAULT 160,
+                  map_marker_scale REAL NOT NULL DEFAULT 0.9
                 );
                 CREATE TABLE IF NOT EXISTS asset_metadata (
                   path TEXT PRIMARY KEY NOT NULL,
@@ -322,6 +328,7 @@ impl DesktopDatabase {
             ("map_tile_provider", "TEXT NOT NULL DEFAULT 'openFreeMap'"),
             ("open_free_map_style", "TEXT NOT NULL DEFAULT 'liberty'"),
             ("anitabi_image_source", "TEXT NOT NULL DEFAULT 'auto'"),
+            ("navigation_app", "TEXT NOT NULL DEFAULT 'googleMaps'"),
             ("custom_xyz_tile_url", "TEXT NOT NULL DEFAULT ''"),
             ("custom_maplibre_style_url", "TEXT NOT NULL DEFAULT ''"),
             (
@@ -332,6 +339,17 @@ impl DesktopDatabase {
                 "map_thumbnail_concurrent_loads",
                 "INTEGER NOT NULL DEFAULT 10",
             ),
+            (
+                "map_marker_clustering_enabled",
+                "INTEGER NOT NULL DEFAULT 1",
+            ),
+            ("map_marker_cluster_radius", "INTEGER NOT NULL DEFAULT 40"),
+            ("map_marker_cluster_max_zoom", "INTEGER NOT NULL DEFAULT 18"),
+            (
+                "map_group_area_radius_meters",
+                "INTEGER NOT NULL DEFAULT 160",
+            ),
+            ("map_marker_scale", "REAL NOT NULL DEFAULT 0.9"),
         ] {
             if columns.iter().any(|column| column == name) {
                 continue;
@@ -461,8 +479,11 @@ impl DesktopDatabase {
                         camera_min_zoom, camera_max_zoom, reference_image_scale,
                         nearest_assign_distance_meters, theme_palette,
                         map_tile_provider, open_free_map_style, anitabi_image_source,
-                        custom_xyz_tile_url, custom_maplibre_style_url,
-                        map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads
+                        navigation_app, custom_xyz_tile_url, custom_maplibre_style_url,
+                        map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
+                        map_marker_clustering_enabled, map_marker_cluster_radius,
+                        map_marker_cluster_max_zoom,
+                        map_group_area_radius_meters, map_marker_scale
                  FROM app_settings WHERE id = 'default'",
                 [],
                 |row| {
@@ -478,10 +499,16 @@ impl DesktopDatabase {
                         "mapTileProvider": row.get::<_, String>(8)?,
                         "openFreeMapStyle": row.get::<_, String>(9)?,
                         "anitabiImageSource": row.get::<_, String>(10)?,
-                        "customXyzTileUrl": row.get::<_, String>(11)?,
-                        "customMapLibreStyleUrl": row.get::<_, String>(12)?,
-                        "mapThumbnailVisibleThreshold": row.get::<_, i64>(13)?,
-                        "mapThumbnailConcurrentLoads": row.get::<_, i64>(14)?,
+                        "navigationApp": row.get::<_, String>(11)?,
+                        "customXyzTileUrl": row.get::<_, String>(12)?,
+                        "customMapLibreStyleUrl": row.get::<_, String>(13)?,
+                        "mapThumbnailVisibleThreshold": row.get::<_, i64>(14)?,
+                        "mapThumbnailConcurrentLoads": row.get::<_, i64>(15)?,
+                        "mapMarkerClusteringEnabled": row.get::<_, bool>(16)?,
+                        "mapMarkerClusterRadius": row.get::<_, i64>(17)?,
+                        "mapMarkerClusterMaxZoom": row.get::<_, i64>(18)?,
+                        "mapGroupAreaRadiusMeters": row.get::<_, i64>(19)?,
+                        "mapMarkerScale": row.get::<_, f64>(20)?,
                     }))
                 },
             )
@@ -812,10 +839,13 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
            id, ui_scale, camera_capture_aspect_ratio, camera_fallback_aspect_ratio,
            camera_min_zoom, camera_max_zoom, reference_image_scale,
            nearest_assign_distance_meters, theme_palette, map_tile_provider,
-           open_free_map_style, anitabi_image_source, custom_xyz_tile_url,
-           custom_maplibre_style_url, map_thumbnail_visible_threshold,
-           map_thumbnail_concurrent_loads
-         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+           open_free_map_style, anitabi_image_source, navigation_app,
+           custom_xyz_tile_url, custom_maplibre_style_url,
+           map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
+           map_marker_clustering_enabled, map_marker_cluster_radius,
+           map_marker_cluster_max_zoom, map_group_area_radius_meters,
+           map_marker_scale
+         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         params![
             f64_value(settings, "uiScale", 1.0),
             string_value(settings, "cameraCaptureAspectRatio", "auto"),
@@ -828,10 +858,16 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
             string_value(settings, "mapTileProvider", "openFreeMap"),
             string_value(settings, "openFreeMapStyle", "liberty"),
             string_value(settings, "anitabiImageSource", "auto"),
+            string_value(settings, "navigationApp", "googleMaps"),
             string_value(settings, "customXyzTileUrl", ""),
             string_value(settings, "customMapLibreStyleUrl", ""),
             i64_value(settings, "mapThumbnailVisibleThreshold", 40).clamp(0, 200),
             i64_value(settings, "mapThumbnailConcurrentLoads", 10).clamp(1, 30),
+            bool_value(settings, "mapMarkerClusteringEnabled", true),
+            i64_value(settings, "mapMarkerClusterRadius", 40).clamp(32, 120),
+            i64_value(settings, "mapMarkerClusterMaxZoom", 18).clamp(10, 22),
+            i64_value(settings, "mapGroupAreaRadiusMeters", 160).clamp(25, 500),
+            f64_value(settings, "mapMarkerScale", 0.9).clamp(0.6, 1.2),
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -1031,10 +1067,16 @@ fn default_settings_json() -> Value {
         "mapTileProvider": "openFreeMap",
         "openFreeMapStyle": "liberty",
         "anitabiImageSource": "auto",
+        "navigationApp": "googleMaps",
         "customXyzTileUrl": "",
         "customMapLibreStyleUrl": "",
         "mapThumbnailVisibleThreshold": 40,
         "mapThumbnailConcurrentLoads": 10,
+        "mapMarkerClusteringEnabled": true,
+        "mapMarkerClusterRadius": 40,
+        "mapMarkerClusterMaxZoom": 18,
+        "mapGroupAreaRadiusMeters": 160,
+        "mapMarkerScale": 0.9,
     })
 }
 
@@ -1081,6 +1123,10 @@ fn i64_value(value: &Value, key: &str, fallback: i64) -> i64 {
     value.get(key).and_then(Value::as_i64).unwrap_or(fallback)
 }
 
+fn bool_value(value: &Value, key: &str, fallback: bool) -> bool {
+    value.get(key).and_then(Value::as_bool).unwrap_or(fallback)
+}
+
 fn optional_i64(value: &Value, key: &str) -> Option<i64> {
     value.get(key).and_then(Value::as_i64)
 }
@@ -1091,4 +1137,100 @@ fn f64_value(value: &Value, key: &str, fallback: f64) -> f64 {
 
 fn optional_f64(value: &Value, key: &str) -> Option<f64> {
     value.get(key).and_then(Value::as_f64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn memory_database() -> DesktopDatabase {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        let mut database = DesktopDatabase {
+            path: PathBuf::from(":memory:"),
+            connection,
+        };
+        database.migrate().expect("migrate database");
+        database
+    }
+
+    #[test]
+    fn map_display_settings_round_trip() {
+        let mut database = memory_database();
+        database
+            .save_settings_json(
+                r#"{
+                  "navigationApp": "amap",
+                  "mapMarkerClusteringEnabled": false,
+                  "mapMarkerClusterRadius": 56,
+                  "mapMarkerClusterMaxZoom": 20,
+                  "mapGroupAreaRadiusMeters": 225,
+                  "mapMarkerScale": 1.1
+                }"#,
+            )
+            .expect("save settings");
+
+        let settings = database.load_settings_json().expect("load settings");
+        assert_eq!(settings["navigationApp"], "amap");
+        assert_eq!(settings["mapMarkerClusteringEnabled"], false);
+        assert_eq!(settings["mapMarkerClusterRadius"], 56);
+        assert_eq!(settings["mapMarkerClusterMaxZoom"], 20);
+        assert_eq!(settings["mapGroupAreaRadiusMeters"], 225);
+        assert_eq!(settings["mapMarkerScale"], 1.1);
+    }
+
+    #[test]
+    fn map_display_columns_are_added_to_existing_settings_table() {
+        let mut database = memory_database();
+        database
+            .save_settings_json(r#"{"uiScale": 0.9}"#)
+            .expect("save existing settings");
+        database
+            .connection
+            .execute(
+                "ALTER TABLE app_settings DROP COLUMN map_group_area_radius_meters",
+                [],
+            )
+            .expect("drop radius column");
+        database
+            .connection
+            .execute("ALTER TABLE app_settings DROP COLUMN map_marker_scale", [])
+            .expect("drop scale column");
+        database
+            .connection
+            .execute("ALTER TABLE app_settings DROP COLUMN navigation_app", [])
+            .expect("drop navigation column");
+        database
+            .connection
+            .execute(
+                "ALTER TABLE app_settings DROP COLUMN map_marker_clustering_enabled",
+                [],
+            )
+            .expect("drop clustering enabled column");
+        database
+            .connection
+            .execute(
+                "ALTER TABLE app_settings DROP COLUMN map_marker_cluster_radius",
+                [],
+            )
+            .expect("drop cluster radius column");
+        database
+            .connection
+            .execute(
+                "ALTER TABLE app_settings DROP COLUMN map_marker_cluster_max_zoom",
+                [],
+            )
+            .expect("drop cluster zoom column");
+
+        database
+            .ensure_app_settings_columns()
+            .expect("restore map display columns");
+        let settings = database.load_settings_json().expect("load settings");
+        assert_eq!(settings["uiScale"], 0.9);
+        assert_eq!(settings["navigationApp"], "googleMaps");
+        assert_eq!(settings["mapMarkerClusteringEnabled"], true);
+        assert_eq!(settings["mapMarkerClusterRadius"], 40);
+        assert_eq!(settings["mapMarkerClusterMaxZoom"], 18);
+        assert_eq!(settings["mapGroupAreaRadiusMeters"], 160);
+        assert_eq!(settings["mapMarkerScale"], 0.9);
+    }
 }

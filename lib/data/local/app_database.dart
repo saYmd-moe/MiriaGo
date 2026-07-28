@@ -153,9 +153,12 @@ class AppSettingsEntries extends Table {
   BoolColumn get mapMarkerClusteringEnabled =>
       boolean().withDefault(const Constant(true))();
   IntColumn get mapMarkerClusterRadius =>
-      integer().withDefault(const Constant(64))();
+      integer().withDefault(const Constant(40))();
   IntColumn get mapMarkerClusterMaxZoom =>
       integer().withDefault(const Constant(18))();
+  IntColumn get mapGroupAreaRadiusMeters =>
+      integer().withDefault(const Constant(160))();
+  RealColumn get mapMarkerScale => real().withDefault(const Constant(0.9))();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -168,7 +171,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 32;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -489,6 +492,22 @@ class AppDatabase extends _$AppDatabase {
               )
           )
         ''');
+      }
+      if (from < 32) {
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'map_group_area_radius_meters',
+          appSettingsEntries,
+          appSettingsEntries.mapGroupAreaRadiusMeters,
+        );
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'map_marker_scale',
+          appSettingsEntries,
+          appSettingsEntries.mapMarkerScale,
+        );
       }
     },
   );
