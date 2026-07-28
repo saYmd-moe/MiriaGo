@@ -104,6 +104,31 @@ void main() {
     );
   });
 
+  test('desktop repository state preserves plan list order', () async {
+    final repository = SamplePilgrimageRepository();
+    final second = await repository.createPlan(name: '第二计划', area: '京都');
+    final third = await repository.createPlan(name: '第三计划', area: '东京');
+    final source = repository.snapshot();
+    final reordered = [source.plans.last, source.plans.first, source.plans[1]];
+    final encoded = encodeDesktopRepositoryState(
+      SamplePilgrimageRepositorySnapshot(
+        plans: reordered,
+        visitRecords: source.visitRecords,
+        settings: source.settings,
+        activePlanId: third.id,
+      ),
+    );
+
+    final decoded = decodeDesktopRepositoryState(encoded);
+
+    expect(decoded, isNotNull);
+    expect(decoded!.plans.map((plan) => plan.id), [
+      third.id,
+      source.plans.first.id,
+      second.id,
+    ]);
+  });
+
   test('desktop state uses unknown work fallback for missing work ids', () {
     final source = '''
 {

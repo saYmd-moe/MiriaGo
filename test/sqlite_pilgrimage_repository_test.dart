@@ -224,6 +224,41 @@ void main() {
     expect(settings.mapMarkerClusterMaxZoom, 18);
   });
 
+  test('schema 30 to 31 backfills deterministic plan order', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final first = await repository.loadActivePlan();
+    final second = await repository.createPlan(name: '旧版第二计划', area: '京都');
+    final third = await repository.createPlan(name: '旧版第三计划', area: '东京');
+    await database.customStatement(
+      'UPDATE plans SET created_at = 3 WHERE id = ?',
+      [first.id],
+    );
+    await database.customStatement(
+      'UPDATE plans SET created_at = 1 WHERE id = ?',
+      [second.id],
+    );
+    await database.customStatement(
+      'UPDATE plans SET created_at = 2 WHERE id = ?',
+      [third.id],
+    );
+    await database.customStatement('ALTER TABLE plans DROP COLUMN order_index');
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      30,
+      database.schemaVersion,
+    );
+
+    expect(await _tableColumnNames(database, 'plans'), contains('order_index'));
+    expect((await repository.loadPlans()).map((plan) => plan.id), [
+      second.id,
+      third.id,
+      first.id,
+    ]);
+  });
+
   test(
     'pending-coordinate point is never promoted to current target',
     () async {
@@ -323,6 +358,30 @@ void main() {
 
     expect(reloadedPlan.points.map((point) => point.id), reorderedIds);
     expect(reloadedPlan.currentPointId, plan.currentPointId);
+  });
+
+  test('persists reordered plan sequence and appends new plans', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final first = await repository.loadActivePlan();
+    final second = await repository.createPlan(name: '第二计划', area: '京都');
+    final third = await repository.createPlan(name: '第三计划', area: '东京');
+    final reorderedIds = [third.id, first.id, second.id];
+
+    await repository.reorderPlans(orderedPlanIds: reorderedIds);
+    final appended = await repository.createPlan(name: '追加计划', area: '大阪');
+
+    expect((await repository.loadPlans()).map((plan) => plan.id), [
+      ...reorderedIds,
+      appended.id,
+    ]);
+    expect(
+      () => repository.reorderPlans(
+        orderedPlanIds: [third.id, first.id, first.id, appended.id],
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('sets first added point as current target for empty plan', () async {

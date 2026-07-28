@@ -69,6 +69,18 @@ class $PlansTable extends Plans with TableInfo<$PlansTable, Plan> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _orderIndexMeta = const VerificationMeta(
+    'orderIndex',
+  );
+  @override
+  late final GeneratedColumn<int> orderIndex = GeneratedColumn<int>(
+    'order_index',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -99,6 +111,7 @@ class $PlansTable extends Plans with TableInfo<$PlansTable, Plan> {
     memo,
     currentGroupId,
     active,
+    orderIndex,
     createdAt,
     updatedAt,
   ];
@@ -156,6 +169,12 @@ class $PlansTable extends Plans with TableInfo<$PlansTable, Plan> {
         active.isAcceptableOrUnknown(data['active']!, _activeMeta),
       );
     }
+    if (data.containsKey('order_index')) {
+      context.handle(
+        _orderIndexMeta,
+        orderIndex.isAcceptableOrUnknown(data['order_index']!, _orderIndexMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -205,6 +224,10 @@ class $PlansTable extends Plans with TableInfo<$PlansTable, Plan> {
         DriftSqlType.bool,
         data['${effectivePrefix}active'],
       )!,
+      orderIndex: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}order_index'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -229,6 +252,7 @@ class Plan extends DataClass implements Insertable<Plan> {
   final String memo;
   final String? currentGroupId;
   final bool active;
+  final int orderIndex;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Plan({
@@ -238,6 +262,7 @@ class Plan extends DataClass implements Insertable<Plan> {
     required this.memo,
     this.currentGroupId,
     required this.active,
+    required this.orderIndex,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -252,6 +277,7 @@ class Plan extends DataClass implements Insertable<Plan> {
       map['current_group_id'] = Variable<String>(currentGroupId);
     }
     map['active'] = Variable<bool>(active);
+    map['order_index'] = Variable<int>(orderIndex);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -267,6 +293,7 @@ class Plan extends DataClass implements Insertable<Plan> {
           ? const Value.absent()
           : Value(currentGroupId),
       active: Value(active),
+      orderIndex: Value(orderIndex),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -284,6 +311,7 @@ class Plan extends DataClass implements Insertable<Plan> {
       memo: serializer.fromJson<String>(json['memo']),
       currentGroupId: serializer.fromJson<String?>(json['currentGroupId']),
       active: serializer.fromJson<bool>(json['active']),
+      orderIndex: serializer.fromJson<int>(json['orderIndex']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -298,6 +326,7 @@ class Plan extends DataClass implements Insertable<Plan> {
       'memo': serializer.toJson<String>(memo),
       'currentGroupId': serializer.toJson<String?>(currentGroupId),
       'active': serializer.toJson<bool>(active),
+      'orderIndex': serializer.toJson<int>(orderIndex),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -310,6 +339,7 @@ class Plan extends DataClass implements Insertable<Plan> {
     String? memo,
     Value<String?> currentGroupId = const Value.absent(),
     bool? active,
+    int? orderIndex,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Plan(
@@ -321,6 +351,7 @@ class Plan extends DataClass implements Insertable<Plan> {
         ? currentGroupId.value
         : this.currentGroupId,
     active: active ?? this.active,
+    orderIndex: orderIndex ?? this.orderIndex,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -334,6 +365,9 @@ class Plan extends DataClass implements Insertable<Plan> {
           ? data.currentGroupId.value
           : this.currentGroupId,
       active: data.active.present ? data.active.value : this.active,
+      orderIndex: data.orderIndex.present
+          ? data.orderIndex.value
+          : this.orderIndex,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -348,6 +382,7 @@ class Plan extends DataClass implements Insertable<Plan> {
           ..write('memo: $memo, ')
           ..write('currentGroupId: $currentGroupId, ')
           ..write('active: $active, ')
+          ..write('orderIndex: $orderIndex, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -362,6 +397,7 @@ class Plan extends DataClass implements Insertable<Plan> {
     memo,
     currentGroupId,
     active,
+    orderIndex,
     createdAt,
     updatedAt,
   );
@@ -375,6 +411,7 @@ class Plan extends DataClass implements Insertable<Plan> {
           other.memo == this.memo &&
           other.currentGroupId == this.currentGroupId &&
           other.active == this.active &&
+          other.orderIndex == this.orderIndex &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -386,6 +423,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
   final Value<String> memo;
   final Value<String?> currentGroupId;
   final Value<bool> active;
+  final Value<int> orderIndex;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -396,6 +434,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
     this.memo = const Value.absent(),
     this.currentGroupId = const Value.absent(),
     this.active = const Value.absent(),
+    this.orderIndex = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -407,6 +446,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
     this.memo = const Value.absent(),
     this.currentGroupId = const Value.absent(),
     this.active = const Value.absent(),
+    this.orderIndex = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -422,6 +462,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
     Expression<String>? memo,
     Expression<String>? currentGroupId,
     Expression<bool>? active,
+    Expression<int>? orderIndex,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -433,6 +474,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
       if (memo != null) 'memo': memo,
       if (currentGroupId != null) 'current_group_id': currentGroupId,
       if (active != null) 'active': active,
+      if (orderIndex != null) 'order_index': orderIndex,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -446,6 +488,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
     Value<String>? memo,
     Value<String?>? currentGroupId,
     Value<bool>? active,
+    Value<int>? orderIndex,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -457,6 +500,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
       memo: memo ?? this.memo,
       currentGroupId: currentGroupId ?? this.currentGroupId,
       active: active ?? this.active,
+      orderIndex: orderIndex ?? this.orderIndex,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -484,6 +528,9 @@ class PlansCompanion extends UpdateCompanion<Plan> {
     if (active.present) {
       map['active'] = Variable<bool>(active.value);
     }
+    if (orderIndex.present) {
+      map['order_index'] = Variable<int>(orderIndex.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -505,6 +552,7 @@ class PlansCompanion extends UpdateCompanion<Plan> {
           ..write('memo: $memo, ')
           ..write('currentGroupId: $currentGroupId, ')
           ..write('active: $active, ')
+          ..write('orderIndex: $orderIndex, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -5985,6 +6033,7 @@ typedef $$PlansTableCreateCompanionBuilder =
       Value<String> memo,
       Value<String?> currentGroupId,
       Value<bool> active,
+      Value<int> orderIndex,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -5997,6 +6046,7 @@ typedef $$PlansTableUpdateCompanionBuilder =
       Value<String> memo,
       Value<String?> currentGroupId,
       Value<bool> active,
+      Value<int> orderIndex,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -6098,6 +6148,11 @@ class $$PlansTableFilterComposer extends Composer<_$AppDatabase, $PlansTable> {
 
   ColumnFilters<bool> get active => $composableBuilder(
     column: $table.active,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get orderIndex => $composableBuilder(
+    column: $table.orderIndex,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6226,6 +6281,11 @@ class $$PlansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get orderIndex => $composableBuilder(
+    column: $table.orderIndex,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -6265,6 +6325,11 @@ class $$PlansTableAnnotationComposer
 
   GeneratedColumn<bool> get active =>
       $composableBuilder(column: $table.active, builder: (column) => column);
+
+  GeneratedColumn<int> get orderIndex => $composableBuilder(
+    column: $table.orderIndex,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -6386,6 +6451,7 @@ class $$PlansTableTableManager
                 Value<String> memo = const Value.absent(),
                 Value<String?> currentGroupId = const Value.absent(),
                 Value<bool> active = const Value.absent(),
+                Value<int> orderIndex = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -6396,6 +6462,7 @@ class $$PlansTableTableManager
                 memo: memo,
                 currentGroupId: currentGroupId,
                 active: active,
+                orderIndex: orderIndex,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -6408,6 +6475,7 @@ class $$PlansTableTableManager
                 Value<String> memo = const Value.absent(),
                 Value<String?> currentGroupId = const Value.absent(),
                 Value<bool> active = const Value.absent(),
+                Value<int> orderIndex = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -6418,6 +6486,7 @@ class $$PlansTableTableManager
                 memo: memo,
                 currentGroupId: currentGroupId,
                 active: active,
+                orderIndex: orderIndex,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

@@ -68,6 +68,12 @@ class DesktopPilgrimageRepository extends SamplePilgrimageRepository {
   }
 
   @override
+  Future<void> reorderPlans({required List<String> orderedPlanIds}) async {
+    await super.reorderPlans(orderedPlanIds: orderedPlanIds);
+    await saveDesktopState(stateJson: encodeDesktopRepositoryState(snapshot()));
+  }
+
+  @override
   Future<PilgrimagePlan> createPlan({
     required String name,
     required String area,

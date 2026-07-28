@@ -14,6 +14,7 @@ import 'package:miriago/point_detail/point_detail_sheet.dart';
 import 'package:miriago/plan/anitabi_map_import_screen.dart';
 import 'package:miriago/plan/nearest_group_assign_screen.dart';
 import 'package:miriago/plan/plan_group_manager_screen.dart';
+import 'package:miriago/plan/plan_manager_screen.dart';
 import 'package:miriago/plan/point_manager_screen.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
@@ -1275,7 +1276,9 @@ void main() {
   });
 
   testWidgets('creates a new plan from the plan manager', (tester) async {
-    await _pumpApp(tester);
+    final repository = SamplePilgrimageRepository();
+    await tester.pumpWidget(MiriaGoApp(repository: repository));
+    await tester.pumpAndSettle();
 
     await _openPlanMenu(tester);
     await tester.tap(find.text('切换计划'));
@@ -1300,12 +1303,11 @@ void main() {
     expect(tester.getSize(find.byTooltip('更多计划操作').first), const Size(38, 34));
     expect(find.text('导入导出'), findsNothing);
     expect(find.byTooltip('编辑计划信息'), findsNWidgets(3));
-    expect(find.byTooltip('计划排序'), findsNothing);
-    expect(find.byTooltip('拖动排序（待接入）'), findsNothing);
+    expect(find.byTooltip('计划排序'), findsOneWidget);
+    expect(find.byTooltip('拖动排序'), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) =>
-            widget is Icon &&
             widget.key is ValueKey<String> &&
             (widget.key! as ValueKey<String>).value.startsWith(
               'plan-card-drag-handle-',
@@ -1371,7 +1373,6 @@ void main() {
     expect(selectedCardRect.bottom - moreRect.bottom, closeTo(4, 0.1));
     final dragHandles = find.byWidgetPredicate(
       (widget) =>
-          widget is Icon &&
           widget.key is ValueKey<String> &&
           (widget.key! as ValueKey<String>).value.startsWith(
             'plan-card-drag-handle-',
@@ -1381,6 +1382,27 @@ void main() {
       find.descendant(of: planCards.first, matching: dragHandles),
       findsNothing,
     );
+
+    await tester.tap(find.byTooltip('计划排序'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('完成排序'), findsOneWidget);
+    expect(find.byTooltip('拖动排序'), findsNWidgets(2));
+    expect(dragHandles, findsNWidgets(2));
+    final planIdsBeforeReorder = (await repository.loadPlans())
+        .map((plan) => plan.id)
+        .toList();
+    final reorderable = tester.widget<ReorderableListView>(
+      find.byKey(const ValueKey('reorderable-plan-list')),
+    );
+    reorderable.onReorderItem!(1, 0);
+    await tester.pumpAndSettle();
+    expect((await repository.loadPlans()).map((plan) => plan.id), [
+      planIdsBeforeReorder[1],
+      planIdsBeforeReorder[0],
+    ]);
+    await tester.tap(find.byTooltip('完成排序'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('拖动排序'), findsNothing);
 
     final planTitleTexts = find.descendant(
       of: find.byWidgetPredicate(
@@ -1519,6 +1541,44 @@ void main() {
 
     expect(find.text('切换计划'), findsNothing);
     expect((await repository.loadActivePlan()).id, 'sample-uji-hibike');
+  });
+
+  testWidgets('restores plan order when persistence fails', (tester) async {
+    final repository = _FailingPlanOrderRepository();
+    await repository.createPlan(name: '第二计划', area: '京都');
+    final originalIds = (await repository.loadPlans())
+        .map((plan) => plan.id)
+        .toList();
+    await tester.pumpWidget(
+      MaterialApp(home: PlanManagerScreen(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('计划排序'));
+    await tester.pumpAndSettle();
+    tester
+        .widget<ReorderableListView>(
+          find.byKey(const ValueKey('reorderable-plan-list')),
+        )
+        .onReorderItem!(1, 0);
+    await tester.pumpAndSettle();
+
+    expect((await repository.loadPlans()).map((plan) => plan.id), originalIds);
+    expect(find.text('保存计划顺序失败，已恢复原来的顺序。'), findsOneWidget);
+    final cardKeys = tester
+        .widgetList<Padding>(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Padding &&
+                widget.key is ValueKey<String> &&
+                (widget.key! as ValueKey<String>).value.startsWith(
+                  'reorder-plan-',
+                ),
+          ),
+        )
+        .map((widget) => (widget.key! as ValueKey<String>).value)
+        .toList();
+    expect(cardKeys, originalIds.map((id) => 'reorder-plan-$id'));
   });
 
   testWidgets('Bangumi work enables work-map import without existing points', (
@@ -2356,6 +2416,13 @@ class _DelayedAddPointRepository extends SamplePilgrimageRepository {
     }
     await _finishAddPoint.future;
     return super.addPointToPlan(planId: planId, point: point);
+  }
+}
+
+class _FailingPlanOrderRepository extends SamplePilgrimageRepository {
+  @override
+  Future<void> reorderPlans({required List<String> orderedPlanIds}) {
+    throw StateError('simulated persistence failure');
   }
 }
 

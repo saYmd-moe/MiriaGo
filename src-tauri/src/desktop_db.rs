@@ -163,6 +163,7 @@ impl DesktopDatabase {
                   memo TEXT NOT NULL DEFAULT '',
                   current_group_id TEXT,
                   active INTEGER NOT NULL DEFAULT 0,
+                  order_index INTEGER NOT NULL DEFAULT 0,
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
@@ -360,7 +361,33 @@ impl DesktopDatabase {
 
         if !columns.iter().any(|column| column == "memo") {
             self.connection
-                .execute("ALTER TABLE plans ADD COLUMN memo TEXT NOT NULL DEFAULT ''", [])
+                .execute(
+                    "ALTER TABLE plans ADD COLUMN memo TEXT NOT NULL DEFAULT ''",
+                    [],
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        if !columns.iter().any(|column| column == "order_index") {
+            self.connection
+                .execute(
+                    "ALTER TABLE plans ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0",
+                    [],
+                )
+                .map_err(|error| error.to_string())?;
+            self.connection
+                .execute(
+                    "UPDATE plans
+                     SET order_index = (
+                       SELECT COUNT(*)
+                       FROM plans AS earlier
+                       WHERE earlier.created_at < plans.created_at
+                          OR (
+                            earlier.created_at = plans.created_at
+                            AND earlier.id < plans.id
+                          )
+                     )",
+                    [],
+                )
                 .map_err(|error| error.to_string())?;
         }
         Ok(())
@@ -468,7 +495,7 @@ impl DesktopDatabase {
             .connection
             .prepare(
                 "SELECT id, name, area, memo, current_group_id, created_at, updated_at
-                 FROM plans ORDER BY created_at ASC",
+                 FROM plans ORDER BY order_index ASC, created_at ASC, id ASC",
             )
             .map_err(|error| error.to_string())?;
         let rows = statement
@@ -702,8 +729,8 @@ fn replace_relational_state(tx: &Transaction<'_>, state: &Value) -> Result<(), S
 
     insert_settings(tx, state.get("settings"))?;
     let active_plan_id = state.get("activePlanId").and_then(Value::as_str);
-    for plan in array_value(state.get("plans")) {
-        insert_plan(tx, plan, active_plan_id)?;
+    for (order_index, plan) in array_value(state.get("plans")).into_iter().enumerate() {
+        insert_plan(tx, plan, active_plan_id, Some(order_index as i64))?;
     }
     for record in array_value(state.get("visitRecords")) {
         insert_visit_record(tx, record)?;
@@ -718,6 +745,14 @@ fn replace_plan_bundle(
     visit_records: &Value,
     active_plan_id: Option<&str>,
 ) -> Result<(), String> {
+    let order_index = tx
+        .query_row(
+            "SELECT order_index FROM plans WHERE id = ?1",
+            params![plan_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
     delete_plan_graph_rows(tx, plan_id)?;
     tx.execute(
         "DELETE FROM visit_records WHERE plan_id = ?1",
@@ -727,7 +762,7 @@ fn replace_plan_bundle(
     if active_plan_id.is_some() {
         set_active_plan_in_tx(tx, active_plan_id)?;
     }
-    insert_plan(tx, plan, active_plan_id)?;
+    insert_plan(tx, plan, active_plan_id, order_index)?;
     for record in array_value(Some(visit_records)) {
         insert_visit_record(tx, record)?;
     }
@@ -807,11 +842,25 @@ fn insert_plan(
     tx: &Transaction<'_>,
     plan: &Value,
     active_plan_id: Option<&str>,
+    order_index: Option<i64>,
 ) -> Result<(), String> {
     let plan_id = required_string(plan, "id")?;
+    let order_index = match order_index {
+        Some(value) => value,
+        None => tx
+            .query_row(
+                "SELECT COALESCE(MAX(order_index), -1) + 1 FROM plans",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map_err(|error| error.to_string())?,
+    };
     tx.execute(
-        "INSERT INTO plans (id, name, area, memo, current_group_id, active, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO plans (
+           id, name, area, memo, current_group_id, active, order_index,
+           created_at, updated_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             plan_id,
             string_value(plan, "name", "桌面端计划"),
@@ -819,6 +868,7 @@ fn insert_plan(
             string_value(plan, "memo", ""),
             optional_string(plan, "currentGroupId"),
             (active_plan_id == Some(plan_id)) as i64,
+            order_index,
             string_value(plan, "createdAt", "1970-01-01T00:00:00.000"),
             string_value(plan, "updatedAt", "1970-01-01T00:00:00.000"),
         ],

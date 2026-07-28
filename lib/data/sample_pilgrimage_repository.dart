@@ -67,6 +67,15 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
   }
 
   @override
+  Future<void> reorderPlans({required List<String> orderedPlanIds}) async {
+    _validatePlanOrder(orderedPlanIds);
+    final plansById = {for (final plan in _plans) plan.id: plan};
+    _plans
+      ..clear()
+      ..addAll(orderedPlanIds.map((id) => plansById[id]!));
+  }
+
+  @override
   Future<PilgrimagePlan> createPlan({
     required String name,
     required String area,
@@ -483,6 +492,20 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
     _visitRecords.removeWhere((record) => record.planId == id);
     if (_activePlanId == id) {
       _activePlanId = _plans.first.id;
+    }
+  }
+
+  void _validatePlanOrder(List<String> orderedPlanIds) {
+    final currentIds = _plans.map((plan) => plan.id).toSet();
+    final orderedIds = orderedPlanIds.toSet();
+    if (orderedPlanIds.length != _plans.length ||
+        orderedIds.length != orderedPlanIds.length ||
+        !orderedIds.containsAll(currentIds)) {
+      throw ArgumentError.value(
+        orderedPlanIds,
+        'orderedPlanIds',
+        'Plan order must contain every existing plan exactly once.',
+      );
     }
   }
 
