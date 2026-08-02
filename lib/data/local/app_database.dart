@@ -150,6 +150,8 @@ class AppSettingsEntries extends Table {
       integer().withDefault(const Constant(40))();
   IntColumn get mapThumbnailConcurrentLoads =>
       integer().withDefault(const Constant(10))();
+  BoolColumn get showPlanGroupProgress =>
+      boolean().withDefault(const Constant(true))();
   BoolColumn get mapMarkerClusteringEnabled =>
       boolean().withDefault(const Constant(true))();
   IntColumn get mapMarkerClusterRadius =>
@@ -172,7 +174,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 34;
+  int get schemaVersion => 35;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -530,6 +532,15 @@ class AppDatabase extends _$AppDatabase {
           SET map_marker_cluster_max_zoom = 21
           WHERE map_marker_cluster_max_zoom = 18
         ''');
+      }
+      if (from < 35) {
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'show_plan_group_progress',
+          appSettingsEntries,
+          appSettingsEntries.showPlanGroupProgress,
+        );
       }
     },
   );

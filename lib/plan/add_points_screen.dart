@@ -432,7 +432,24 @@ class BangumiWorkSearchScreenState extends State<BangumiWorkSearchScreen> {
   final Set<String> _addedWorkIds = {};
 
   @override
+  void initState() {
+    super.initState();
+    _queryController.addListener(_handleQueryChanged);
+  }
+
+  void _handleQueryChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _clearQuery() {
+    _queryController.clear();
+  }
+
+  @override
   void dispose() {
+    _queryController.removeListener(_handleQueryChanged);
     _queryController.dispose();
     super.dispose();
   }
@@ -545,10 +562,31 @@ class BangumiWorkSearchScreenState extends State<BangumiWorkSearchScreen> {
                   prominent: true,
                   child: TextField(
                     controller: _queryController,
-                    decoration: _boxedFormDecoration(
-                      hintText: '例如：轻音少女',
-                      reserveHelperSpace: false,
-                    ),
+                    decoration:
+                        _boxedFormDecoration(
+                          hintText: '例如：轻音少女',
+                          reserveHelperSpace: false,
+                        ).copyWith(
+                          suffixIcon: _queryController.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  key: const ValueKey(
+                                    'bangumi-search-clear-button',
+                                  ),
+                                  tooltip: '清空搜索',
+                                  onPressed: _clearQuery,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 40,
+                                    height: 46,
+                                  ),
+                                  icon: const Icon(Icons.clear, size: 19),
+                                ),
+                          suffixIconConstraints: const BoxConstraints.tightFor(
+                            width: 40,
+                            height: 46,
+                          ),
+                        ),
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _search(),
                   ),
@@ -849,7 +887,25 @@ class _AnitabiLinkImportScreenState extends State<_AnitabiLinkImportScreen> {
   final _linkController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _linkController.addListener(_handleLinkChanged);
+  }
+
+  void _handleLinkChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _clearLink() {
+    _linkController.clear();
+    _formKey.currentState?.reset();
+  }
+
+  @override
   void dispose() {
+    _linkController.removeListener(_handleLinkChanged);
     _linkController.dispose();
     super.dispose();
   }
@@ -923,6 +979,7 @@ class _AnitabiLinkImportScreenState extends State<_AnitabiLinkImportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasLinkText = _linkController.text.isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: const Text('Anitabi 链接导入')),
       body: Form(
@@ -969,17 +1026,27 @@ class _AnitabiLinkImportScreenState extends State<_AnitabiLinkImportScreen> {
                         letterSpacing: 0,
                       ),
                       helperText: ' ',
-                      suffixIcon: Padding(
-                        padding: EdgeInsets.only(right: 6),
-                        child: IconButton(
-                          onPressed: _pasteLinkFromClipboard,
-                          tooltip: '粘贴',
-                          icon: Icon(Icons.content_paste_outlined, size: 20),
+                      suffixIcon: IconButton(
+                        key: const ValueKey('anitabi-link-input-action'),
+                        onPressed: hasLinkText
+                            ? _clearLink
+                            : _pasteLinkFromClipboard,
+                        tooltip: hasLinkText ? '清除搜索框' : '粘贴',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints.tightFor(
+                          width: 40,
+                          height: 40,
+                        ),
+                        icon: Icon(
+                          hasLinkText
+                              ? Icons.clear
+                              : Icons.content_paste_outlined,
+                          size: 20,
                         ),
                       ),
-                      suffixIconConstraints: const BoxConstraints(
-                        minWidth: 46,
-                        minHeight: 40,
+                      suffixIconConstraints: const BoxConstraints.tightFor(
+                        width: 40,
+                        height: 40,
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,

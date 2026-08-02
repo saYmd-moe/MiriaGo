@@ -838,6 +838,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
       context: context,
       groups: groups,
       selectedGroupId: groups[_selectedGroupIndex].id,
+      showProgressRing: widget.settings.showPlanGroupProgress,
       onSelectGroup: (selectedGroup) {
         final index = groups.indexWhere(
           (group) => group.id == selectedGroup.id,
@@ -1047,7 +1048,11 @@ class _PointCard extends StatelessWidget {
               onPrevious: onPreviousOverlapPoint!,
               onNext: onNextOverlapPoint!,
             ),
-            const Divider(height: 1),
+            const Divider(
+              key: ValueKey('map-overlap-point-divider'),
+              height: 1,
+              color: AppColors.border,
+            ),
             const SizedBox(height: 6),
           ],
           Row(

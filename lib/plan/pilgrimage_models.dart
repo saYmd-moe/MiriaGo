@@ -171,6 +171,7 @@ class AppSettings {
     this.customCameraAspectRatioHeight = 1,
     this.mapThumbnailVisibleThreshold = 40,
     this.mapThumbnailConcurrentLoads = 10,
+    this.showPlanGroupProgress = true,
     this.mapMarkerClusteringEnabled = true,
     this.mapMarkerClusterRadius = 40,
     this.mapMarkerClusterMaxZoom = 21,
@@ -206,6 +207,7 @@ class AppSettings {
   final double customCameraAspectRatioHeight;
   final int mapThumbnailVisibleThreshold;
   final int mapThumbnailConcurrentLoads;
+  final bool showPlanGroupProgress;
   final bool mapMarkerClusteringEnabled;
   final int mapMarkerClusterRadius;
   final int mapMarkerClusterMaxZoom;
@@ -241,6 +243,7 @@ class AppSettings {
     double? customCameraAspectRatioHeight,
     int? mapThumbnailVisibleThreshold,
     int? mapThumbnailConcurrentLoads,
+    bool? showPlanGroupProgress,
     bool? mapMarkerClusteringEnabled,
     int? mapMarkerClusterRadius,
     int? mapMarkerClusterMaxZoom,
@@ -289,6 +292,8 @@ class AppSettings {
           mapThumbnailVisibleThreshold ?? this.mapThumbnailVisibleThreshold,
       mapThumbnailConcurrentLoads:
           mapThumbnailConcurrentLoads ?? this.mapThumbnailConcurrentLoads,
+      showPlanGroupProgress:
+          showPlanGroupProgress ?? this.showPlanGroupProgress,
       mapMarkerClusteringEnabled:
           mapMarkerClusteringEnabled ?? this.mapMarkerClusteringEnabled,
       mapMarkerClusterRadius:
