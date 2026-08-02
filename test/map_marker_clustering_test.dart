@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:miriago/app_theme.dart';
 import 'package:miriago/map/map_marker_clustering.dart';
 import 'package:miriago/map/pilgrimage_map_screen.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';

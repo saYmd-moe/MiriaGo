@@ -1496,6 +1496,7 @@ class _PointManagerTile extends StatelessWidget {
               ),
               if (!selectionMode)
                 PopupMenuButton<String>(
+                  key: ValueKey('point-manager-actions-${point.id}'),
                   tooltip: '点位操作',
                   enabled: !isBusy,
                   onSelected: (value) {

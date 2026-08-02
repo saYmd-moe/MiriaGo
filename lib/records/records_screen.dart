@@ -31,6 +31,7 @@ class RecordsScreen extends StatefulWidget {
 class _RecordsScreenState extends State<RecordsScreen> {
   Set<String>? _selectedWorkIds;
   Set<String>? _selectedGroupFilterIds;
+  late String _scopeFilterPlanId = widget.controller.plan.id;
   String _searchQuery = '';
   _RecordStatusFilter _statusFilter = _RecordStatusFilter.all;
   var _expandedSectionsInitialized = false;
@@ -39,6 +40,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
+    _synchronizeScopeFilters(controller.plan);
     final records = _filteredRecords(controller);
     final sections = _groupedRecords(controller, records);
     if (!_expandedSectionsInitialized && sections.isNotEmpty) {
@@ -186,6 +188,39 @@ class _RecordsScreenState extends State<RecordsScreen> {
   void _resetExpandedSections() {
     _expandedSectionIds.clear();
     _expandedSectionsInitialized = false;
+  }
+
+  void _synchronizeScopeFilters(PilgrimagePlan plan) {
+    if (_scopeFilterPlanId != plan.id) {
+      _scopeFilterPlanId = plan.id;
+      _selectedWorkIds = null;
+      _selectedGroupFilterIds = null;
+      _resetExpandedSections();
+      return;
+    }
+
+    final validWorkIds = plan.works.map((work) => work.id).toSet();
+    _selectedWorkIds = _validFilterSelection(_selectedWorkIds, validWorkIds);
+    final validGroupIds = {
+      ...plan.groups.map((group) => group.id),
+      _ungroupedRecordFilterId,
+      _orphanRecordFilterId,
+    };
+    _selectedGroupFilterIds = _validFilterSelection(
+      _selectedGroupFilterIds,
+      validGroupIds,
+    );
+  }
+
+  Set<String>? _validFilterSelection(
+    Set<String>? selection,
+    Set<String> validIds,
+  ) {
+    if (selection == null) {
+      return null;
+    }
+    final retained = selection.intersection(validIds);
+    return retained.isEmpty ? null : retained;
   }
 
   List<PilgrimageVisitRecord> _filteredRecords(

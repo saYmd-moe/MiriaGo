@@ -20,6 +20,8 @@ import 'package:miriago/plan/plan_group_manager_screen.dart';
 import 'package:miriago/plan/plan_manager_screen.dart';
 import 'package:miriago/plan/point_manager_screen.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
+import 'package:miriago/plan/pilgrimage_plan_controller.dart';
+import 'package:miriago/records/records_screen.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
 import 'package:miriago/widgets/reference_image_placeholder.dart';
 
@@ -702,8 +704,9 @@ void main() {
           .right,
       closeTo(
         tester
-            .getRect(find.byKey(const ValueKey('records-search-shell')))
-            .right,
+                .getRect(find.byKey(const ValueKey('records-search-shell')))
+                .right -
+            1,
         0.1,
       ),
     );
@@ -829,6 +832,54 @@ void main() {
       find.byKey(const ValueKey('records-group-sample-group-uji-station')),
       findsNothing,
     );
+  });
+
+  testWidgets('records clear stale scope filters when the plan changes', (
+    tester,
+  ) async {
+    final repository = SamplePilgrimageRepository();
+    final initialPlan = await repository.loadActivePlan();
+    final controller = PilgrimagePlanController(
+      plan: initialPlan,
+      visitRepository: repository,
+    );
+    addTearDown(controller.dispose);
+
+    Widget recordsApp() => MaterialApp(
+      theme: AppTheme.light(),
+      home: RecordsScreen(
+        controller: controller,
+        settings: const AppSettings(),
+      ),
+    );
+
+    await tester.pumpWidget(recordsApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-filter-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-work-entry')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('records-scope-option-work-hibike-euphonium')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('records-scope-secondary-confirm-work')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-apply')));
+    await tester.pumpAndSettle();
+
+    final nextPlan = await repository.createPlan(name: '新计划', area: '东京');
+    controller.replacePlan(nextPlan);
+    await controller.loadVisitRecords();
+    await tester.pumpWidget(recordsApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-filter-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选：作品 0 · 片区 0'), findsOneWidget);
+    expect(find.text('全部作品'), findsOneWidget);
+    expect(find.text('全部片区'), findsOneWidget);
   });
 
   testWidgets('records app bar toggles all group sections', (tester) async {
@@ -1323,9 +1374,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    tester
-        .widget<PopupMenuButton<String>>(find.byType(PopupMenuButton))
-        .onSelected!('move');
+    final actions = find.byKey(ValueKey('point-manager-actions-${point.id}'));
+    await tester.ensureVisible(actions);
+    tester.widget<PopupMenuButton<String>>(actions).onSelected!('move');
     await tester.pumpAndSettle();
 
     expect(find.text('移动到片区'), findsOneWidget);
