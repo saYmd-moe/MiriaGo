@@ -144,6 +144,8 @@ class _PlanGroupPickerTile extends StatelessWidget {
         : (group.completedCount / group.points.length)
               .clamp(0.0, 1.0)
               .toDouble();
+    final completed =
+        group.points.isNotEmpty && group.completedCount >= group.points.length;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -159,6 +161,25 @@ class _PlanGroupPickerTile extends StatelessWidget {
             height: 68,
             child: Stack(
               children: [
+                if (showProgressRing && !completed)
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        key: ValueKey('plan-group-picker-progress-${group.id}'),
+                        widthFactor: progress,
+                        heightFactor: 1,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(
+                              alpha: selected ? 0.18 : 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 if (selected)
                   Positioned(
                     key: const ValueKey('plan-group-picker-selected-accent'),
@@ -179,15 +200,49 @@ class _PlanGroupPickerTile extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
                   child: Row(
                     children: [
-                      Icon(
-                        group.isUngrouped
-                            ? (selected
-                                  ? Icons.inventory_2
-                                  : Icons.inventory_2_outlined)
-                            : (selected ? Icons.folder : Icons.folder_outlined),
-                        color: selected ? accentColor : AppColors.textSecondary,
-                        size: 24,
-                      ),
+                      if (completed)
+                        SizedBox(
+                          key: ValueKey(
+                            'plan-group-picker-completed-icon-${group.id}',
+                          ),
+                          width: 28,
+                          height: 26,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Icon(
+                                Icons.folder,
+                                color: AppColors.accentDark,
+                                size: 28,
+                              ),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 2),
+                                child: Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        SizedBox(
+                          width: 28,
+                          child: Icon(
+                            group.isUngrouped
+                                ? (selected
+                                      ? Icons.inventory_2
+                                      : Icons.inventory_2_outlined)
+                                : (selected
+                                      ? Icons.folder
+                                      : Icons.folder_outlined),
+                            color: selected
+                                ? accentColor
+                                : AppColors.textSecondary,
+                            size: 24,
+                          ),
+                        ),
                       const SizedBox(width: 14),
                       Expanded(
                         child: Column(
@@ -220,57 +275,40 @@ class _PlanGroupPickerTile extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      SizedBox.square(
-                        dimension: 44,
-                        key: ValueKey('plan-group-picker-progress-${group.id}'),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            if (showProgressRing)
-                              CircularProgressIndicator(
-                                value: progress,
-                                strokeWidth: 3,
-                                backgroundColor: AppColors.border,
-                                color: selected
-                                    ? accentColor
-                                    : AppColors.textSecondary,
-                              ),
-                            Text.rich(
-                              key: ValueKey(
-                                'plan-group-picker-count-${group.id}',
+                      SizedBox(
+                        width: 44,
+                        child: Text.rich(
+                          key: ValueKey('plan-group-picker-count-${group.id}'),
+                          TextSpan(
+                            text: '${group.completedCount}',
+                            children: [
+                              TextSpan(
+                                text: '/',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0,
+                                ),
                               ),
                               TextSpan(
-                                text: '${group.completedCount}',
-                                children: [
-                                  TextSpan(
-                                    text: '/',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: '${group.points.length}',
-                                    style: TextStyle(
-                                      fontSize: emphasizeTotalCount ? 17 : 10,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0,
-                                    ),
-                                  ),
-                                ],
+                                text: '${group.points.length}',
+                                style: TextStyle(
+                                  fontSize: emphasizeTotalCount ? 17 : 10,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0,
+                                ),
                               ),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: selected
-                                    ? accentColor
-                                    : AppColors.textSecondary,
-                                fontSize: emphasizeTotalCount ? 10 : 17,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: selected
+                                ? AppColors.accentDark
+                                : AppColors.textSecondary,
+                            fontSize: emphasizeTotalCount ? 10 : 17,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
                         ),
                       ),
                     ],

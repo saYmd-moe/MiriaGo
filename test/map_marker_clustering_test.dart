@@ -292,6 +292,14 @@ void main() {
       expect(controller.currentPoint?.id, 'point-c');
       expect(find.text('重合点位  1 / 3'), findsOneWidget);
       expect(
+        tester
+            .widget<Divider>(
+              find.byKey(const ValueKey('map-overlap-point-divider')),
+            )
+            .color,
+        AppColors.border,
+      );
+      expect(
         tester.widget<MarkerLayer>(find.byType(MarkerLayer)).markers.last.key,
         const ValueKey('plan-map-marker-point-a'),
       );

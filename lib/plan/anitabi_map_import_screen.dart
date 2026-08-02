@@ -57,6 +57,13 @@ class AnitabiMapImportScreen extends StatefulWidget {
   State<AnitabiMapImportScreen> createState() => _AnitabiMapImportScreenState();
 }
 
+class _ImportOverlapPointBrowser {
+  _ImportOverlapPointBrowser({required List<String> pointIds})
+    : pointIds = List.unmodifiable(pointIds);
+
+  final List<String> pointIds;
+}
+
 class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
   static const double _fallbackLoadedPointsZoom = 15;
   static const Duration _thumbnailBoundsDebounceDuration = Duration(
@@ -71,6 +78,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
   AnitabiBangumiLite? _lite;
   List<AnitabiPoint> _points = const [];
   AnitabiPoint? _selectedPoint;
+  _ImportOverlapPointBrowser? _overlapPointBrowser;
   Object? _error;
   bool _isLoading = false;
   bool _isImporting = false;
@@ -226,6 +234,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
         _error = null;
         _lite = null;
         _points = const [];
+        _overlapPointBrowser = null;
         _selectedPoint = null;
       });
       _showManualWorkMessage();
@@ -237,6 +246,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       _isLoading = true;
       _error = null;
       _points = const [];
+      _overlapPointBrowser = null;
       _selectedPoint = null;
     });
 
@@ -256,6 +266,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       setState(() {
         _lite = lite;
         _points = points;
+        _overlapPointBrowser = null;
         _selectedPoint = _initialSelectedPointForLoadedPoints(points, lite);
       });
       _requestMapMove(
@@ -328,6 +339,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       _isLoading = true;
       _error = null;
       _points = const [];
+      _overlapPointBrowser = null;
       _selectedPoint = null;
     });
 
@@ -350,6 +362,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
         _selectedWork = work;
         _lite = lite;
         _points = points;
+        _overlapPointBrowser = null;
         _selectedPoint = _initialSelectedPointForLoadedPoints(points, lite);
       });
       _requestMapMove(
@@ -379,6 +392,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       _isLoading = true;
       _error = null;
       _points = const [];
+      _overlapPointBrowser = null;
       _selectedPoint = null;
     });
 
@@ -403,6 +417,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
         _selectedWork = work;
         _lite = lite;
         _points = result.points;
+        _overlapPointBrowser = null;
         _selectedPoint = result.point;
       });
       _requestMapMove(result.point.position, math.max(lite.zoom, 15));
@@ -519,7 +534,11 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
     return plan.works.firstOrNull;
   }
 
-  void _selectPoint(AnitabiPoint point) {
+  void _selectPoint(
+    AnitabiPoint point, {
+    bool preserveOverlapBrowser = false,
+    _ImportOverlapPointBrowser? overlapPointBrowser,
+  }) {
     if (_isImporting) {
       return;
     }
@@ -531,8 +550,66 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
     messenger.removeCurrentSnackBar();
     messenger.clearSnackBars();
     setState(() {
+      if (overlapPointBrowser != null) {
+        _overlapPointBrowser = overlapPointBrowser;
+      } else if (!preserveOverlapBrowser) {
+        _overlapPointBrowser = null;
+      }
       _selectedPoint = point;
     });
+  }
+
+  void _openOverlapPointBrowser(
+    List<AnitabiPoint> points,
+    List<AnitabiPoint> visiblePoints,
+  ) {
+    if (_isImporting) {
+      return;
+    }
+    final orderedPoints = orderMapClusterItems<AnitabiPoint>(
+      items: points,
+      planOrder: visiblePoints,
+      idOf: (point) => point.id,
+    );
+    if (orderedPoints.isEmpty) {
+      return;
+    }
+    if (orderedPoints.length == 1) {
+      _selectPoint(orderedPoints.single);
+      return;
+    }
+    _selectPoint(
+      orderedPoints.first,
+      overlapPointBrowser: _ImportOverlapPointBrowser(
+        pointIds: orderedPoints.map((point) => point.id).toList(),
+      ),
+    );
+  }
+
+  void _moveOverlapPoint(int offset) {
+    final browser = _overlapPointBrowser;
+    if (browser == null || browser.pointIds.length < 2) {
+      return;
+    }
+    final pointsById = {
+      for (final point in _pointsForWork(_selectedWork)) point.id: point,
+    };
+    final points = [
+      for (final pointId in browser.pointIds) ?pointsById[pointId],
+    ];
+    if (points.length < 2) {
+      setState(() => _overlapPointBrowser = null);
+      return;
+    }
+    final selectedIndex = points.indexWhere(
+      (point) => point.id == _selectedPoint?.id,
+    );
+    final nextIndex = nextMapOverlapIndex(
+      currentIndex: selectedIndex < 0 ? 0 : selectedIndex,
+      offset: offset,
+      total: points.length,
+    );
+    _selectPoint(points[nextIndex], preserveOverlapBrowser: true);
   }
 
   PilgrimagePoint? _importedPointFor(AnitabiPoint point) {
@@ -1082,6 +1159,9 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
   }
 
   void _handleMapEvent(MapEvent event) {
+    if (_overlapPointBrowser != null && !isAtMaximumMapZoom(event.camera)) {
+      setState(() => _overlapPointBrowser = null);
+    }
     if (!_showThumbnailMarkers) {
       return;
     }
@@ -1236,6 +1316,16 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       visiblePoints,
       isSelected: (point) => point.id == selectedPoint?.id,
     );
+    final pointsById = {for (final point in visiblePoints) point.id: point};
+    final overlapPoints = [
+      for (final pointId in _overlapPointBrowser?.pointIds ?? const <String>[])
+        ?pointsById[pointId],
+    ];
+    final overlapPointIndex = overlapPoints.indexWhere(
+      (point) => point.id == selectedPoint?.id,
+    );
+    final hasActiveOverlapBrowser =
+        overlapPoints.length > 1 && overlapPointIndex >= 0;
 
     return PopScope(
       canPop: !_isImporting,
@@ -1360,28 +1450,74 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
                                   visiblePoints,
                                   visibleBounds,
                                 );
-                            final clusteringEnabled =
+                            final atMaximumZoom = isAtMaximumMapZoom(camera);
+                            final normalClusteringEnabled =
                                 _settings.mapMarkerClusteringEnabled &&
                                 camera.zoom <=
                                     _settings.mapMarkerClusterMaxZoom;
+                            final overlapClusteringEnabled =
+                                _settings.mapMarkerClusteringEnabled &&
+                                camera.zoom > _settings.mapMarkerClusterMaxZoom;
+                            final clusteringEnabled =
+                                normalClusteringEnabled ||
+                                overlapClusteringEnabled;
+                            final activeOverlapPointIds =
+                                hasActiveOverlapBrowser && atMaximumZoom
+                                ? overlapPoints.map((point) => point.id).toSet()
+                                : const <String>{};
+                            final clusterItems = activeOverlapPointIds.isEmpty
+                                ? mapPoints
+                                : mapPoints
+                                      .where(
+                                        (point) => !activeOverlapPointIds
+                                            .contains(point.id),
+                                      )
+                                      .toList(growable: false);
+                            final terminalRadiusLimit =
+                                scaledMapMarkerDimension(
+                                  _showThumbnailMarkers ? 52 : 44,
+                                  _settings.mapMarkerScale,
+                                );
+                            final clusterRadius = normalClusteringEnabled
+                                ? _settings.mapMarkerClusterRadius.toDouble()
+                                : _settings.mapMarkerClusterRadius
+                                      .toDouble()
+                                      .clamp(1, terminalRadiusLimit)
+                                      .toDouble();
                             final markerClusters = clusteringEnabled
                                 ? clusterMapMarkers<AnitabiPoint>(
-                                    items: mapPoints,
+                                    items: clusterItems,
                                     positionOf: (point) => point.position,
                                     camera: camera,
-                                    radiusPixels: _settings
-                                        .mapMarkerClusterRadius
-                                        .toDouble(),
+                                    radiusPixels: clusterRadius,
                                     keepSeparate: (point) =>
+                                        activeOverlapPointIds.isEmpty &&
+                                        normalClusteringEnabled &&
                                         point.id == selectedPoint?.id,
                                   )
                                 : [
-                                    for (final point in mapPoints)
+                                    for (final point in clusterItems)
                                       MapMarkerCluster(
                                         items: [point],
                                         position: point.position,
                                       ),
+                                    if (activeOverlapPointIds.isNotEmpty &&
+                                        selectedPoint != null)
+                                      MapMarkerCluster(
+                                        items: [selectedPoint],
+                                        position: selectedPoint.position,
+                                      ),
                                   ];
+                            if (clusteringEnabled &&
+                                activeOverlapPointIds.isNotEmpty &&
+                                selectedPoint != null) {
+                              markerClusters.add(
+                                MapMarkerCluster(
+                                  items: [selectedPoint],
+                                  position: selectedPoint.position,
+                                ),
+                              );
+                            }
                             return MarkerLayer(
                               markers: [
                                 for (final cluster in markerClusters)
@@ -1406,14 +1542,25 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
                                         child: Center(
                                           child: MapMarkerClusterBadge(
                                             count: cluster.items.length,
-                                            onTap: () => _mapController.move(
-                                              cluster.position,
-                                              nextClusterZoom(
-                                                camera,
-                                                _settings
-                                                    .mapMarkerClusterMaxZoom,
-                                              ),
-                                            ),
+                                            opensPointBrowser: atMaximumZoom,
+                                            onTap: atMaximumZoom
+                                                ? () =>
+                                                      _openOverlapPointBrowser(
+                                                        cluster.items,
+                                                        visiblePoints,
+                                                      )
+                                                : () => _mapController.move(
+                                                    cluster.position,
+                                                    normalClusteringEnabled
+                                                        ? nextClusterZoom(
+                                                            camera,
+                                                            _settings
+                                                                .mapMarkerClusterMaxZoom,
+                                                          )
+                                                        : nextOverlapClusterZoom(
+                                                            camera,
+                                                          ),
+                                                  ),
                                           ),
                                         ),
                                       ),
@@ -1510,6 +1657,18 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
                               ),
                               isImporting: _isImporting,
                               onImport: _importSelectedPoint,
+                              overlapPointIndex: hasActiveOverlapBrowser
+                                  ? overlapPointIndex
+                                  : null,
+                              overlapPointCount: hasActiveOverlapBrowser
+                                  ? overlapPoints.length
+                                  : null,
+                              onPreviousOverlapPoint: hasActiveOverlapBrowser
+                                  ? () => _moveOverlapPoint(-1)
+                                  : null,
+                              onNextOverlapPoint: hasActiveOverlapBrowser
+                                  ? () => _moveOverlapPoint(1)
+                                  : null,
                             ),
                     ),
                   ],
@@ -1872,6 +2031,10 @@ class _AnitabiPointCard extends StatelessWidget {
     required this.imported,
     required this.isImporting,
     required this.onImport,
+    this.overlapPointIndex,
+    this.overlapPointCount,
+    this.onPreviousOverlapPoint,
+    this.onNextOverlapPoint,
   });
 
   final AnitabiPoint point;
@@ -1884,6 +2047,10 @@ class _AnitabiPointCard extends StatelessWidget {
   final bool imported;
   final bool isImporting;
   final VoidCallback onImport;
+  final int? overlapPointIndex;
+  final int? overlapPointCount;
+  final VoidCallback? onPreviousOverlapPoint;
+  final VoidCallback? onNextOverlapPoint;
 
   @override
   Widget build(BuildContext context) {
@@ -1892,6 +2059,11 @@ class _AnitabiPointCard extends StatelessWidget {
     final fullImageUrl = anitabiFullResolutionImageUrl(point.referenceImageUrl);
     final localThumbnailPath = importedPoint?.referenceThumbnailPath;
     final localFullPath = importedPoint?.referenceFullImagePath;
+    final showOverlapPager =
+        overlapPointIndex != null &&
+        overlapPointCount != null &&
+        onPreviousOverlapPoint != null &&
+        onNextOverlapPoint != null;
     void openFullImage() {
       if (fullImageUrl == null) {
         return;
@@ -1938,135 +2110,162 @@ class _AnitabiPointCard extends StatelessWidget {
           side: const BorderSide(color: AppColors.border),
         ),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: ValueKey('anitabi-point-card-${point.id}'),
-          onTap: openDetail,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Material(
-                    color: AppColors.surfaceMuted,
-                    child: InkWell(
-                      onTap: fullImageUrl == null ? null : openFullImage,
-                      child: SizedBox(
-                        width: 86,
-                        height: 86,
-                        child: importedPoint == null
-                            ? ReferenceThumbnail(
-                                localPath: localThumbnailPath,
-                                imageUrl: imageUrl,
-                                placeholder: const Icon(Icons.image_outlined),
-                              )
-                            : AutoCachingReferenceThumbnail(
-                                planId: planId,
-                                point: importedPoint!,
-                                repository: repository,
-                                onPlanUpdated: onPlanUpdated,
-                                placeholder: const Icon(Icons.image_outlined),
-                              ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showOverlapPager) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+                child: MapOverlapPointPager(
+                  currentIndex: overlapPointIndex!,
+                  total: overlapPointCount!,
+                  onPrevious: onPreviousOverlapPoint!,
+                  onNext: onNextOverlapPoint!,
+                ),
+              ),
+              const Divider(
+                key: ValueKey('anitabi-import-overlap-point-divider'),
+                height: 1,
+                indent: 14,
+                endIndent: 14,
+                color: AppColors.border,
+              ),
+            ],
+            InkWell(
+              key: ValueKey('anitabi-point-card-${point.id}'),
+              onTap: openDetail,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Material(
+                        color: AppColors.surfaceMuted,
+                        child: InkWell(
+                          onTap: fullImageUrl == null ? null : openFullImage,
+                          child: SizedBox(
+                            width: 86,
+                            height: 86,
+                            child: importedPoint == null
+                                ? ReferenceThumbnail(
+                                    localPath: localThumbnailPath,
+                                    imageUrl: imageUrl,
+                                    placeholder: const Icon(
+                                      Icons.image_outlined,
+                                    ),
+                                  )
+                                : AutoCachingReferenceThumbnail(
+                                    planId: planId,
+                                    point: importedPoint!,
+                                    repository: repository,
+                                    onPlanUpdated: onPlanUpdated,
+                                    placeholder: const Icon(
+                                      Icons.image_outlined,
+                                    ),
+                                  ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CopyableText(
-                        text: point.name,
-                        copyLabel: '点位名称',
-                        onTap: openDetail,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      CopyableText(
-                        text: '${point.subtitle} / ${point.episodeLabel}',
-                        copyText: _copySummary,
-                        copyLabel: '点位信息',
-                        onTap: openDetail,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      CopyableText(
-                        text: point.origin,
-                        copyLabel: '来源',
-                        onTap: openDetail,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                          letterSpacing: 0,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          SizedBox(
-                            height: 40,
-                            child: OutlinedButton.icon(
-                              onPressed: openNavigation,
-                              icon: const Icon(
-                                Icons.navigation_outlined,
-                                size: 17,
-                              ),
-                              label: const Text('导航'),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                ),
-                              ),
+                          CopyableText(
+                            text: point.name,
+                            copyLabel: '点位名称',
+                            onTap: openDetail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: SizedBox(
-                              height: 40,
-                              child: FilledButton.icon(
-                                onPressed: imported || isImporting
-                                    ? null
-                                    : onImport,
-                                icon: Icon(
-                                  imported
-                                      ? Icons.check
-                                      : Icons.add_location_alt_outlined,
-                                  size: 18,
-                                ),
-                                label: Text(imported ? '已加入' : '加入计划'),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
+                          const SizedBox(height: 3),
+                          CopyableText(
+                            text: '${point.subtitle} / ${point.episodeLabel}',
+                            copyText: _copySummary,
+                            copyLabel: '点位信息',
+                            onTap: openDetail,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          CopyableText(
+                            text: point.origin,
+                            copyLabel: '来源',
+                            onTap: openDetail,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              SizedBox(
+                                height: 40,
+                                child: OutlinedButton.icon(
+                                  onPressed: openNavigation,
+                                  icon: const Icon(
+                                    Icons.navigation_outlined,
+                                    size: 17,
+                                  ),
+                                  label: const Text('导航'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 40,
+                                  child: FilledButton.icon(
+                                    onPressed: imported || isImporting
+                                        ? null
+                                        : onImport,
+                                    icon: Icon(
+                                      imported
+                                          ? Icons.check
+                                          : Icons.add_location_alt_outlined,
+                                      size: 18,
+                                    ),
+                                    label: Text(imported ? '已加入' : '加入计划'),
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

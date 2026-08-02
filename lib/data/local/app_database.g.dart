@@ -4460,6 +4460,21 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         requiredDuringInsert: false,
         defaultValue: const Constant(10),
       );
+  static const VerificationMeta _showPlanGroupProgressMeta =
+      const VerificationMeta('showPlanGroupProgress');
+  @override
+  late final GeneratedColumn<bool> showPlanGroupProgress =
+      GeneratedColumn<bool>(
+        'show_plan_group_progress',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("show_plan_group_progress" IN (0, 1))',
+        ),
+        defaultValue: const Constant(true),
+      );
   static const VerificationMeta _mapMarkerClusteringEnabledMeta =
       const VerificationMeta('mapMarkerClusteringEnabled');
   @override
@@ -4564,6 +4579,7 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
     customCameraAspectRatioHeight,
     mapThumbnailVisibleThreshold,
     mapThumbnailConcurrentLoads,
+    showPlanGroupProgress,
     mapMarkerClusteringEnabled,
     mapMarkerClusterRadius,
     mapMarkerClusterMaxZoom,
@@ -4822,6 +4838,15 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         ),
       );
     }
+    if (data.containsKey('show_plan_group_progress')) {
+      context.handle(
+        _showPlanGroupProgressMeta,
+        showPlanGroupProgress.isAcceptableOrUnknown(
+          data['show_plan_group_progress']!,
+          _showPlanGroupProgressMeta,
+        ),
+      );
+    }
     if (data.containsKey('map_marker_clustering_enabled')) {
       context.handle(
         _mapMarkerClusteringEnabledMeta,
@@ -4997,6 +5022,10 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         DriftSqlType.int,
         data['${effectivePrefix}map_thumbnail_concurrent_loads'],
       )!,
+      showPlanGroupProgress: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}show_plan_group_progress'],
+      )!,
       mapMarkerClusteringEnabled: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}map_marker_clustering_enabled'],
@@ -5060,6 +5089,7 @@ class AppSettingsEntry extends DataClass
   final double customCameraAspectRatioHeight;
   final int mapThumbnailVisibleThreshold;
   final int mapThumbnailConcurrentLoads;
+  final bool showPlanGroupProgress;
   final bool mapMarkerClusteringEnabled;
   final int mapMarkerClusterRadius;
   final int mapMarkerClusterMaxZoom;
@@ -5095,6 +5125,7 @@ class AppSettingsEntry extends DataClass
     required this.customCameraAspectRatioHeight,
     required this.mapThumbnailVisibleThreshold,
     required this.mapThumbnailConcurrentLoads,
+    required this.showPlanGroupProgress,
     required this.mapMarkerClusteringEnabled,
     required this.mapMarkerClusterRadius,
     required this.mapMarkerClusterMaxZoom,
@@ -5153,6 +5184,7 @@ class AppSettingsEntry extends DataClass
     map['map_thumbnail_concurrent_loads'] = Variable<int>(
       mapThumbnailConcurrentLoads,
     );
+    map['show_plan_group_progress'] = Variable<bool>(showPlanGroupProgress);
     map['map_marker_clustering_enabled'] = Variable<bool>(
       mapMarkerClusteringEnabled,
     );
@@ -5196,6 +5228,7 @@ class AppSettingsEntry extends DataClass
       customCameraAspectRatioHeight: Value(customCameraAspectRatioHeight),
       mapThumbnailVisibleThreshold: Value(mapThumbnailVisibleThreshold),
       mapThumbnailConcurrentLoads: Value(mapThumbnailConcurrentLoads),
+      showPlanGroupProgress: Value(showPlanGroupProgress),
       mapMarkerClusteringEnabled: Value(mapMarkerClusteringEnabled),
       mapMarkerClusterRadius: Value(mapMarkerClusterRadius),
       mapMarkerClusterMaxZoom: Value(mapMarkerClusterMaxZoom),
@@ -5271,6 +5304,9 @@ class AppSettingsEntry extends DataClass
       mapThumbnailConcurrentLoads: serializer.fromJson<int>(
         json['mapThumbnailConcurrentLoads'],
       ),
+      showPlanGroupProgress: serializer.fromJson<bool>(
+        json['showPlanGroupProgress'],
+      ),
       mapMarkerClusteringEnabled: serializer.fromJson<bool>(
         json['mapMarkerClusteringEnabled'],
       ),
@@ -5339,6 +5375,7 @@ class AppSettingsEntry extends DataClass
       'mapThumbnailConcurrentLoads': serializer.toJson<int>(
         mapThumbnailConcurrentLoads,
       ),
+      'showPlanGroupProgress': serializer.toJson<bool>(showPlanGroupProgress),
       'mapMarkerClusteringEnabled': serializer.toJson<bool>(
         mapMarkerClusteringEnabled,
       ),
@@ -5383,6 +5420,7 @@ class AppSettingsEntry extends DataClass
     double? customCameraAspectRatioHeight,
     int? mapThumbnailVisibleThreshold,
     int? mapThumbnailConcurrentLoads,
+    bool? showPlanGroupProgress,
     bool? mapMarkerClusteringEnabled,
     int? mapMarkerClusterRadius,
     int? mapMarkerClusterMaxZoom,
@@ -5428,6 +5466,7 @@ class AppSettingsEntry extends DataClass
         mapThumbnailVisibleThreshold ?? this.mapThumbnailVisibleThreshold,
     mapThumbnailConcurrentLoads:
         mapThumbnailConcurrentLoads ?? this.mapThumbnailConcurrentLoads,
+    showPlanGroupProgress: showPlanGroupProgress ?? this.showPlanGroupProgress,
     mapMarkerClusteringEnabled:
         mapMarkerClusteringEnabled ?? this.mapMarkerClusteringEnabled,
     mapMarkerClusterRadius:
@@ -5517,6 +5556,9 @@ class AppSettingsEntry extends DataClass
       mapThumbnailConcurrentLoads: data.mapThumbnailConcurrentLoads.present
           ? data.mapThumbnailConcurrentLoads.value
           : this.mapThumbnailConcurrentLoads,
+      showPlanGroupProgress: data.showPlanGroupProgress.present
+          ? data.showPlanGroupProgress.value
+          : this.showPlanGroupProgress,
       mapMarkerClusteringEnabled: data.mapMarkerClusteringEnabled.present
           ? data.mapMarkerClusteringEnabled.value
           : this.mapMarkerClusteringEnabled,
@@ -5575,6 +5617,7 @@ class AppSettingsEntry extends DataClass
             'mapThumbnailVisibleThreshold: $mapThumbnailVisibleThreshold, ',
           )
           ..write('mapThumbnailConcurrentLoads: $mapThumbnailConcurrentLoads, ')
+          ..write('showPlanGroupProgress: $showPlanGroupProgress, ')
           ..write('mapMarkerClusteringEnabled: $mapMarkerClusteringEnabled, ')
           ..write('mapMarkerClusterRadius: $mapMarkerClusterRadius, ')
           ..write('mapMarkerClusterMaxZoom: $mapMarkerClusterMaxZoom, ')
@@ -5615,6 +5658,7 @@ class AppSettingsEntry extends DataClass
     customCameraAspectRatioHeight,
     mapThumbnailVisibleThreshold,
     mapThumbnailConcurrentLoads,
+    showPlanGroupProgress,
     mapMarkerClusteringEnabled,
     mapMarkerClusterRadius,
     mapMarkerClusterMaxZoom,
@@ -5660,6 +5704,7 @@ class AppSettingsEntry extends DataClass
               this.mapThumbnailVisibleThreshold &&
           other.mapThumbnailConcurrentLoads ==
               this.mapThumbnailConcurrentLoads &&
+          other.showPlanGroupProgress == this.showPlanGroupProgress &&
           other.mapMarkerClusteringEnabled == this.mapMarkerClusteringEnabled &&
           other.mapMarkerClusterRadius == this.mapMarkerClusterRadius &&
           other.mapMarkerClusterMaxZoom == this.mapMarkerClusterMaxZoom &&
@@ -5697,6 +5742,7 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
   final Value<double> customCameraAspectRatioHeight;
   final Value<int> mapThumbnailVisibleThreshold;
   final Value<int> mapThumbnailConcurrentLoads;
+  final Value<bool> showPlanGroupProgress;
   final Value<bool> mapMarkerClusteringEnabled;
   final Value<int> mapMarkerClusterRadius;
   final Value<int> mapMarkerClusterMaxZoom;
@@ -5733,6 +5779,7 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     this.customCameraAspectRatioHeight = const Value.absent(),
     this.mapThumbnailVisibleThreshold = const Value.absent(),
     this.mapThumbnailConcurrentLoads = const Value.absent(),
+    this.showPlanGroupProgress = const Value.absent(),
     this.mapMarkerClusteringEnabled = const Value.absent(),
     this.mapMarkerClusterRadius = const Value.absent(),
     this.mapMarkerClusterMaxZoom = const Value.absent(),
@@ -5770,6 +5817,7 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     this.customCameraAspectRatioHeight = const Value.absent(),
     this.mapThumbnailVisibleThreshold = const Value.absent(),
     this.mapThumbnailConcurrentLoads = const Value.absent(),
+    this.showPlanGroupProgress = const Value.absent(),
     this.mapMarkerClusteringEnabled = const Value.absent(),
     this.mapMarkerClusterRadius = const Value.absent(),
     this.mapMarkerClusterMaxZoom = const Value.absent(),
@@ -5807,6 +5855,7 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     Expression<double>? customCameraAspectRatioHeight,
     Expression<int>? mapThumbnailVisibleThreshold,
     Expression<int>? mapThumbnailConcurrentLoads,
+    Expression<bool>? showPlanGroupProgress,
     Expression<bool>? mapMarkerClusteringEnabled,
     Expression<int>? mapMarkerClusterRadius,
     Expression<int>? mapMarkerClusterMaxZoom,
@@ -5860,6 +5909,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
         'map_thumbnail_visible_threshold': mapThumbnailVisibleThreshold,
       if (mapThumbnailConcurrentLoads != null)
         'map_thumbnail_concurrent_loads': mapThumbnailConcurrentLoads,
+      if (showPlanGroupProgress != null)
+        'show_plan_group_progress': showPlanGroupProgress,
       if (mapMarkerClusteringEnabled != null)
         'map_marker_clustering_enabled': mapMarkerClusteringEnabled,
       if (mapMarkerClusterRadius != null)
@@ -5903,6 +5954,7 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     Value<double>? customCameraAspectRatioHeight,
     Value<int>? mapThumbnailVisibleThreshold,
     Value<int>? mapThumbnailConcurrentLoads,
+    Value<bool>? showPlanGroupProgress,
     Value<bool>? mapMarkerClusteringEnabled,
     Value<int>? mapMarkerClusterRadius,
     Value<int>? mapMarkerClusterMaxZoom,
@@ -5953,6 +6005,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
           mapThumbnailVisibleThreshold ?? this.mapThumbnailVisibleThreshold,
       mapThumbnailConcurrentLoads:
           mapThumbnailConcurrentLoads ?? this.mapThumbnailConcurrentLoads,
+      showPlanGroupProgress:
+          showPlanGroupProgress ?? this.showPlanGroupProgress,
       mapMarkerClusteringEnabled:
           mapMarkerClusteringEnabled ?? this.mapMarkerClusteringEnabled,
       mapMarkerClusterRadius:
@@ -6084,6 +6138,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
         mapThumbnailConcurrentLoads.value,
       );
     }
+    if (showPlanGroupProgress.present) {
+      map['show_plan_group_progress'] = Variable<bool>(
+        showPlanGroupProgress.value,
+      );
+    }
     if (mapMarkerClusteringEnabled.present) {
       map['map_marker_clustering_enabled'] = Variable<bool>(
         mapMarkerClusteringEnabled.value,
@@ -6153,6 +6212,7 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
             'mapThumbnailVisibleThreshold: $mapThumbnailVisibleThreshold, ',
           )
           ..write('mapThumbnailConcurrentLoads: $mapThumbnailConcurrentLoads, ')
+          ..write('showPlanGroupProgress: $showPlanGroupProgress, ')
           ..write('mapMarkerClusteringEnabled: $mapMarkerClusteringEnabled, ')
           ..write('mapMarkerClusterRadius: $mapMarkerClusterRadius, ')
           ..write('mapMarkerClusterMaxZoom: $mapMarkerClusterMaxZoom, ')
@@ -9054,6 +9114,7 @@ typedef $$AppSettingsEntriesTableCreateCompanionBuilder =
       Value<double> customCameraAspectRatioHeight,
       Value<int> mapThumbnailVisibleThreshold,
       Value<int> mapThumbnailConcurrentLoads,
+      Value<bool> showPlanGroupProgress,
       Value<bool> mapMarkerClusteringEnabled,
       Value<int> mapMarkerClusterRadius,
       Value<int> mapMarkerClusterMaxZoom,
@@ -9092,6 +9153,7 @@ typedef $$AppSettingsEntriesTableUpdateCompanionBuilder =
       Value<double> customCameraAspectRatioHeight,
       Value<int> mapThumbnailVisibleThreshold,
       Value<int> mapThumbnailConcurrentLoads,
+      Value<bool> showPlanGroupProgress,
       Value<bool> mapMarkerClusteringEnabled,
       Value<int> mapMarkerClusterRadius,
       Value<int> mapMarkerClusterMaxZoom,
@@ -9247,6 +9309,11 @@ class $$AppSettingsEntriesTableFilterComposer
 
   ColumnFilters<int> get mapThumbnailConcurrentLoads => $composableBuilder(
     column: $table.mapThumbnailConcurrentLoads,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get showPlanGroupProgress => $composableBuilder(
+    column: $table.showPlanGroupProgress,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9432,6 +9499,11 @@ class $$AppSettingsEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get showPlanGroupProgress => $composableBuilder(
+    column: $table.showPlanGroupProgress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<bool> get mapMarkerClusteringEnabled => $composableBuilder(
     column: $table.mapMarkerClusteringEnabled,
     builder: (column) => ColumnOrderings(column),
@@ -9606,6 +9678,11 @@ class $$AppSettingsEntriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<bool> get showPlanGroupProgress => $composableBuilder(
+    column: $table.showPlanGroupProgress,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<bool> get mapMarkerClusteringEnabled => $composableBuilder(
     column: $table.mapMarkerClusteringEnabled,
     builder: (column) => column,
@@ -9708,6 +9785,7 @@ class $$AppSettingsEntriesTableTableManager
                     const Value.absent(),
                 Value<int> mapThumbnailVisibleThreshold = const Value.absent(),
                 Value<int> mapThumbnailConcurrentLoads = const Value.absent(),
+                Value<bool> showPlanGroupProgress = const Value.absent(),
                 Value<bool> mapMarkerClusteringEnabled = const Value.absent(),
                 Value<int> mapMarkerClusterRadius = const Value.absent(),
                 Value<int> mapMarkerClusterMaxZoom = const Value.absent(),
@@ -9744,6 +9822,7 @@ class $$AppSettingsEntriesTableTableManager
                 customCameraAspectRatioHeight: customCameraAspectRatioHeight,
                 mapThumbnailVisibleThreshold: mapThumbnailVisibleThreshold,
                 mapThumbnailConcurrentLoads: mapThumbnailConcurrentLoads,
+                showPlanGroupProgress: showPlanGroupProgress,
                 mapMarkerClusteringEnabled: mapMarkerClusteringEnabled,
                 mapMarkerClusterRadius: mapMarkerClusterRadius,
                 mapMarkerClusterMaxZoom: mapMarkerClusterMaxZoom,
@@ -9785,6 +9864,7 @@ class $$AppSettingsEntriesTableTableManager
                     const Value.absent(),
                 Value<int> mapThumbnailVisibleThreshold = const Value.absent(),
                 Value<int> mapThumbnailConcurrentLoads = const Value.absent(),
+                Value<bool> showPlanGroupProgress = const Value.absent(),
                 Value<bool> mapMarkerClusteringEnabled = const Value.absent(),
                 Value<int> mapMarkerClusterRadius = const Value.absent(),
                 Value<int> mapMarkerClusterMaxZoom = const Value.absent(),
@@ -9821,6 +9901,7 @@ class $$AppSettingsEntriesTableTableManager
                 customCameraAspectRatioHeight: customCameraAspectRatioHeight,
                 mapThumbnailVisibleThreshold: mapThumbnailVisibleThreshold,
                 mapThumbnailConcurrentLoads: mapThumbnailConcurrentLoads,
+                showPlanGroupProgress: showPlanGroupProgress,
                 mapMarkerClusteringEnabled: mapMarkerClusteringEnabled,
                 mapMarkerClusterRadius: mapMarkerClusterRadius,
                 mapMarkerClusterMaxZoom: mapMarkerClusterMaxZoom,

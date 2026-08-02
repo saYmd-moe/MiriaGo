@@ -8,6 +8,28 @@ import '../widgets/copyable_text.dart';
 import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_models.dart';
 
+Widget _cleanPlanReorderProxy(
+  Widget child,
+  int index,
+  Animation<double> animation,
+) {
+  return AnimatedBuilder(
+    animation: animation,
+    builder: (context, child) {
+      final elevation = Curves.easeOut.transform(animation.value) * 10;
+      return Material(
+        key: const ValueKey('plan-reorder-proxy'),
+        color: Colors.transparent,
+        shadowColor: Colors.black.withValues(alpha: 0.18),
+        elevation: elevation,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
+      );
+    },
+    child: child,
+  );
+}
+
 class PlanManagerScreen extends StatefulWidget {
   const PlanManagerScreen({required this.repository, super.key});
 
@@ -332,6 +354,7 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   buildDefaultDragHandles: false,
+                  proxyDecorator: _cleanPlanReorderProxy,
                   onReorderItem: _savingOrder ? (_, _) {} : _reorderPlans,
                   itemCount: plans.length,
                   itemBuilder: (context, index) {
