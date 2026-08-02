@@ -29,8 +29,9 @@ class RecordsScreen extends StatefulWidget {
 }
 
 class _RecordsScreenState extends State<RecordsScreen> {
-  String? _selectedWorkId;
-  String? _selectedGroupFilterId;
+  Set<String>? _selectedWorkIds;
+  Set<String>? _selectedGroupFilterIds;
+  late String _scopeFilterPlanId = widget.controller.plan.id;
   String _searchQuery = '';
   _RecordStatusFilter _statusFilter = _RecordStatusFilter.all;
   var _expandedSectionsInitialized = false;
@@ -39,6 +40,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
+    _synchronizeScopeFilters(controller.plan);
     final records = _filteredRecords(controller);
     final sections = _groupedRecords(controller, records);
     if (!_expandedSectionsInitialized && sections.isNotEmpty) {
@@ -93,8 +95,8 @@ class _RecordsScreenState extends State<RecordsScreen> {
                   statusFilter: _statusFilter,
                   searchQuery: _searchQuery,
                   activeScopeFilterCount:
-                      (_selectedWorkId == null ? 0 : 1) +
-                      (_selectedGroupFilterId == null ? 0 : 1),
+                      (_selectedWorkIds == null ? 0 : 1) +
+                      (_selectedGroupFilterIds == null ? 0 : 1),
                   onSearchChanged: (query) {
                     setState(() {
                       _searchQuery = query;
@@ -188,13 +190,47 @@ class _RecordsScreenState extends State<RecordsScreen> {
     _expandedSectionsInitialized = false;
   }
 
+  void _synchronizeScopeFilters(PilgrimagePlan plan) {
+    if (_scopeFilterPlanId != plan.id) {
+      _scopeFilterPlanId = plan.id;
+      _selectedWorkIds = null;
+      _selectedGroupFilterIds = null;
+      _resetExpandedSections();
+      return;
+    }
+
+    final validWorkIds = plan.works.map((work) => work.id).toSet();
+    _selectedWorkIds = _validFilterSelection(_selectedWorkIds, validWorkIds);
+    final validGroupIds = {
+      ...plan.groups.map((group) => group.id),
+      _ungroupedRecordFilterId,
+      _orphanRecordFilterId,
+    };
+    _selectedGroupFilterIds = _validFilterSelection(
+      _selectedGroupFilterIds,
+      validGroupIds,
+    );
+  }
+
+  Set<String>? _validFilterSelection(
+    Set<String>? selection,
+    Set<String> validIds,
+  ) {
+    if (selection == null) {
+      return null;
+    }
+    final retained = selection.intersection(validIds);
+    return retained.isEmpty ? null : retained;
+  }
+
   List<PilgrimageVisitRecord> _filteredRecords(
     PilgrimagePlanController controller,
   ) {
     return controller.visitRecords
         .where((record) {
           final point = controller.pointById(record.pointId);
-          if (_selectedWorkId != null && record.workId != _selectedWorkId) {
+          final workIds = _selectedWorkIds;
+          if (workIds != null && !workIds.contains(record.workId)) {
             return false;
           }
           if (!_matchesGroupFilter(point)) {
@@ -286,36 +322,38 @@ class _RecordsScreenState extends State<RecordsScreen> {
   }
 
   bool _matchesGroupFilter(PilgrimagePoint? point) {
-    final filterId = _selectedGroupFilterId;
-    if (filterId == null) {
+    final filterIds = _selectedGroupFilterIds;
+    if (filterIds == null) {
       return true;
     }
-    if (filterId == _orphanRecordFilterId) {
-      return point == null;
+    if (point == null) {
+      return filterIds.contains(_orphanRecordFilterId);
     }
-    if (filterId == _ungroupedRecordFilterId) {
-      return point != null && point.groupId == null;
+    final groupId = point.groupId;
+    if (groupId == null) {
+      return filterIds.contains(_ungroupedRecordFilterId);
     }
-    return point != null && point.groupId == filterId;
+    return filterIds.contains(groupId);
   }
 
   Future<void> _openScopeFilters() async {
     final result = await showModalBottomSheet<_RecordScopeSelection>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (context) => _RecordScopeFilterSheet(
         works: widget.controller.plan.works,
         groups: widget.controller.plan.groups,
-        selectedWorkId: _selectedWorkId,
-        selectedGroupFilterId: _selectedGroupFilterId,
+        selectedWorkIds: _selectedWorkIds,
+        selectedGroupFilterIds: _selectedGroupFilterIds,
       ),
     );
     if (result == null || !mounted) {
       return;
     }
     setState(() {
-      _selectedWorkId = result.workId;
-      _selectedGroupFilterId = result.groupId;
+      _selectedWorkIds = result.workIds;
+      _selectedGroupFilterIds = result.groupIds;
       _resetExpandedSections();
     });
   }
@@ -435,6 +473,10 @@ class _RecordFilters extends StatelessWidget {
               key: const ValueKey('records-scope-filter-button'),
               tooltip: '按作品和片区筛选',
               onPressed: onOpenScopeFilters,
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.surface,
+                side: const BorderSide(color: AppColors.border),
+              ),
               icon: const Icon(Icons.tune),
             ),
           ),
@@ -445,24 +487,24 @@ class _RecordFilters extends StatelessWidget {
 }
 
 class _RecordScopeSelection {
-  const _RecordScopeSelection({required this.workId, required this.groupId});
+  const _RecordScopeSelection({required this.workIds, required this.groupIds});
 
-  final String? workId;
-  final String? groupId;
+  final Set<String>? workIds;
+  final Set<String>? groupIds;
 }
 
 class _RecordScopeFilterSheet extends StatefulWidget {
   const _RecordScopeFilterSheet({
     required this.works,
     required this.groups,
-    required this.selectedWorkId,
-    required this.selectedGroupFilterId,
+    required this.selectedWorkIds,
+    required this.selectedGroupFilterIds,
   });
 
   final List<PilgrimageWork> works;
   final List<PilgrimagePlanGroup> groups;
-  final String? selectedWorkId;
-  final String? selectedGroupFilterId;
+  final Set<String>? selectedWorkIds;
+  final Set<String>? selectedGroupFilterIds;
 
   @override
   State<_RecordScopeFilterSheet> createState() =>
@@ -470,24 +512,75 @@ class _RecordScopeFilterSheet extends StatefulWidget {
 }
 
 class _RecordScopeFilterSheetState extends State<_RecordScopeFilterSheet> {
-  late String? _workId = widget.selectedWorkId;
-  late String? _groupId = widget.selectedGroupFilterId;
+  late Set<String>? _workIds = _copyFilter(widget.selectedWorkIds);
+  late Set<String>? _groupIds = _copyFilter(widget.selectedGroupFilterIds);
+
+  static Set<String>? _copyFilter(Set<String>? value) {
+    return value == null ? null : {...value};
+  }
+
+  Future<void> _openWorkFilters() async {
+    final selectedIds = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppColors.surface,
+      builder: (context) => _RecordScopeOptionSheet(
+        kind: 'work',
+        title: '作品',
+        options: [
+          for (final work in widget.works)
+            _RecordScopeOption(id: work.id, label: work.title),
+        ],
+        selectedIds: _workIds ?? const {},
+      ),
+    );
+    if (selectedIds == null || !mounted) {
+      return;
+    }
+    setState(() => _workIds = selectedIds.isEmpty ? null : selectedIds);
+  }
+
+  Future<void> _openGroupFilters() async {
+    final groups = sortGroupsByPlanOrder(widget.groups);
+    final selectedIds = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: AppColors.surface,
+      builder: (context) => _RecordScopeOptionSheet(
+        kind: 'group',
+        title: '片区',
+        options: [
+          for (final group in groups)
+            _RecordScopeOption(id: group.id, label: group.name),
+          const _RecordScopeOption(id: _ungroupedRecordFilterId, label: '未分组'),
+          const _RecordScopeOption(id: _orphanRecordFilterId, label: '孤立记录'),
+        ],
+        selectedIds: _groupIds ?? const {},
+      ),
+    );
+    if (selectedIds == null || !mounted) {
+      return;
+    }
+    setState(() => _groupIds = selectedIds.isEmpty ? null : selectedIds);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final groups = sortGroupsByPlanOrder(widget.groups);
     return SafeArea(
+      top: false,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 12, 8),
-              child: Row(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
                 children: [
                   const Expanded(
                     child: Text(
@@ -500,107 +593,450 @@ class _RecordScopeFilterSheetState extends State<_RecordScopeFilterSheet> {
                     ),
                   ),
                   TextButton(
+                    key: const ValueKey('records-scope-clear'),
                     onPressed: () => setState(() {
-                      _workId = null;
-                      _groupId = null;
+                      _workIds = null;
+                      _groupIds = null;
                     }),
                     child: const Text('清除'),
                   ),
                 ],
               ),
+              Text(
+                '已选：作品 ${_workIds?.length ?? 0} · 片区 ${_groupIds?.length ?? 0}',
+                key: const ValueKey('records-scope-summary'),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text('作品', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              _RecordScopeEntry(
+                key: const ValueKey('records-scope-work-entry'),
+                label: _scopeLabel(_workIds, allLabel: '全部作品', noun: '作品'),
+                onTap: _openWorkFilters,
+              ),
+              const SizedBox(height: 16),
+              const Text('片区', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              _RecordScopeEntry(
+                key: const ValueKey('records-scope-group-entry'),
+                label: _scopeLabel(_groupIds, allLabel: '全部片区', noun: '片区'),
+                onTap: _openGroupFilters,
+              ),
+              const SizedBox(height: 28),
+              FilledButton(
+                key: const ValueKey('records-scope-apply'),
+                onPressed: () => Navigator.of(context).pop(
+                  _RecordScopeSelection(
+                    workIds: _copyFilter(_workIds),
+                    groupIds: _copyFilter(_groupIds),
+                  ),
+                ),
+                child: Text(
+                  '应用筛选（${_workIds == null && _groupIds == null ? '全部点位' : '已选择'}）',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _scopeLabel(
+    Set<String>? ids, {
+    required String allLabel,
+    required String noun,
+  }) {
+    return ids == null ? allLabel : '已选 ${ids.length} 个$noun';
+  }
+}
+
+class _RecordScopeEntry extends StatelessWidget {
+  const _RecordScopeEntry({
+    required this.label,
+    required this.onTap,
+    super.key,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 48,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle, color: AppColors.accent, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+              ],
             ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordScopeOption {
+  const _RecordScopeOption({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+class _RecordScopeOptionSheet extends StatefulWidget {
+  const _RecordScopeOptionSheet({
+    required this.kind,
+    required this.title,
+    required this.options,
+    required this.selectedIds,
+  });
+
+  final String kind;
+  final String title;
+  final List<_RecordScopeOption> options;
+  final Set<String> selectedIds;
+
+  @override
+  State<_RecordScopeOptionSheet> createState() =>
+      _RecordScopeOptionSheetState();
+}
+
+class _RecordScopeOptionSheetState extends State<_RecordScopeOptionSheet> {
+  late final Set<String> _selectedIds = {...widget.selectedIds};
+  var _scrolling = false;
+
+  void _toggleOption(String id, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedIds.add(id);
+      } else {
+        _selectedIds.remove(id);
+      }
+    });
+  }
+
+  void _confirm() {
+    Navigator.of(context).pop({..._selectedIds});
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification && !_scrolling) {
+      setState(() => _scrolling = true);
+    } else if (notification is ScrollEndNotification && _scrolling) {
+      setState(() => _scrolling = false);
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.82;
+    final desiredHeight = 52.0 + 40.0 + widget.options.length * 48.0 + 78.0;
+    final sheetHeight = desiredHeight
+        .clamp(190.0, maxHeight > 560 ? 560.0 : maxHeight)
+        .toDouble();
+    final noun = widget.kind == 'work' ? '作品' : '片区';
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: sheetHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 52,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 64,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          key: ValueKey('records-scope-back-${widget.kind}'),
+                          tooltip: '返回筛选记录',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.chevron_left),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '选择${widget.title}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 64),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Text(
+                '全部${widget.title}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            Expanded(
+              child: widget.options.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '暂无可筛选项',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    )
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: _handleScrollNotification,
+                      child: ListView.builder(
+                        padding: EdgeInsets.zero,
+                        itemCount: widget.options.length,
+                        itemBuilder: (context, index) {
+                          final option = widget.options[index];
+                          final selected = _selectedIds.contains(option.id);
+                          return _RecordScopeOptionTile(
+                            key: ValueKey(
+                              'records-scope-option-${widget.kind}-${option.id}',
+                            ),
+                            decorationKey: ValueKey(
+                              'records-scope-option-decoration-${widget.kind}-${option.id}',
+                            ),
+                            option: option,
+                            badgeLabel: noun,
+                            selected: selected,
+                            hoverEnabled: !_scrolling,
+                            onChanged: (value) =>
+                                _toggleOption(option.id, value),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+            ColoredBox(
+              color: AppColors.background,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                child: Row(
                   children: [
-                    const Text(
-                      '作品',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                    Expanded(
+                      child: Text(
+                        '已选择 ${_selectedIds.length} 个$noun',
+                        key: ValueKey(
+                          'records-scope-secondary-count-${widget.kind}',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('全部作品'),
-                          selected: _workId == null,
-                          onSelected: (_) => setState(() => _workId = null),
+                    SizedBox(
+                      width: 176,
+                      child: FilledButton(
+                        key: ValueKey(
+                          'records-scope-secondary-confirm-${widget.kind}',
                         ),
-                        for (final work in widget.works)
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
-                            child: ChoiceChip(
-                              label: Text(
-                                work.title,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              selected: _workId == work.id,
-                              onSelected: (_) =>
-                                  setState(() => _workId = work.id),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      '片区',
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('全部片区'),
-                          selected: _groupId == null,
-                          onSelected: (_) => setState(() => _groupId = null),
+                        onPressed: _confirm,
+                        child: Text(
+                          _selectedIds.isEmpty
+                              ? '确定'
+                              : '确定（${_selectedIds.length}）',
                         ),
-                        for (final group in groups)
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 280),
-                            child: ChoiceChip(
-                              label: Text(
-                                group.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              selected: _groupId == group.id,
-                              onSelected: (_) =>
-                                  setState(() => _groupId = group.id),
-                            ),
-                          ),
-                        ChoiceChip(
-                          label: const Text('未分组'),
-                          selected: _groupId == _ungroupedRecordFilterId,
-                          onSelected: (_) => setState(
-                            () => _groupId = _ungroupedRecordFilterId,
-                          ),
-                        ),
-                        ChoiceChip(
-                          label: const Text('孤立记录'),
-                          selected: _groupId == _orphanRecordFilterId,
-                          onSelected: (_) =>
-                              setState(() => _groupId = _orphanRecordFilterId),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(
-                  _RecordScopeSelection(workId: _workId, groupId: _groupId),
-                ),
-                child: const Text('应用筛选'),
-              ),
-            ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordScopeOptionTile extends StatefulWidget {
+  const _RecordScopeOptionTile({
+    required this.decorationKey,
+    required this.option,
+    required this.badgeLabel,
+    required this.selected,
+    required this.hoverEnabled,
+    required this.onChanged,
+    super.key,
+  });
+
+  final Key decorationKey;
+  final _RecordScopeOption option;
+  final String badgeLabel;
+  final bool selected;
+  final bool hoverEnabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  State<_RecordScopeOptionTile> createState() => _RecordScopeOptionTileState();
+}
+
+class _RecordScopeOptionTileState extends State<_RecordScopeOptionTile> {
+  var _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final showHover = widget.hoverEnabled && _hovered;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: MouseRegion(
+        onEnter: (_) {
+          if (!_hovered) {
+            setState(() => _hovered = true);
+          }
+        },
+        onExit: (_) {
+          if (_hovered) {
+            setState(() => _hovered = false);
+          }
+        },
+        child: SizedBox(
+          height: 48,
+          child: Stack(
+            clipBehavior: Clip.none,
+            fit: StackFit.expand,
+            children: [
+              Positioned(
+                left: 0,
+                top: 6,
+                right: 0,
+                bottom: 6,
+                child: AnimatedContainer(
+                  key: widget.decorationKey,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(
+                      alpha: widget.selected ? 0.10 : (showHover ? 0.05 : 0),
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => widget.onChanged(!widget.selected),
+                  hoverColor: Colors.transparent,
+                  splashColor: Colors.transparent,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    transform: Matrix4.translationValues(
+                      showHover && !widget.selected ? 12 : 0,
+                      0,
+                      0,
+                    ),
+                    transformAlignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.08),
+                            border: Border.all(
+                              color: AppColors.accent.withValues(alpha: 0.42),
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            widget.badgeLabel,
+                            style: TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.option.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 14,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Checkbox(
+                          value: widget.selected,
+                          onChanged: (value) =>
+                              widget.onChanged(value ?? false),
+                          shape: const CircleBorder(),
+                          side: const BorderSide(
+                            color: AppColors.border,
+                            width: 1.5,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -869,8 +1305,13 @@ class _ExpandedRecordFiltersState extends State<_ExpandedRecordFilters> {
             child: _searchController.text.isEmpty
                 ? const SizedBox.shrink()
                 : IconButton(
+                    key: const ValueKey('records-search-clear-button'),
                     tooltip: '清空搜索',
                     padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 40,
+                      height: 42,
+                    ),
                     onPressed: () {
                       _searchController.clear();
                       widget.onSearchChanged('');

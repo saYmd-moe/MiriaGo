@@ -333,6 +333,42 @@ void main() {
     },
   );
 
+  test('schema 34 to 35 adds plan group progress setting', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.createPlan(name: '片区进度迁移', area: '东京');
+    await repository.saveAppSettings(
+      const AppSettings(customXyzTileUrl: 'https://example.com/tiles'),
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries DROP COLUMN show_plan_group_progress',
+    );
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      34,
+      database.schemaVersion,
+    );
+
+    expect(
+      await _tableColumnNames(database, 'app_settings_entries'),
+      contains('show_plan_group_progress'),
+    );
+    final migratedPlan = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    final migratedSettings = await repository.loadAppSettings();
+    expect(migratedPlan.name, plan.name);
+    expect(migratedSettings.customXyzTileUrl, 'https://example.com/tiles');
+    expect(migratedSettings.showPlanGroupProgress, isTrue);
+
+    await repository.saveAppSettings(
+      migratedSettings.copyWith(showPlanGroupProgress: false),
+    );
+    expect((await repository.loadAppSettings()).showPlanGroupProgress, isFalse);
+  });
+
   test(
     'pending-coordinate point is never promoted to current target',
     () async {
@@ -1375,6 +1411,7 @@ void main() {
         customCameraAspectRatioHeight: 9,
         mapThumbnailVisibleThreshold: 55,
         mapThumbnailConcurrentLoads: 12,
+        showPlanGroupProgress: false,
         mapMarkerClusteringEnabled: false,
         mapMarkerClusterRadius: 88,
         mapMarkerClusterMaxZoom: 20,
@@ -1417,6 +1454,7 @@ void main() {
     expect(settings.customCameraAspectRatioHeight, 9);
     expect(settings.mapThumbnailVisibleThreshold, 55);
     expect(settings.mapThumbnailConcurrentLoads, 12);
+    expect(settings.showPlanGroupProgress, isFalse);
     expect(settings.mapMarkerClusteringEnabled, isFalse);
     expect(settings.mapMarkerClusterRadius, 88);
     expect(settings.mapMarkerClusterMaxZoom, 20);

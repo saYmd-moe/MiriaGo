@@ -145,6 +145,16 @@ void main() {
     );
   });
 
+  test('sample repository persists plan group progress setting', () async {
+    final repository = SamplePilgrimageRepository();
+
+    await repository.saveAppSettings(
+      const AppSettings(showPlanGroupProgress: false),
+    );
+
+    expect((await repository.loadAppSettings()).showPlanGroupProgress, isFalse);
+  });
+
   testWidgets('sample record photos render bundled assets on IO platforms', (
     tester,
   ) async {

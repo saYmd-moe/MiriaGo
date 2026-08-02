@@ -9,14 +9,19 @@ import 'package:latlong2/latlong.dart';
 import 'package:miriago/app_theme.dart';
 import 'package:miriago/main.dart';
 import 'package:miriago/data/anitabi_client.dart';
+import 'package:miriago/data/bangumi_api_client.dart';
 import 'package:miriago/data/sample_pilgrimage_repository.dart';
+import 'package:miriago/map/map_marker_clustering.dart';
 import 'package:miriago/point_detail/point_detail_sheet.dart';
+import 'package:miriago/plan/add_points_screen.dart';
 import 'package:miriago/plan/anitabi_map_import_screen.dart';
 import 'package:miriago/plan/nearest_group_assign_screen.dart';
 import 'package:miriago/plan/plan_group_manager_screen.dart';
 import 'package:miriago/plan/plan_manager_screen.dart';
 import 'package:miriago/plan/point_manager_screen.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
+import 'package:miriago/plan/pilgrimage_plan_controller.dart';
+import 'package:miriago/records/records_screen.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
 import 'package:miriago/widgets/reference_image_placeholder.dart';
 
@@ -207,7 +212,19 @@ void main() {
         of: planGroupOption,
         matching: find.byType(CircularProgressIndicator),
       ),
-      findsOneWidget,
+      findsNothing,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(
+              const ValueKey(
+                'plan-group-picker-progress-sample-group-uji-station',
+              ),
+            ),
+          )
+          .height,
+      68,
     );
     final planCount = tester.widget<Text>(
       find.byKey(
@@ -220,6 +237,43 @@ void main() {
     expect((planCountSpan.children![1] as TextSpan).style?.fontSize, 10);
     expect(find.textContaining('关键点：'), findsWidgets);
     expect(find.textContaining('关键点：关键点：'), findsNothing);
+  });
+
+  testWidgets('completed plan group uses a checked filled folder', (
+    tester,
+  ) async {
+    final group = samplePilgrimagePlan.groups.first;
+    final completedPointIds = samplePilgrimagePlan.points
+        .where((point) => point.groupId == group.id)
+        .map((point) => point.id)
+        .toSet();
+    final plan = samplePilgrimagePlan.copyWith(
+      completedPointIds: completedPointIds,
+    );
+    await tester.pumpWidget(
+      MiriaGoApp(repository: SamplePilgrimageRepository(plans: [plan])),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, group.name));
+    await tester.pumpAndSettle();
+
+    final completedIcon = find.byKey(
+      ValueKey('plan-group-picker-completed-icon-${group.id}'),
+    );
+    expect(completedIcon, findsOneWidget);
+    expect(
+      find.descendant(of: completedIcon, matching: find.byIcon(Icons.folder)),
+      findsOneWidget,
+    );
+    final checkIcon = tester.widget<Icon>(
+      find.descendant(of: completedIcon, matching: find.byIcon(Icons.check)),
+    );
+    expect(checkIcon.color, Colors.white);
+    expect(
+      find.byKey(ValueKey('plan-group-picker-progress-${group.id}')),
+      findsNothing,
+    );
   });
 
   testWidgets('box assign uses the integrated region picker', (tester) async {
@@ -399,6 +453,14 @@ void main() {
     expect(statusFilterShape.side.color, AppColors.border);
     expect(statusFilterShape.side.style, BorderStyle.solid);
     expect(statusFilterShape.side.width, 1);
+    final scopeFilterButton = tester.widget<IconButton>(
+      find.byKey(const ValueKey('records-scope-filter-button')),
+    );
+    expect(
+      scopeFilterButton.style?.backgroundColor?.resolve({}),
+      AppColors.surface,
+    );
+    expect(scopeFilterButton.style?.side?.resolve({})?.color, AppColors.border);
     expect(
       tester
           .widgetList<NavigationDestination>(find.byType(NavigationDestination))
@@ -638,6 +700,18 @@ void main() {
     );
     expect(
       tester
+          .getRect(find.byKey(const ValueKey('records-search-clear-button')))
+          .right,
+      closeTo(
+        tester
+                .getRect(find.byKey(const ValueKey('records-search-shell')))
+                .right -
+            1,
+        0.1,
+      ),
+    );
+    expect(
+      tester
           .widget<TextField>(find.byKey(const ValueKey('records-search-field')))
           .controller
           ?.text,
@@ -653,11 +727,101 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('records-scope-filter-button')));
     await tester.pumpAndSettle();
 
+    expect(
+      tester.widget<BottomSheet>(find.byType(BottomSheet)).showDragHandle,
+      isTrue,
+    );
     expect(find.text('筛选记录'), findsOneWidget);
     expect(find.text('作品'), findsOneWidget);
     expect(find.text('片区'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ChoiceChip, '大吉山'));
-    await tester.tap(find.widgetWithText(FilledButton, '应用筛选'));
+    expect(find.text('已选：作品 0 · 片区 0'), findsOneWidget);
+    expect(find.text('全部作品'), findsOneWidget);
+    expect(find.text('全部片区'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('records-scope-work-entry')));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<BottomSheet>(find.byType(BottomSheet).last).showDragHandle,
+      isTrue,
+    );
+    expect(
+      find.byKey(const ValueKey('records-scope-secondary-confirm-work')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('records-scope-secondary-top-confirm-work')),
+      findsNothing,
+    );
+    expect(
+      tester
+          .getSize(
+            find.byKey(const ValueKey('records-scope-secondary-confirm-work')),
+          )
+          .width,
+      176,
+    );
+    final workOptionDecoration = tester.widget<AnimatedContainer>(
+      find.byKey(
+        const ValueKey('records-scope-option-decoration-work-hibike-euphonium'),
+      ),
+    );
+    final unselectedDecoration =
+        workOptionDecoration.decoration! as BoxDecoration;
+    expect(unselectedDecoration.border, isNull);
+    expect(unselectedDecoration.borderRadius, BorderRadius.circular(6));
+    expect(unselectedDecoration.color!.a, 0);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('records-scope-option-work-hibike-euphonium'),
+        ),
+        matching: find.text('作品'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(Checkbox), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('records-scope-back-work')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('records-scope-group-entry')));
+    await tester.pumpAndSettle();
+    final daikichiyamaOption = find.byKey(
+      const ValueKey('records-scope-option-group-sample-group-daikichiyama'),
+    );
+    expect(daikichiyamaOption, findsOneWidget);
+    await tester.tap(daikichiyamaOption);
+    await tester.pump();
+    expect(
+      tester
+          .widget<Checkbox>(
+            find.descendant(
+              of: daikichiyamaOption,
+              matching: find.byType(Checkbox),
+            ),
+          )
+          .value,
+      isTrue,
+    );
+    final selectedDecoration =
+        tester
+                .widget<AnimatedContainer>(
+                  find.byKey(
+                    const ValueKey(
+                      'records-scope-option-decoration-group-sample-group-daikichiyama',
+                    ),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(selectedDecoration.border, isNull);
+    expect(selectedDecoration.color!.a, greaterThan(0));
+    await tester.tap(
+      find.byKey(const ValueKey('records-scope-secondary-confirm-group')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('已选：作品 0 · 片区 1'), findsOneWidget);
+    expect(find.text('已选 1 个片区'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('records-scope-apply')));
     await tester.pumpAndSettle();
 
     expect(
@@ -668,6 +832,54 @@ void main() {
       find.byKey(const ValueKey('records-group-sample-group-uji-station')),
       findsNothing,
     );
+  });
+
+  testWidgets('records clear stale scope filters when the plan changes', (
+    tester,
+  ) async {
+    final repository = SamplePilgrimageRepository();
+    final initialPlan = await repository.loadActivePlan();
+    final controller = PilgrimagePlanController(
+      plan: initialPlan,
+      visitRepository: repository,
+    );
+    addTearDown(controller.dispose);
+
+    Widget recordsApp() => MaterialApp(
+      theme: AppTheme.light(),
+      home: RecordsScreen(
+        controller: controller,
+        settings: const AppSettings(),
+      ),
+    );
+
+    await tester.pumpWidget(recordsApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-filter-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-work-entry')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('records-scope-option-work-hibike-euphonium')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('records-scope-secondary-confirm-work')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-apply')));
+    await tester.pumpAndSettle();
+
+    final nextPlan = await repository.createPlan(name: '新计划', area: '东京');
+    controller.replacePlan(nextPlan);
+    await controller.loadVisitRecords();
+    await tester.pumpWidget(recordsApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('records-scope-filter-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选：作品 0 · 片区 0'), findsOneWidget);
+    expect(find.text('全部作品'), findsOneWidget);
+    expect(find.text('全部片区'), findsOneWidget);
   });
 
   testWidgets('records app bar toggles all group sections', (tester) async {
@@ -1097,6 +1309,12 @@ void main() {
       ),
       findsNothing,
     );
+    expect(
+      find.byKey(
+        const ValueKey('plan-group-picker-progress-sample-group-uji-station'),
+      ),
+      findsNothing,
+    );
     final managerCount = tester.widget<Text>(
       find.byKey(
         const ValueKey('plan-group-picker-count-sample-group-uji-station'),
@@ -1120,6 +1338,55 @@ void main() {
     expect(find.text('选择一个片区作为当前点位所属片区'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('plan-point-group-selection-宇治站附近')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('plan-point-group-create-entry')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('ungrouped manager point uses the shared move region sheet', (
+    tester,
+  ) async {
+    final sourceRepository = SamplePilgrimageRepository();
+    final sourcePlan = await sourceRepository.loadActivePlan();
+    final point = sourcePlan.points.first.copyWith(
+      groupId: null,
+      groupOrderIndex: null,
+    );
+    final plan = sourcePlan.copyWith(
+      groups: const [],
+      points: [point],
+      currentPointId: null,
+      currentGroupId: null,
+    );
+    final repository = SamplePilgrimageRepository(plans: [plan]);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: PointManagerScreen(
+          plan: plan,
+          repository: repository,
+          settings: const AppSettings(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final actions = find.byKey(ValueKey('point-manager-actions-${point.id}'));
+    await tester.ensureVisible(actions);
+    tester.widget<PopupMenuButton<String>>(actions).onSelected!('move');
+    await tester.pumpAndSettle();
+
+    expect(find.text('移动到片区'), findsOneWidget);
+    expect(find.text('选择一个片区作为当前点位所属片区'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('plan-point-group-option-未分入片区')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('plan-point-group-selection-未分入片区')),
       findsOneWidget,
     );
     expect(
@@ -1174,7 +1441,7 @@ void main() {
     expect(find.textContaining('桌面启动器'), findsNothing);
   });
 
-  testWidgets('separates map display settings from data sources', (
+  testWidgets('separates appearance, map display, and data source settings', (
     tester,
   ) async {
     await _pumpApp(tester);
@@ -1182,6 +1449,21 @@ void main() {
     await tester.tap(find.text('设置').last);
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('外观设置'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('显示片区进度条'),
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('显示片区进度条'), findsOneWidget);
+    final progressToggle = tester.widget<SwitchListTile>(
+      find.byKey(const ValueKey('plan-group-progress-toggle')),
+    );
+    expect(progressToggle.value, isTrue);
+
+    Navigator.of(tester.element(find.text('外观设置').first)).pop();
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('数据源设置'),
       280,
@@ -1196,14 +1478,20 @@ void main() {
     expect(find.text('最大缩放倍率'), findsOneWidget);
     expect(find.text('地图标记大小'), findsOneWidget);
     expect(find.text('片区范围半径'), findsOneWidget);
-    expect(find.text('自动聚合密集点位'), findsOneWidget);
+    expect(find.text('显示片区进度条'), findsNothing);
     expect(find.text('90%'), findsOneWidget);
-    expect(find.text('40 px'), findsOneWidget);
     final maxZoomSlider = tester.widget<Slider>(
       find.byKey(const ValueKey('map-max-zoom-slider')),
     );
     expect(maxZoomSlider.value, 22);
     expect(maxZoomSlider.max, 24);
+    await tester.scrollUntilVisible(
+      find.text('自动聚合密集点位'),
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('自动聚合密集点位'), findsOneWidget);
+    expect(find.text('40 px'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('缩略图显示阈值'),
       280,
@@ -1603,6 +1891,36 @@ void main() {
     expect((await repository.loadActivePlan()).id, 'sample-uji-hibike');
   });
 
+  testWidgets('plan reorder proxy keeps item spacing transparent', (
+    tester,
+  ) async {
+    final repository = SamplePilgrimageRepository();
+    await repository.createPlan(name: '第二计划', area: '京都');
+    await tester.pumpWidget(
+      MaterialApp(home: PlanManagerScreen(repository: repository)),
+    );
+    await tester.pumpAndSettle();
+
+    final reorderable = tester.widget<ReorderableListView>(
+      find.byKey(const ValueKey('reorderable-plan-list')),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: reorderable.proxyDecorator!(
+          const SizedBox(key: ValueKey('proxy-child')),
+          0,
+          const AlwaysStoppedAnimation(1),
+        ),
+      ),
+    );
+
+    final reorderProxy = tester.widget<Material>(
+      find.byKey(const ValueKey('plan-reorder-proxy')),
+    );
+    expect(reorderProxy.color, Colors.transparent);
+    expect(find.byKey(const ValueKey('proxy-child')), findsOneWidget);
+  });
+
   testWidgets('restores plan order when persistence fails', (tester) async {
     final repository = _FailingPlanOrderRepository();
     await repository.createPlan(name: '第二计划', area: '京都');
@@ -1672,6 +1990,43 @@ void main() {
     expect(mapImportInkWell.onTap, isNotNull);
     expect(find.text('在作品地图上选择并导入点位'), findsOneWidget);
     expect(find.text('请先通过 Bangumi 搜索添加作品'), findsNothing);
+  });
+
+  testWidgets('Bangumi search shows a trailing clear button after input', (
+    tester,
+  ) async {
+    final repository = SamplePilgrimageRepository(plans: const []);
+    final plan = await repository.createPlan(name: '搜索测试', area: '东京');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BangumiWorkSearchScreen(
+          plan: plan,
+          repository: repository,
+          bangumiApiClient: BangumiApiClient(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final searchField = find.byType(TextField);
+    expect(
+      find.byKey(const ValueKey('bangumi-search-clear-button')),
+      findsNothing,
+    );
+    await tester.enterText(searchField, '轻音少女');
+    await tester.pump();
+    final clearButton = find.byKey(
+      const ValueKey('bangumi-search-clear-button'),
+    );
+    expect(clearButton, findsOneWidget);
+    expect(
+      tester.getRect(clearButton).right,
+      closeTo(tester.getRect(searchField).right, 0.1),
+    );
+    await tester.tap(clearButton);
+    await tester.pump();
+    expect(tester.widget<TextField>(searchField).controller?.text, isEmpty);
+    expect(clearButton, findsNothing);
   });
 
   testWidgets('adds a manual work to an empty plan', (tester) async {
@@ -2247,6 +2602,21 @@ void main() {
 
     final field = tester.widget<TextFormField>(find.byType(TextFormField));
     expect(field.controller?.text, link);
+    expect(find.byTooltip('清除搜索框'), findsOneWidget);
+    expect(find.byTooltip('粘贴'), findsNothing);
+    expect(
+      tester
+          .getRect(find.byKey(const ValueKey('anitabi-link-input-action')))
+          .right,
+      closeTo(tester.getRect(find.byType(TextFormField)).right, 0.1),
+    );
+    await tester.tap(find.byTooltip('清除搜索框'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextFormField>(find.byType(TextFormField)).controller?.text,
+      isEmpty,
+    );
+    expect(find.byTooltip('粘贴'), findsOneWidget);
     expect(find.text('Anitabi 地图导入'), findsNothing);
   });
 
@@ -2386,6 +2756,74 @@ void main() {
     expect(find.text('1002 场景 / EP 1002'), findsOneWidget);
     expect(find.text('1001 点位'), findsNothing);
     expect(find.text('1001 场景 / EP 1001'), findsNothing);
+  });
+
+  testWidgets('Anitabi import map browses overlapping points at maximum zoom', (
+    tester,
+  ) async {
+    const settings = AppSettings(mapMarkerClusterMaxZoom: 18, mapMaxZoom: 24);
+    final repository = SamplePilgrimageRepository(
+      plans: const [],
+      settings: settings,
+    );
+    final plan = await repository.createPlan(name: '重合点位测试', area: '京都');
+    final planWithWork = await repository.addWorkToPlan(
+      planId: plan.id,
+      work: const PilgrimageWork(
+        id: 'overlap-work',
+        bangumiId: 3001,
+        title: '重合点位作品',
+        subtitle: '',
+        city: '京都',
+        source: WorkSource.bangumi,
+      ),
+    );
+    const position = LatLng(35, 135);
+    final points = [
+      for (var index = 0; index < 3; index += 1)
+        AnitabiPoint(
+          bangumiId: 3001,
+          id: 'overlap-$index',
+          name: '重合点位 ${index + 1}',
+          subtitle: '场景 ${index + 1}',
+          position: position,
+          episodeLabel: 'EP ${index + 1}',
+          referenceImageUrl: null,
+          origin: 'Anitabi',
+          originUrl: 'https://anitabi.cn/',
+        ),
+    ];
+    final anitabiClient = _FakeAnitabiClient(pointsByBangumi: {3001: points});
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AnitabiMapImportScreen(
+          plan: planWithWork,
+          repository: repository,
+          initialSettings: settings,
+          anitabiClient: anitabiClient,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final map = tester.widget<FlutterMap>(find.byType(FlutterMap));
+    map.mapController!.move(position, 24);
+    await tester.pumpAndSettle();
+    final cluster = tester.widget<MapMarkerClusterBadge>(
+      find.byType(MapMarkerClusterBadge),
+    );
+    expect(cluster.opensPointBrowser, isTrue);
+    cluster.onTap();
+    await tester.pump();
+
+    expect(find.text('重合点位  1 / 3'), findsOneWidget);
+    tester
+        .widget<IconButton>(find.byKey(const ValueKey('map-overlap-next')))
+        .onPressed!();
+    await tester.pump();
+    expect(find.text('重合点位  2 / 3'), findsOneWidget);
+    expect(find.text('重合点位 2'), findsOneWidget);
   });
 
   testWidgets('Anitabi initial Bangumi load failure does not add work', (

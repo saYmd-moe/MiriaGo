@@ -713,6 +713,29 @@ class _AppearanceSettingsPageState extends State<_AppearanceSettingsPage> {
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          _AppearancePanel(
+            child: Material(
+              color: Colors.transparent,
+              child: SwitchListTile(
+                key: const ValueKey('plan-group-progress-toggle'),
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(
+                  Icons.linear_scale_outlined,
+                  color: AppColors.textSecondary,
+                ),
+                title: const Text('显示片区进度条', style: _titleTextStyle),
+                subtitle: const Text(
+                  '在片区选择弹窗中显示未完成片区的进度背景；完成后仅显示对勾。',
+                  style: _secondaryTextStyle,
+                ),
+                value: settings.showPlanGroupProgress,
+                onChanged: (value) {
+                  _update(settings.copyWith(showPlanGroupProgress: value));
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );

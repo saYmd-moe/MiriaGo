@@ -349,6 +349,7 @@ class _PlanScreenState extends State<PlanScreen> {
             _GroupSwitcher(
               groups: groups,
               selectedIndex: _selectedGroupIndex,
+              showProgressRing: widget.settings.showPlanGroupProgress,
               onSelectGroup: (group) {
                 final currentGroups = planGroupBuckets(
                   controller.plan,
@@ -734,12 +735,14 @@ class _GroupSwitcher extends StatelessWidget {
   const _GroupSwitcher({
     required this.groups,
     required this.selectedIndex,
+    required this.showProgressRing,
     required this.onSelectGroup,
     required this.onCreateGroup,
   });
 
   final List<PlanGroupBucket> groups;
   final int selectedIndex;
+  final bool showProgressRing;
   final ValueChanged<PlanGroupBucket> onSelectGroup;
   final Future<PilgrimagePlanGroup?> Function() onCreateGroup;
 
@@ -790,6 +793,7 @@ class _GroupSwitcher extends StatelessWidget {
       context: context,
       groups: groups,
       selectedGroupId: groups[selectedIndex].id,
+      showProgressRing: showProgressRing,
       onSelectGroup: onSelectGroup,
       onCreateGroup: onCreateGroup,
     );

@@ -250,6 +250,7 @@ impl DesktopDatabase {
                   custom_maplibre_style_url TEXT NOT NULL DEFAULT '',
                   map_thumbnail_visible_threshold INTEGER NOT NULL DEFAULT 40,
                   map_thumbnail_concurrent_loads INTEGER NOT NULL DEFAULT 10,
+                  show_plan_group_progress INTEGER NOT NULL DEFAULT 1,
                   map_marker_clustering_enabled INTEGER NOT NULL DEFAULT 1,
                   map_marker_cluster_radius INTEGER NOT NULL DEFAULT 40,
                   map_marker_cluster_max_zoom INTEGER NOT NULL DEFAULT 21,
@@ -382,6 +383,7 @@ impl DesktopDatabase {
                 "map_thumbnail_concurrent_loads",
                 "INTEGER NOT NULL DEFAULT 10",
             ),
+            ("show_plan_group_progress", "INTEGER NOT NULL DEFAULT 1"),
             (
                 "map_marker_clustering_enabled",
                 "INTEGER NOT NULL DEFAULT 1",
@@ -525,6 +527,7 @@ impl DesktopDatabase {
                         map_tile_provider, open_free_map_style, anitabi_image_source,
                         navigation_app, custom_xyz_tile_url, custom_maplibre_style_url,
                         map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
+                        show_plan_group_progress,
                         map_marker_clustering_enabled, map_marker_cluster_radius,
                         map_marker_cluster_max_zoom,
                         map_group_area_radius_meters, map_marker_scale,
@@ -549,12 +552,13 @@ impl DesktopDatabase {
                         "customMapLibreStyleUrl": row.get::<_, String>(13)?,
                         "mapThumbnailVisibleThreshold": row.get::<_, i64>(14)?,
                         "mapThumbnailConcurrentLoads": row.get::<_, i64>(15)?,
-                        "mapMarkerClusteringEnabled": row.get::<_, bool>(16)?,
-                        "mapMarkerClusterRadius": row.get::<_, i64>(17)?,
-                        "mapMarkerClusterMaxZoom": row.get::<_, i64>(18)?,
-                        "mapGroupAreaRadiusMeters": row.get::<_, i64>(19)?,
-                        "mapMarkerScale": row.get::<_, f64>(20)?,
-                        "mapMaxZoom": row.get::<_, i64>(21)?,
+                        "showPlanGroupProgress": row.get::<_, bool>(16)?,
+                        "mapMarkerClusteringEnabled": row.get::<_, bool>(17)?,
+                        "mapMarkerClusterRadius": row.get::<_, i64>(18)?,
+                        "mapMarkerClusterMaxZoom": row.get::<_, i64>(19)?,
+                        "mapGroupAreaRadiusMeters": row.get::<_, i64>(20)?,
+                        "mapMarkerScale": row.get::<_, f64>(21)?,
+                        "mapMaxZoom": row.get::<_, i64>(22)?,
                     }))
                 },
             )
@@ -888,10 +892,11 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
            open_free_map_style, anitabi_image_source, navigation_app,
            custom_xyz_tile_url, custom_maplibre_style_url,
            map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
+           show_plan_group_progress,
            map_marker_clustering_enabled, map_marker_cluster_radius,
            map_marker_cluster_max_zoom, map_group_area_radius_meters,
            map_marker_scale, map_max_zoom
-         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         params![
             f64_value(settings, "uiScale", 1.0),
             string_value(settings, "cameraCaptureAspectRatio", "auto"),
@@ -909,6 +914,7 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
             string_value(settings, "customMapLibreStyleUrl", ""),
             i64_value(settings, "mapThumbnailVisibleThreshold", 40).clamp(0, 200),
             i64_value(settings, "mapThumbnailConcurrentLoads", 10).clamp(1, 30),
+            bool_value(settings, "showPlanGroupProgress", true),
             bool_value(settings, "mapMarkerClusteringEnabled", true),
             i64_value(settings, "mapMarkerClusterRadius", 40).clamp(32, 120),
             i64_value(settings, "mapMarkerClusterMaxZoom", 21).clamp(10, 22),
@@ -1119,6 +1125,7 @@ fn default_settings_json() -> Value {
         "customMapLibreStyleUrl": "",
         "mapThumbnailVisibleThreshold": 40,
         "mapThumbnailConcurrentLoads": 10,
+        "showPlanGroupProgress": true,
         "mapMarkerClusteringEnabled": true,
         "mapMarkerClusterRadius": 40,
         "mapMarkerClusterMaxZoom": 21,
@@ -1208,6 +1215,7 @@ mod tests {
             .save_settings_json(
                 r#"{
                   "navigationApp": "amap",
+                  "showPlanGroupProgress": false,
                   "mapMarkerClusteringEnabled": false,
                   "mapMarkerClusterRadius": 56,
                   "mapMarkerClusterMaxZoom": 20,
@@ -1220,6 +1228,7 @@ mod tests {
 
         let settings = database.load_settings_json().expect("load settings");
         assert_eq!(settings["navigationApp"], "amap");
+        assert_eq!(settings["showPlanGroupProgress"], false);
         assert_eq!(settings["mapMarkerClusteringEnabled"], false);
         assert_eq!(settings["mapMarkerClusterRadius"], 56);
         assert_eq!(settings["mapMarkerClusterMaxZoom"], 20);
@@ -1274,6 +1283,13 @@ mod tests {
                 [],
             )
             .expect("drop cluster zoom column");
+        database
+            .connection
+            .execute(
+                "ALTER TABLE app_settings DROP COLUMN show_plan_group_progress",
+                [],
+            )
+            .expect("drop plan group progress column");
 
         database
             .ensure_app_settings_columns()
@@ -1281,6 +1297,7 @@ mod tests {
         let settings = database.load_settings_json().expect("load settings");
         assert_eq!(settings["uiScale"], 0.9);
         assert_eq!(settings["navigationApp"], "googleMaps");
+        assert_eq!(settings["showPlanGroupProgress"], true);
         assert_eq!(settings["mapMarkerClusteringEnabled"], true);
         assert_eq!(settings["mapMarkerClusterRadius"], 40);
         assert_eq!(settings["mapMarkerClusterMaxZoom"], 21);

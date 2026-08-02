@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:miriago/app_theme.dart';
 import 'package:miriago/map/map_marker_clustering.dart';
 import 'package:miriago/map/pilgrimage_map_screen.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
@@ -291,6 +292,14 @@ void main() {
       expect(controller.selectedPoint?.id, 'point-a');
       expect(controller.currentPoint?.id, 'point-c');
       expect(find.text('重合点位  1 / 3'), findsOneWidget);
+      expect(
+        tester
+            .widget<Divider>(
+              find.byKey(const ValueKey('map-overlap-point-divider')),
+            )
+            .color,
+        AppColors.border,
+      );
       expect(
         tester.widget<MarkerLayer>(find.byType(MarkerLayer)).markers.last.key,
         const ValueKey('plan-map-marker-point-a'),

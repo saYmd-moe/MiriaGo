@@ -744,41 +744,30 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
   Future<String?> _pickTargetGroup({String? currentGroupId}) async {
     final groups = _plan.groups.toList(growable: false)
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-    return showModalBottomSheet<String>(
+    final selectedGroupId = await showPlanGroupSelectionSheet(
       context: context,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: ListView(
-            shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            children: [
-              const _SheetTitle(title: '移动到片区'),
-              _MoveTargetTile(
-                title: '未分配点位',
-                selected: currentGroupId == null,
-                onTap: () => Navigator.of(context).pop(_ungroupedGroupMove),
-              ),
-              for (final group in groups)
-                _MoveTargetTile(
-                  title: group.name,
-                  selected: currentGroupId == group.id,
-                  onTap: () => Navigator.of(context).pop(group.id),
-                ),
-            ],
-          ),
-        );
+      title: '移动到片区',
+      subtitle: '选择一个片区作为当前点位所属片区',
+      selectedOptionId: currentGroupId ?? _ungroupedGroupMove,
+      options: [
+        const PlanGroupSelectionOption(id: _ungroupedGroupMove, title: '未分入片区'),
+        for (final group in groups)
+          PlanGroupSelectionOption(id: group.id, title: group.name),
+      ],
+      onCreateOption: () async {
+        final created = await _createGroupFromPicker();
+        return created == null
+            ? null
+            : PlanGroupSelectionOption(id: created.id, title: created.name);
       },
-    ).then((value) {
-      if (value == null) {
-        return _cancelGroupMove;
-      }
-      if (value == _ungroupedGroupMove) {
-        return null;
-      }
-      return value;
-    });
+    );
+    if (selectedGroupId == null) {
+      return _cancelGroupMove;
+    }
+    if (selectedGroupId == _ungroupedGroupMove) {
+      return null;
+    }
+    return selectedGroupId;
   }
 
   Future<void> _openNearestAssign() async {
@@ -1507,6 +1496,7 @@ class _PointManagerTile extends StatelessWidget {
               ),
               if (!selectionMode)
                 PopupMenuButton<String>(
+                  key: ValueKey('point-manager-actions-${point.id}'),
                   tooltip: '点位操作',
                   enabled: !isBusy,
                   onSelected: (value) {
@@ -1753,34 +1743,6 @@ class _SheetTitle extends StatelessWidget {
 
 class _OrderModeTile extends StatelessWidget {
   const _OrderModeTile({
-    required this.title,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(
-          selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-          color: selected ? AppColors.accent : AppColors.textSecondary,
-        ),
-        title: Text(title),
-        onTap: onTap,
-      ),
-    );
-  }
-}
-
-class _MoveTargetTile extends StatelessWidget {
-  const _MoveTargetTile({
     required this.title,
     required this.selected,
     required this.onTap,
