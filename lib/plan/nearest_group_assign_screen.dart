@@ -301,7 +301,7 @@ class _NearestGroupAssignScreenState extends State<NearestGroupAssignScreen> {
       message:
           '将把 $count 个未分组点位分配到最近的片区关键点，最大距离为 ${_formatDistance(_distanceMeters)}。',
       confirmLabel: '开始分配',
-      icon: Icons.near_me_outlined,
+      emphasizedValues: ['$count 个未分组点位'],
     );
     if (!confirmed || !mounted) {
       return;
@@ -758,7 +758,7 @@ class _BoxGroupAssignScreenState extends State<BoxGroupAssignScreen> {
       title: '确认框选分配',
       message: '将把 ${points.length} 个未分组点位移动到「${targetGroup.name}」。',
       confirmLabel: '分配',
-      icon: Icons.select_all_outlined,
+      emphasizedValues: ['${points.length} 个未分组点位', targetGroup.name],
     );
     if (!confirmed || !mounted) {
       return;

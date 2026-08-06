@@ -128,10 +128,10 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
     final confirmed = await showConfirmActionDialog(
       context,
       title: '删除计划',
-      message: '将删除「${plan.name}」及其中的点位、片区、作品和巡礼记录。此操作无法撤销。',
+      message: '将删除「${plan.name}」及其中的点位、片区、作品和巡礼记录。',
       confirmLabel: '删除',
-      icon: Icons.delete_outline,
       destructive: true,
+      emphasizedValues: [plan.name],
     );
     if (!confirmed || !mounted) {
       return;

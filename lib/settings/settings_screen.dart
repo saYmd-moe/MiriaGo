@@ -13,6 +13,7 @@ import '../records/comparison_export_config_editor.dart';
 import '../records/comparison_export_config_storage_stub.dart'
     if (dart.library.io) '../records/comparison_export_config_storage_io.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/confirm_action_dialog.dart';
 
 bool get _showFutureThemeModeSettings => false;
 bool get _showFutureCacheCleanupSettings => false;
@@ -331,26 +332,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmResetSettings() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('恢复初始设置'),
-          content: const Text('所有外观、拍摄和地图设置将恢复为默认值。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('恢复'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '恢复初始设置',
+      message: '所有外观、拍摄和地图设置将恢复为默认值。',
+      confirmLabel: '恢复',
+      notice: '恢复后仍可重新调整各项设置',
+      emphasizedValues: const ['所有外观、拍摄和地图设置'],
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     widget.onChanged(const AppSettings());

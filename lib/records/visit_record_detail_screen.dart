@@ -14,6 +14,7 @@ import '../plan/plan_group_utils.dart';
 import '../plan/reference_image_status.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/confirm_action_dialog.dart';
 import '../widgets/anitabi_network_image.dart';
 import '../widgets/image_viewer_screen.dart';
 import '../widgets/reference_image_placeholder.dart';
@@ -206,38 +207,46 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('删除记录'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('只删除这条巡礼记录，不会改变点位完成状态。'),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: deleteFiles,
-                        onChanged: (v) =>
-                            setState(() => deleteFiles = v ?? false),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
+            return ConfirmActionDialog(
+              title: '删除记录',
+              message: '将删除这条巡礼记录，不会改变点位完成状态。',
+              confirmLabel: '删除',
+              destructive: true,
+              emphasizedValues: const ['这条巡礼记录'],
+              additionalContent: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => deleteFiles = !deleteFiles),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: deleteFiles,
+                      checkColor: Colors.white,
+                      fillColor: WidgetStateProperty.resolveWith((states) {
+                        return states.contains(WidgetState.selected)
+                            ? ConfirmActionDialog.dangerColor
+                            : Colors.transparent;
+                      }),
+                      side: const BorderSide(
+                        color: AppColors.border,
+                        width: 1.5,
                       ),
-                      const Text('同时删除照片文件'),
-                    ],
-                  ),
-                ],
+                      onChanged: (value) =>
+                          setState(() => deleteFiles = value ?? false),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      '同时删除照片文件',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('删除'),
-                ),
-              ],
             );
           },
         );

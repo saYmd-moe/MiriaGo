@@ -1053,7 +1053,6 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       title: title,
       message: message,
       confirmLabel: confirmLabel,
-      icon: Icons.playlist_add_check_outlined,
     );
   }
 

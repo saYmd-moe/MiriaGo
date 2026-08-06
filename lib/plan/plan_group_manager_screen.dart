@@ -4,6 +4,7 @@ import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
 import '../widgets/snackbar_helper.dart';
 import '../widgets/app_scaled_route.dart';
+import '../widgets/confirm_action_dialog.dart';
 import 'group_anchor_picker_screen.dart';
 import 'pilgrimage_models.dart';
 
@@ -264,25 +265,15 @@ class _PlanGroupManagerScreenState extends State<PlanGroupManagerScreen> {
     PilgrimagePlanGroup group,
     int pointCount,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除片区'),
-        content: Text('确定删除「${group.name}」吗？其中 $pointCount 个点位会移入未分配点位。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).pop(true),
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '删除片区',
+      message: '将删除「${group.name}」，其中 $pointCount 个点位会移入未分配点位。',
+      confirmLabel: '删除',
+      destructive: true,
+      emphasizedValues: [group.name],
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
 

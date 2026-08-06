@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
+import '../widgets/confirm_action_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
@@ -580,24 +581,15 @@ class _PlanScreenState extends State<PlanScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('缓存完整参考图'),
-        content: Text('将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('开始缓存'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '缓存完整参考图',
+      message: '将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。',
+      confirmLabel: '开始缓存',
+      notice: '建议在 Wi-Fi 环境下进行缓存',
+      emphasizedValues: ['${points.length} 张'],
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     await _cacheFullReferenceImages();

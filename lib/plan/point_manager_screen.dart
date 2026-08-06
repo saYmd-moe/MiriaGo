@@ -846,10 +846,10 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     final confirmed = await showConfirmActionDialog(
       context,
       title: '删除点位',
-      message: '确定从计划中删除「${point.name}」吗？',
+      message: '将从计划中删除「${point.name}」。',
       confirmLabel: '删除',
-      icon: Icons.delete_outline,
       destructive: true,
+      emphasizedValues: [point.name],
     );
     if (!confirmed || !mounted) {
       return;
@@ -870,10 +870,10 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     final confirmed = await showConfirmActionDialog(
       context,
       title: '批量删除点位',
-      message: '确定从计划中删除 ${_selectedPointIds.length} 个点位吗？',
+      message: '将从计划中删除 ${_selectedPointIds.length} 个点位。',
       confirmLabel: '删除',
-      icon: Icons.delete_outline,
       destructive: true,
+      emphasizedValues: ['${_selectedPointIds.length} 个点位'],
     );
     if (!confirmed || !mounted) {
       return;
@@ -1089,24 +1089,15 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     if (points.isEmpty) {
       return _showInfo('当前计划没有需要缓存的参考图');
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('缓存完整参考图'),
-        content: Text('将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('开始缓存'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '缓存完整参考图',
+      message: '将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。',
+      confirmLabel: '开始缓存',
+      notice: '建议在 Wi-Fi 环境下进行缓存',
+      emphasizedValues: ['${points.length} 张'],
     );
-    if (confirmed == true) {
+    if (confirmed) {
       await _cacheFullReferenceImages();
     }
   }
