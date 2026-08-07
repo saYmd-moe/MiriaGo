@@ -14,6 +14,7 @@ import '../records/comparison_export_config_storage_stub.dart'
     if (dart.library.io) '../records/comparison_export_config_storage_io.dart';
 import '../widgets/copyable_text.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 
 bool get _showFutureThemeModeSettings => false;
 bool get _showFutureCacheCleanupSettings => false;
@@ -378,36 +379,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(title),
+        return AppInputDialog(
+          title: title,
           content: Form(
             key: formKey,
-            child: TextFormField(
-              controller: controller,
-              autofocus: true,
-              decoration: InputDecoration(
-                helperText: helperText,
-                border: const OutlineInputBorder(),
+            child: AppDialogField(
+              label: 'URL 地址',
+              child: TextFormField(
+                controller: controller,
+                autofocus: true,
+                decoration: appDialogInputDecoration(helperText: helperText),
+                keyboardType: TextInputType.url,
+                validator: (value) => validator(value ?? ''),
               ),
-              keyboardType: TextInputType.url,
-              validator: (value) => validator(value ?? ''),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (!formKey.currentState!.validate()) {
-                  return;
-                }
-                Navigator.of(context).pop(controller.text);
-              },
-              child: const Text('保存'),
-            ),
-          ],
+          confirmLabel: '保存',
+          onConfirm: () {
+            if (!formKey.currentState!.validate()) {
+              return;
+            }
+            Navigator.of(context).pop(controller.text);
+          },
         );
       },
     );
@@ -2541,17 +2534,21 @@ class _CustomAspectRatioDialogState extends State<_CustomAspectRatioDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('\u81ea\u5b9a\u4e49\u6bd4\u4f8b'),
+    return AppInputDialog(
+      title: '\u81ea\u5b9a\u4e49\u6bd4\u4f8b',
       content: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
-            child: TextField(
-              controller: _widthController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+            child: AppDialogField(
+              label: '\u5bbd',
+              child: TextField(
+                controller: _widthController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: appDialogInputDecoration(),
               ),
-              decoration: const InputDecoration(labelText: '\u5bbd'),
             ),
           ),
           const Padding(
@@ -2562,24 +2559,22 @@ class _CustomAspectRatioDialogState extends State<_CustomAspectRatioDialog> {
             ),
           ),
           Expanded(
-            child: TextField(
-              controller: _heightController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+            child: AppDialogField(
+              label: '\u9ad8',
+              child: TextField(
+                controller: _heightController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: appDialogInputDecoration(),
+                onSubmitted: (_) => _submit(),
               ),
-              decoration: const InputDecoration(labelText: '\u9ad8'),
-              onSubmitted: (_) => _submit(),
             ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('\u53d6\u6d88'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('\u4fdd\u5b58')),
-      ],
+      confirmLabel: '\u4fdd\u5b58',
+      onConfirm: _submit,
     );
   }
 }
@@ -2937,67 +2932,81 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('\u81ea\u5b9a\u4e49\u4e3b\u9898\u8272'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              height: 54,
-              decoration: BoxDecoration(
-                color: _color,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
+    return AppInputDialog(
+      title: '\u81ea\u5b9a\u4e49\u4e3b\u9898\u8272',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _color,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              _hexFromColor(_color),
+              style: TextStyle(
+                color: _color.computeLuminance() > 0.5
+                    ? AppColors.textPrimary
+                    : Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
               ),
             ),
-            const SizedBox(height: 14),
-            TextField(
+          ),
+          const SizedBox(height: 14),
+          AppDialogField(
+            label: '\u540d\u79f0',
+            child: TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: '\u540d\u79f0'),
+              decoration: appDialogInputDecoration(),
             ),
-            const SizedBox(height: 10),
-            TextField(
+          ),
+          const SizedBox(height: 10),
+          AppDialogField(
+            label: '\u8272\u53f7',
+            child: TextField(
               controller: _hexController,
-              decoration: const InputDecoration(
-                labelText: '\u8272\u53f7',
-                hintText: '#0F8B8D',
-              ),
+              decoration: appDialogInputDecoration(hintText: '#0F8B8D'),
               onChanged: (_) => _applyHex(),
               onSubmitted: (_) => _submit(),
             ),
-            const SizedBox(height: 14),
-            _ColorChannelSlider(
-              label: 'R',
-              value: _color.r.round(),
-              onChanged: (value) => _setColor(
-                Color.fromARGB(255, value, _color.g.round(), _color.b.round()),
-              ),
+          ),
+          const SizedBox(height: 14),
+          _ColorChannelSlider(
+            label: 'R',
+            channelName: '红色',
+            channelColor: const Color(0xFFE53935),
+            value: _color.r.round(),
+            onChanged: (value) => _setColor(
+              Color.fromARGB(255, value, _color.g.round(), _color.b.round()),
             ),
-            _ColorChannelSlider(
-              label: 'G',
-              value: _color.g.round(),
-              onChanged: (value) => _setColor(
-                Color.fromARGB(255, _color.r.round(), value, _color.b.round()),
-              ),
+          ),
+          _ColorChannelSlider(
+            label: 'G',
+            channelName: '绿色',
+            channelColor: const Color(0xFF16A34A),
+            value: _color.g.round(),
+            onChanged: (value) => _setColor(
+              Color.fromARGB(255, _color.r.round(), value, _color.b.round()),
             ),
-            _ColorChannelSlider(
-              label: 'B',
-              value: _color.b.round(),
-              onChanged: (value) => _setColor(
-                Color.fromARGB(255, _color.r.round(), _color.g.round(), value),
-              ),
+          ),
+          _ColorChannelSlider(
+            label: 'B',
+            channelName: '蓝色',
+            channelColor: const Color(0xFF2563EB),
+            value: _color.b.round(),
+            onChanged: (value) => _setColor(
+              Color.fromARGB(255, _color.r.round(), _color.g.round(), value),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('\u53d6\u6d88'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('\u6dfb\u52a0')),
-      ],
+      confirmLabel: '\u6dfb\u52a0',
+      onConfirm: _submit,
     );
   }
 }
@@ -3005,38 +3014,132 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
 class _ColorChannelSlider extends StatelessWidget {
   const _ColorChannelSlider({
     required this.label,
+    required this.channelName,
+    required this.channelColor,
     required this.value,
     required this.onChanged,
   });
 
   final String label;
+  final String channelName;
+  final Color channelColor;
   final int value;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    void update(int next) => onChanged(next.clamp(0, 255));
+
     return Row(
       children: [
-        SizedBox(width: 18, child: Text(label, style: _captionTextStyle)),
-        Expanded(
-          child: Slider(
-            value: value.toDouble(),
-            min: 0,
-            max: 255,
-            divisions: 255,
-            label: value.toString(),
-            onChanged: (next) => onChanged(next.round()),
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: channelColor.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: channelColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+            ),
           ),
         ),
-        SizedBox(
-          width: 34,
+        const SizedBox(width: 6),
+        _ColorChannelStepButton(
+          icon: Icons.remove,
+          tooltip: '减少$channelName',
+          onPressed: value > 0 ? () => update(value - 1) : null,
+        ),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 5,
+              activeTrackColor: channelColor,
+              inactiveTrackColor: channelColor.withValues(alpha: 0.16),
+              thumbColor: channelColor,
+              overlayColor: channelColor.withValues(alpha: 0.12),
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              valueIndicatorColor: AppColors.cameraDarkOverlay,
+              valueIndicatorTextStyle: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+            child: Slider(
+              value: value.toDouble(),
+              min: 0,
+              max: 255,
+              divisions: 255,
+              label: value.toString(),
+              semanticFormatterCallback: (next) =>
+                  '$channelName ${next.round()}',
+              onChanged: (next) => update(next.round()),
+            ),
+          ),
+        ),
+        _ColorChannelStepButton(
+          icon: Icons.add,
+          tooltip: '增加$channelName',
+          onPressed: value < 255 ? () => update(value + 1) : null,
+        ),
+        const SizedBox(width: 6),
+        Container(
+          width: 40,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: AppColors.border),
+          ),
           child: Text(
             value.toString(),
-            textAlign: TextAlign.right,
-            style: _captionTextStyle,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ColorChannelStepButton extends StatelessWidget {
+  const _ColorChannelStepButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      style: IconButton.styleFrom(
+        fixedSize: const Size.square(30),
+        minimumSize: const Size.square(30),
+        padding: EdgeInsets.zero,
+        side: const BorderSide(color: AppColors.border),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
     );
   }
 }

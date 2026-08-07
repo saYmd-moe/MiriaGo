@@ -13,6 +13,7 @@ import '../data/user_reference_image_stub.dart'
 import '../point_detail/point_detail_sheet.dart';
 import '../utils/selected_item_order.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_models.dart';
 import 'plan_group_utils.dart';
@@ -1173,28 +1174,26 @@ class _BoxAssignCreateGroupDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('新建片区'),
-      content: TextField(
-        key: const ValueKey('box-assign-group-name-field'),
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: '片区名称', errorText: _errorText),
-        textInputAction: TextInputAction.done,
-        onChanged: (_) {
-          if (_errorText != null) {
-            setState(() => _errorText = null);
-          }
-        },
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+    return AppInputDialog(
+      title: '新建片区',
+      content: AppDialogField(
+        label: '片区名称',
+        child: TextField(
+          key: const ValueKey('box-assign-group-name-field'),
+          controller: _controller,
+          autofocus: true,
+          decoration: appDialogInputDecoration(errorText: _errorText),
+          textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() => _errorText = null);
+            }
+          },
+          onSubmitted: (_) => _submit(),
         ),
-        FilledButton(onPressed: _submit, child: const Text('创建')),
-      ],
+      ),
+      confirmLabel: '创建',
+      onConfirm: _submit,
     );
   }
 }

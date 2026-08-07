@@ -20,6 +20,12 @@ void main() {
         autoSaveComparisonToGallery: true,
         comparisonShowPilgrimName: true,
         comparisonPilgrimName: 'BilyHurington',
+        customThemeColorName: '湖蓝',
+        customThemeColorValue: 0xFF168AAD,
+        customThemeColors: [
+          CustomThemeColor(name: '湖蓝', value: 0xFF168AAD),
+          CustomThemeColor(name: '莓红', value: 0xFFC43D62),
+        ],
         mapThumbnailVisibleThreshold: 55,
         mapThumbnailConcurrentLoads: 12,
         showPlanGroupProgress: false,
@@ -83,6 +89,13 @@ void main() {
     expect(decoded.settings.autoSaveComparisonToGallery, isTrue);
     expect(decoded.settings.comparisonShowPilgrimName, isTrue);
     expect(decoded.settings.comparisonPilgrimName, 'BilyHurington');
+    expect(decoded.settings.customThemeColorName, '湖蓝');
+    expect(decoded.settings.customThemeColorValue, 0xFF168AAD);
+    expect(decoded.settings.customThemeColors, hasLength(2));
+    expect(decoded.settings.customThemeColors[0].name, '湖蓝');
+    expect(decoded.settings.customThemeColors[0].value, 0xFF168AAD);
+    expect(decoded.settings.customThemeColors[1].name, '莓红');
+    expect(decoded.settings.customThemeColors[1].value, 0xFFC43D62);
     expect(decoded.settings.mapThumbnailVisibleThreshold, 55);
     expect(decoded.settings.mapThumbnailConcurrentLoads, 12);
     expect(decoded.settings.showPlanGroupProgress, isFalse);

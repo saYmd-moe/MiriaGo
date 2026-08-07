@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
@@ -669,26 +670,21 @@ class _PlanPointCreateGroupDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('新建片区'),
-      content: TextField(
-        key: const ValueKey('plan-point-group-name-field'),
-        controller: _nameController,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: '片区名称'),
-        textInputAction: TextInputAction.done,
-        onSubmitted: (value) => Navigator.of(context).pop(value),
+    return AppInputDialog(
+      title: '新建片区',
+      content: AppDialogField(
+        label: '片区名称',
+        child: TextField(
+          key: const ValueKey('plan-point-group-name-field'),
+          controller: _nameController,
+          autofocus: true,
+          decoration: appDialogInputDecoration(),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_nameController.text),
-          child: const Text('创建'),
-        ),
-      ],
+      confirmLabel: '创建',
+      onConfirm: () => Navigator.of(context).pop(_nameController.text),
     );
   }
 }

@@ -23,6 +23,7 @@ import 'package:miriago/plan/pilgrimage_models.dart';
 import 'package:miriago/plan/pilgrimage_plan_controller.dart';
 import 'package:miriago/records/records_screen.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
+import 'package:miriago/widgets/input_dialog.dart';
 import 'package:miriago/widgets/reference_image_placeholder.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
@@ -1414,13 +1415,16 @@ void main() {
     expect(find.text('片区名不能为空'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(AlertDialog),
+        of: find.byType(AppInputDialog),
         matching: find.text('新建片区'),
       ),
       findsOneWidget,
     );
 
-    await tester.enterText(find.widgetWithText(TextField, '片区名称'), '新片区');
+    await tester.enterText(
+      find.byKey(const ValueKey('plan-group-name-field')),
+      '新片区',
+    );
     await tester.tap(find.text('创建'));
     await tester.pumpAndSettle();
 

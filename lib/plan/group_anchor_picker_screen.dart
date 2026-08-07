@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
+import '../widgets/input_dialog.dart';
 import '../map/map_tile_config.dart';
 import '../map/map_marker_scale.dart';
 import '../utils/selected_item_order.dart';
@@ -242,56 +243,50 @@ class _GroupAnchorPickerScreenState extends State<GroupAnchorPickerScreen> {
     final result = await showDialog<LatLng>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('输入经纬度'),
+        return AppInputDialog(
+          title: '输入经纬度',
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: latitudeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
+              AppDialogField(
+                label: '纬度',
+                child: TextField(
+                  controller: latitudeController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                  decoration: appDialogInputDecoration(),
                 ),
-                decoration: const InputDecoration(labelText: '纬度'),
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: longitudeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
+              const SizedBox(height: 14),
+              AppDialogField(
+                label: '经度',
+                child: TextField(
+                  controller: longitudeController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                  decoration: appDialogInputDecoration(),
                 ),
-                decoration: const InputDecoration(labelText: '经度'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final latitude = double.tryParse(
-                  latitudeController.text.trim(),
-                );
-                final longitude = double.tryParse(
-                  longitudeController.text.trim(),
-                );
-                if (latitude == null ||
-                    longitude == null ||
-                    latitude < -90 ||
-                    latitude > 90 ||
-                    longitude < -180 ||
-                    longitude > 180) {
-                  return;
-                }
-                Navigator.of(context).pop(LatLng(latitude, longitude));
-              },
-              child: const Text('确定'),
-            ),
-          ],
+          confirmLabel: '确定',
+          onConfirm: () {
+            final latitude = double.tryParse(latitudeController.text.trim());
+            final longitude = double.tryParse(longitudeController.text.trim());
+            if (latitude == null ||
+                longitude == null ||
+                latitude < -90 ||
+                latitude > 90 ||
+                longitude < -180 ||
+                longitude > 180) {
+              return;
+            }
+            Navigator.of(context).pop(LatLng(latitude, longitude));
+          },
         );
       },
     );

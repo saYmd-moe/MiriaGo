@@ -19,6 +19,7 @@ import '../widgets/reference_thumbnail_stub.dart'
     if (dart.library.io) '../widgets/reference_thumbnail_io.dart';
 import '../widgets/image_viewer_screen.dart';
 import '../widgets/app_scaled_route.dart';
+import '../widgets/input_dialog.dart';
 import 'anitabi_map_import_screen.dart';
 import 'coordinate_parser.dart';
 import 'pilgrimage_work_dropdown.dart';
@@ -2975,47 +2976,41 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('粘贴坐标'),
+        return AppInputDialog(
+          title: '粘贴坐标',
           content: Form(
             key: formKey,
-            child: TextFormField(
-              controller: controller,
-              autofocus: true,
-              minLines: 2,
-              maxLines: 3,
-              decoration: stableInputDecoration(
-                labelText: '坐标文本',
-                hintText: '例如 35.712576, 139.722166',
+            child: AppDialogField(
+              label: '坐标文本',
+              child: TextFormField(
+                controller: controller,
+                autofocus: true,
+                minLines: 2,
+                maxLines: 3,
+                decoration: appDialogInputDecoration(
+                  hintText: '例如 35.712576, 139.722166',
+                ),
+                validator: (value) {
+                  if (parseCoordinateText(value ?? '') == null) {
+                    return '请输入可识别的坐标';
+                  }
+                  return null;
+                },
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) {
+                  if (formKey.currentState?.validate() ?? false) {
+                    Navigator.of(dialogContext).pop(controller.text);
+                  }
+                },
               ),
-              validator: (value) {
-                if (parseCoordinateText(value ?? '') == null) {
-                  return '请输入可识别的坐标';
-                }
-                return null;
-              },
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.of(dialogContext).pop(controller.text);
-                }
-              },
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (formKey.currentState?.validate() ?? false) {
-                  Navigator.of(dialogContext).pop(controller.text);
-                }
-              },
-              child: const Text('填入'),
-            ),
-          ],
+          confirmLabel: '填入',
+          onConfirm: () {
+            if (formKey.currentState?.validate() ?? false) {
+              Navigator.of(dialogContext).pop(controller.text);
+            }
+          },
         );
       },
     );

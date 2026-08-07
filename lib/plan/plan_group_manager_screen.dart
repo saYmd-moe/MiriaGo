@@ -5,6 +5,7 @@ import '../data/pilgrimage_repository.dart';
 import '../widgets/snackbar_helper.dart';
 import '../widgets/app_scaled_route.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import 'group_anchor_picker_screen.dart';
 import 'pilgrimage_models.dart';
 
@@ -174,25 +175,20 @@ class _PlanGroupManagerScreenState extends State<PlanGroupManagerScreen> {
     final controller = TextEditingController(text: group.name);
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('重命名片区'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: '片区名称'),
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) => Navigator.of(context).pop(value),
+      builder: (context) => AppInputDialog(
+        title: '重命名片区',
+        content: AppDialogField(
+          label: '片区名称',
+          child: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: appDialogInputDecoration(),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(context).pop(value),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('保存'),
-          ),
-        ],
+        confirmLabel: '保存',
+        onConfirm: () => Navigator.of(context).pop(controller.text),
       ),
     );
     controller.dispose();
@@ -424,30 +420,29 @@ class _CreatePlanGroupDialogState extends State<_CreatePlanGroupDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('新建片区'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: '片区名称', errorText: _errorText),
-        textInputAction: TextInputAction.done,
-        onChanged: (_) {
-          if (_errorText == null) {
-            return;
-          }
-          setState(() {
-            _errorText = null;
-          });
-        },
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+    return AppInputDialog(
+      title: '新建片区',
+      content: AppDialogField(
+        label: '片区名称',
+        child: TextField(
+          key: const ValueKey('plan-group-name-field'),
+          controller: _controller,
+          autofocus: true,
+          decoration: appDialogInputDecoration(errorText: _errorText),
+          textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_errorText == null) {
+              return;
+            }
+            setState(() {
+              _errorText = null;
+            });
+          },
+          onSubmitted: (_) => _submit(),
         ),
-        FilledButton(onPressed: _submit, child: const Text('创建')),
-      ],
+      ),
+      confirmLabel: '创建',
+      onConfirm: _submit,
     );
   }
 }
