@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -2969,6 +2971,7 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
           AppDialogField(
             label: '\u8272\u53f7',
             child: TextField(
+              key: const ValueKey('custom-theme-color-hex-field'),
               controller: _hexController,
               decoration: appDialogInputDecoration(hintText: '#0F8B8D'),
               onChanged: (_) => _applyHex(),
@@ -2976,33 +2979,7 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
             ),
           ),
           const SizedBox(height: 14),
-          _ColorChannelSlider(
-            label: 'R',
-            channelName: '红色',
-            channelColor: const Color(0xFFE53935),
-            value: _color.r.round(),
-            onChanged: (value) => _setColor(
-              Color.fromARGB(255, value, _color.g.round(), _color.b.round()),
-            ),
-          ),
-          _ColorChannelSlider(
-            label: 'G',
-            channelName: '绿色',
-            channelColor: const Color(0xFF16A34A),
-            value: _color.g.round(),
-            onChanged: (value) => _setColor(
-              Color.fromARGB(255, _color.r.round(), value, _color.b.round()),
-            ),
-          ),
-          _ColorChannelSlider(
-            label: 'B',
-            channelName: '蓝色',
-            channelColor: const Color(0xFF2563EB),
-            value: _color.b.round(),
-            onChanged: (value) => _setColor(
-              Color.fromARGB(255, _color.r.round(), _color.g.round(), value),
-            ),
-          ),
+          _HsvColorPalette(color: _color, onChanged: _setColor),
         ],
       ),
       confirmLabel: '\u6dfb\u52a0',
@@ -3011,136 +2988,233 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
   }
 }
 
-class _ColorChannelSlider extends StatelessWidget {
-  const _ColorChannelSlider({
-    required this.label,
-    required this.channelName,
-    required this.channelColor,
-    required this.value,
-    required this.onChanged,
-  });
+class _HsvColorPalette extends StatelessWidget {
+  const _HsvColorPalette({required this.color, required this.onChanged});
 
-  final String label;
-  final String channelName;
-  final Color channelColor;
-  final int value;
-  final ValueChanged<int> onChanged;
+  final Color color;
+  final ValueChanged<Color> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    void update(int next) => onChanged(next.clamp(0, 255));
+    final hsv = HSVColor.fromColor(color);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final paletteSize = math.min(constraints.maxWidth - 44, 230.0);
 
-    return Row(
-      children: [
-        Container(
-          width: 28,
-          height: 28,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: channelColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: channelColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0,
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        _ColorChannelStepButton(
-          icon: Icons.remove,
-          tooltip: '减少$channelName',
-          onPressed: value > 0 ? () => update(value - 1) : null,
-        ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: 5,
-              activeTrackColor: channelColor,
-              inactiveTrackColor: channelColor.withValues(alpha: 0.16),
-              thumbColor: channelColor,
-              overlayColor: channelColor.withValues(alpha: 0.12),
-              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
-              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-              valueIndicatorColor: AppColors.cameraDarkOverlay,
-              valueIndicatorTextStyle: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0,
+        void updateHueSaturation(Offset position) {
+          final hue = (position.dx.clamp(0, paletteSize) / paletteSize * 360)
+              .clamp(0.0, 359.999);
+          final saturation =
+              1 - position.dy.clamp(0, paletteSize) / paletteSize;
+          onChanged(
+            hsv
+                .withHue(hue)
+                .withSaturation(saturation)
+                .toColor()
+                .withAlpha(255),
+          );
+        }
+
+        void updateValue(double y) {
+          final value = 1 - y.clamp(0, paletteSize) / paletteSize;
+          onChanged(hsv.withValue(value).toColor().withAlpha(255));
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Semantics(
+              slider: true,
+              label: '色相和饱和度',
+              value:
+                  '色相 ${hsv.hue.round()} 度，饱和度 ${(hsv.saturation * 100).round()}%',
+              increasedValue:
+                  '色相 ${((hsv.hue + 5) % 360).round()} 度，饱和度 ${(hsv.saturation * 100).round()}%',
+              decreasedValue:
+                  '色相 ${((hsv.hue - 5) % 360).round()} 度，饱和度 ${(hsv.saturation * 100).round()}%',
+              onIncrease: () => onChanged(
+                hsv.withHue((hsv.hue + 5) % 360).toColor().withAlpha(255),
+              ),
+              onDecrease: () => onChanged(
+                hsv.withHue((hsv.hue - 5) % 360).toColor().withAlpha(255),
+              ),
+              child: GestureDetector(
+                key: const ValueKey('custom-theme-color-palette'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    updateHueSaturation(details.localPosition),
+                onPanDown: (details) =>
+                    updateHueSaturation(details.localPosition),
+                onPanUpdate: (details) =>
+                    updateHueSaturation(details.localPosition),
+                child: CustomPaint(
+                  size: Size.square(paletteSize),
+                  painter: _HueSaturationPalettePainter(hsv),
+                ),
               ),
             ),
-            child: Slider(
-              value: value.toDouble(),
-              min: 0,
-              max: 255,
-              divisions: 255,
-              label: value.toString(),
-              semanticFormatterCallback: (next) =>
-                  '$channelName ${next.round()}',
-              onChanged: (next) => update(next.round()),
+            const SizedBox(width: 12),
+            Semantics(
+              slider: true,
+              label: '明度',
+              value: '${(hsv.value * 100).round()}%',
+              increasedValue:
+                  '${((hsv.value + 0.05).clamp(0.0, 1.0) * 100).round()}%',
+              decreasedValue:
+                  '${((hsv.value - 0.05).clamp(0.0, 1.0) * 100).round()}%',
+              onIncrease: () => onChanged(
+                hsv
+                    .withValue((hsv.value + 0.05).clamp(0.0, 1.0))
+                    .toColor()
+                    .withAlpha(255),
+              ),
+              onDecrease: () => onChanged(
+                hsv
+                    .withValue((hsv.value - 0.05).clamp(0.0, 1.0))
+                    .toColor()
+                    .withAlpha(255),
+              ),
+              child: GestureDetector(
+                key: const ValueKey('custom-theme-color-value'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) => updateValue(details.localPosition.dy),
+                onPanDown: (details) => updateValue(details.localPosition.dy),
+                onPanUpdate: (details) => updateValue(details.localPosition.dy),
+                child: CustomPaint(
+                  size: Size(28, paletteSize),
+                  painter: _ColorValuePainter(hsv),
+                ),
+              ),
             ),
-          ),
-        ),
-        _ColorChannelStepButton(
-          icon: Icons.add,
-          tooltip: '增加$channelName',
-          onPressed: value < 255 ? () => update(value + 1) : null,
-        ),
-        const SizedBox(width: 6),
-        Container(
-          width: 40,
-          height: 30,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceMuted,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Text(
-            value.toString(),
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0,
-            ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
 
-class _ColorChannelStepButton extends StatelessWidget {
-  const _ColorChannelStepButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
+class _HueSaturationPalettePainter extends CustomPainter {
+  const _HueSaturationPalettePainter(this.hsv);
 
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback? onPressed;
+  final HSVColor hsv;
 
   @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon, size: 16),
-      style: IconButton.styleFrom(
-        fixedSize: const Size.square(30),
-        minimumSize: const Size.square(30),
-        padding: EdgeInsets.zero,
-        side: const BorderSide(color: AppColors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-      ),
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final shape = RRect.fromRectAndRadius(rect, const Radius.circular(6));
+    canvas.save();
+    canvas.clipRRect(shape);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [
+            Color(0xFFFF0000),
+            Color(0xFFFFFF00),
+            Color(0xFF00FF00),
+            Color(0xFF00FFFF),
+            Color(0xFF0000FF),
+            Color(0xFFFF00FF),
+            Color(0xFFFF0000),
+          ],
+        ).createShader(rect),
     );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.white],
+        ).createShader(rect),
+    );
+    canvas.restore();
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = AppColors.border,
+    );
+
+    final selector = Offset(
+      hsv.hue / 360 * size.width,
+      (1 - hsv.saturation) * size.height,
+    );
+    canvas.drawCircle(
+      selector,
+      8,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..color = Colors.white,
+    );
+    canvas.drawCircle(
+      selector,
+      8,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = AppColors.textPrimary,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HueSaturationPalettePainter oldDelegate) {
+    return oldDelegate.hsv.hue != hsv.hue ||
+        oldDelegate.hsv.saturation != hsv.saturation;
+  }
+}
+
+class _ColorValuePainter extends CustomPainter {
+  const _ColorValuePainter(this.hsv);
+
+  final HSVColor hsv;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barWidth = 12.0;
+    final rect = Rect.fromLTWH(
+      (size.width - barWidth) / 2,
+      0,
+      barWidth,
+      size.height,
+    );
+    final shape = RRect.fromRectAndRadius(rect, const Radius.circular(6));
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [hsv.withValue(1).toColor(), Colors.black],
+        ).createShader(rect),
+    );
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = AppColors.border,
+    );
+
+    final selector = Offset(size.width / 2, (1 - hsv.value) * size.height);
+    canvas.drawCircle(selector, 8, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      selector,
+      6,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = AppColors.textPrimary,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ColorValuePainter oldDelegate) {
+    return oldDelegate.hsv.hue != hsv.hue ||
+        oldDelegate.hsv.saturation != hsv.saturation ||
+        oldDelegate.hsv.value != hsv.value;
   }
 }
 

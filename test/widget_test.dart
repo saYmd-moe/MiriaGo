@@ -1520,6 +1520,34 @@ void main() {
     expect(find.text('自动聚合密集点位'), findsNothing);
   });
 
+  testWidgets('custom theme palette updates the hex color', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('外观设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自定义'));
+    await tester.pumpAndSettle();
+
+    final valueControl = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('custom-theme-color-value')),
+    );
+    valueControl.onTapDown!(TapDownDetails(localPosition: Offset.zero));
+    await tester.pump();
+
+    final palette = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('custom-theme-color-palette')),
+    );
+    palette.onTapDown!(TapDownDetails(localPosition: Offset.zero));
+    await tester.pump();
+
+    final hexField = tester.widget<TextField>(
+      find.byKey(const ValueKey('custom-theme-color-hex-field')),
+    );
+    expect(hexField.controller!.text, '#FF0000');
+  });
+
   testWidgets('creates empty plan and shows add-points shell', (tester) async {
     await _pumpAppWithEmptyPlan(tester);
 
