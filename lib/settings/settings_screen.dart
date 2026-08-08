@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 import '../app_theme.dart';
 import '../app_version.dart';
 import '../camera_reference/camera_zoom_capabilities.dart';
 import '../data/pilgrimage_repository.dart';
+import '../data/anitabi_service_config.dart';
 import '../desktop/tauri_bridge.dart';
 import '../map/map_tile_config.dart';
 import '../plan/pilgrimage_models.dart';
@@ -13,6 +15,7 @@ import '../records/comparison_export_config_editor.dart';
 import '../records/comparison_export_config_storage_stub.dart'
     if (dart.library.io) '../records/comparison_export_config_storage_io.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/snackbar_helper.dart';
 
 bool get _showFutureThemeModeSettings => false;
 bool get _showFutureCacheCleanupSettings => false;
@@ -353,7 +356,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true) {
       return;
     }
-    widget.onChanged(const AppSettings());
+    const settings = AppSettings();
+    ComparisonExportConfig.lastUsed = const ComparisonExportConfig();
+    await widget.repository.saveAppSettings(settings);
+    widget.onChanged(settings);
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showReplacingSnackBar(const SnackBar(content: Text('已恢复初始设置')));
+    }
+    await clearComparisonExportConfig();
   }
 
   String get _desktopLauncherStatusText {
@@ -993,6 +1005,254 @@ class _CameraSettingsPageState extends State<_CameraSettingsPage> {
   }
 }
 
+class _AnitabiServiceSettingsPage extends StatefulWidget {
+  const _AnitabiServiceSettingsPage({
+    required this.settings,
+    required this.onChanged,
+    required this.showUrlDialog,
+  });
+
+  final AppSettings settings;
+  final ValueChanged<AppSettings> onChanged;
+  final Future<void> Function({
+    required String title,
+    required String initialValue,
+    required String helperText,
+    required String? Function(String value) validator,
+    required ValueChanged<String> onSaved,
+  })
+  showUrlDialog;
+
+  @override
+  State<_AnitabiServiceSettingsPage> createState() =>
+      _AnitabiServiceSettingsPageState();
+}
+
+class _AnitabiServiceSettingsPageState
+    extends State<_AnitabiServiceSettingsPage> {
+  late AppSettings _settings = widget.settings;
+  var _testing = false;
+  Map<String, String> _testResults = const {};
+
+  AnitabiServiceConfig get _config => AnitabiServiceConfig(
+    siteBaseUrl: _settings.anitabiSiteBaseUrl,
+    staticDataBaseUrl: _settings.anitabiStaticDataBaseUrl,
+    apiBaseUrl: _settings.anitabiApiBaseUrl,
+    officialImageBaseUrl: _settings.anitabiOfficialImageBaseUrl,
+    mirrorImageBaseUrl: _settings.anitabiMirrorImageBaseUrl,
+  );
+
+  void _update(AppSettings settings) {
+    setState(() {
+      _settings = settings;
+      _testResults = const {};
+    });
+    widget.onChanged(settings);
+  }
+
+  Future<void> _edit({
+    required String title,
+    required String value,
+    required ValueChanged<String> onSaved,
+  }) {
+    return widget.showUrlDialog(
+      title: title,
+      initialValue: value,
+      helperText: '仅支持公开可访问的 HTTPS 基础地址，不要填写接口路径参数。',
+      validator: validateAnitabiBaseUrl,
+      onSaved: (value) =>
+          onSaved(normalizeAnitabiBaseUrl(value, fallback: value.trim())),
+    );
+  }
+
+  Future<void> _testConnections() async {
+    setState(() {
+      _testing = true;
+      _testResults = const {};
+    });
+    final config = _config;
+    final probes = <String, Uri>{
+      '主站': config.siteUri('/'),
+      '静态数据': config.staticDataUri('g.json'),
+      '数据 API': config.apiUri('bangumi/115908/lite'),
+      '官方图片': Uri.parse(
+        config.officialImageUrl(
+          Uri.parse(
+            'https://image.anitabi.cn/points/115908/qys7fu.jpg?plan=h160',
+          ),
+        ),
+      ),
+      '备用图片': Uri.parse(
+        config.mirrorImageUrl(
+          Uri.parse(
+            'https://image.anitabi.cn/points/115908/qys7fu.jpg?plan=h160',
+          ),
+        ),
+      ),
+    };
+    final results = <String, String>{};
+    final client = http.Client();
+    try {
+      for (final entry in probes.entries) {
+        results[entry.key] = await _probe(client, entry.value);
+        if (mounted) {
+          setState(() => _testResults = {...results});
+        }
+      }
+    } finally {
+      client.close();
+    }
+    if (mounted) {
+      setState(() => _testing = false);
+    }
+  }
+
+  Future<String> _probe(http.Client client, Uri uri) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final request = http.Request('GET', uri)
+        ..headers['range'] = 'bytes=0-2047';
+      final response = await client
+          .send(request)
+          .timeout(const Duration(seconds: 12));
+      await response.stream.timeout(const Duration(seconds: 12)).drain<void>();
+      stopwatch.stop();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return '失败 · HTTP ${response.statusCode}';
+      }
+      return '连接成功 · ${stopwatch.elapsedMilliseconds} ms';
+    } catch (_) {
+      return '连接失败';
+    }
+  }
+
+  void _restoreDefaults() {
+    _update(
+      _settings.copyWith(
+        anitabiSiteBaseUrl: defaultAnitabiSiteBaseUrl,
+        anitabiStaticDataBaseUrl: defaultAnitabiStaticDataBaseUrl,
+        anitabiApiBaseUrl: defaultAnitabiApiBaseUrl,
+        anitabiOfficialImageBaseUrl: defaultAnitabiOfficialImageBaseUrl,
+        anitabiMirrorImageBaseUrl: defaultAnitabiMirrorImageBaseUrl,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = _settings;
+    return _ScaledDetailScaffold(
+      title: 'Anitabi 服务地址',
+      uiScale: settings.uiScale,
+      fontScale: settings.fontScale,
+      children: [
+        _SettingsSection(
+          title: '服务地址',
+          children: [
+            _serviceRow(
+              key: const ValueKey('anitabi-site-base-url'),
+              icon: Icons.public_outlined,
+              title: '主站地址',
+              value: settings.anitabiSiteBaseUrl,
+              onSaved: (value) =>
+                  _update(settings.copyWith(anitabiSiteBaseUrl: value)),
+            ),
+            _serviceRow(
+              key: const ValueKey('anitabi-static-data-base-url'),
+              icon: Icons.data_object_outlined,
+              title: '静态地图数据',
+              value: settings.anitabiStaticDataBaseUrl,
+              onSaved: (value) =>
+                  _update(settings.copyWith(anitabiStaticDataBaseUrl: value)),
+            ),
+            _serviceRow(
+              key: const ValueKey('anitabi-api-base-url'),
+              icon: Icons.api_outlined,
+              title: '数据 API',
+              value: settings.anitabiApiBaseUrl,
+              onSaved: (value) =>
+                  _update(settings.copyWith(anitabiApiBaseUrl: value)),
+            ),
+            _serviceRow(
+              key: const ValueKey('anitabi-official-image-base-url'),
+              icon: Icons.image_outlined,
+              title: '官方图片服务',
+              value: settings.anitabiOfficialImageBaseUrl,
+              onSaved: (value) => _update(
+                settings.copyWith(anitabiOfficialImageBaseUrl: value),
+              ),
+            ),
+            _serviceRow(
+              key: const ValueKey('anitabi-mirror-image-base-url'),
+              icon: Icons.cloud_outlined,
+              title: '备用图片服务',
+              value: settings.anitabiMirrorImageBaseUrl,
+              onSaved: (value) =>
+                  _update(settings.copyWith(anitabiMirrorImageBaseUrl: value)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '连接测试',
+          children: [
+            for (final entry in _testResults.entries)
+              _InfoRow(
+                icon: entry.value.startsWith('连接成功')
+                    ? Icons.check_circle_outline
+                    : Icons.error_outline,
+                text: '${entry.key}：${entry.value}',
+              ),
+            if (_testResults.isNotEmpty) const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                key: const ValueKey('anitabi-service-test-all'),
+                onPressed: _testing ? null : _testConnections,
+                icon: _testing
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.network_check_outlined),
+                label: Text(_testing ? '正在测试连接' : '测试全部连接'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const ValueKey('anitabi-service-restore-defaults'),
+                onPressed: _testing ? null : _restoreDefaults,
+                icon: const Icon(Icons.restore),
+                label: const Text('恢复默认地址'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _serviceRow({
+    required Key key,
+    required IconData icon,
+    required String title,
+    required String value,
+    required ValueChanged<String> onSaved,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _MapUrlRow(
+        key: key,
+        icon: icon,
+        label: '$title\n$value',
+        onTap: () => _edit(title: title, value: value, onSaved: onSaved),
+      ),
+    );
+  }
+}
+
 class _ComparisonStyleSettingsPage extends StatefulWidget {
   const _ComparisonStyleSettingsPage({
     required this.repository,
@@ -1033,32 +1293,18 @@ class _ComparisonStyleSettingsPageState
 
   Future<void> _loadSavedConfig() async {
     final settings = await widget.repository.loadAppSettings();
-    final saved = await loadComparisonExportConfig();
     if (!mounted) {
       return;
     }
 
-    final migratedConfig = (saved ?? _config).copyWith(
-      showPilgrimName: settings.comparisonShowPilgrimName,
-      pilgrimName: settings.comparisonPilgrimName.isEmpty
-          ? saved?.pilgrimName
-          : settings.comparisonPilgrimName,
-    );
-    final migratedSettings = migratedConfig.applyToSettings(settings);
+    final migratedConfig = ComparisonExportConfig.fromSettings(settings);
     setState(() {
-      _settings = migratedSettings;
+      _settings = settings;
       _config = migratedConfig;
       ComparisonExportConfig.lastUsed = migratedConfig;
       _pilgrimNameController.text = migratedConfig.pilgrimName;
       _loading = false;
     });
-    if (migratedSettings.comparisonPilgrimName !=
-            settings.comparisonPilgrimName ||
-        migratedSettings.comparisonShowPilgrimName !=
-            settings.comparisonShowPilgrimName) {
-      await widget.repository.saveAppSettings(migratedSettings);
-      widget.onChanged(migratedSettings);
-    }
   }
 
   Future<void> _updateConfig(ComparisonExportConfig config) async {
@@ -1069,10 +1315,7 @@ class _ComparisonStyleSettingsPageState
     });
     ComparisonExportConfig.lastUsed = config;
     widget.onChanged(settings);
-    await Future.wait([
-      saveComparisonExportConfig(config),
-      widget.repository.saveAppSettings(settings),
-    ]);
+    await widget.repository.saveAppSettings(settings);
   }
 
   @override
@@ -1241,6 +1484,31 @@ class _DataSourceSettingsPageState extends State<_DataSourceSettingsPage> {
         ),
         const SizedBox(height: 12),
         _SettingsSection(
+          title: 'Anitabi 服务地址',
+          children: [
+            _MapUrlRow(
+              key: const ValueKey('anitabi-service-settings-entry'),
+              icon: Icons.dns_outlined,
+              label: '主站、静态数据、API 与图片服务',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => _AnitabiServiceSettingsPage(
+                    settings: settings,
+                    onChanged: _update,
+                    showUrlDialog: widget.showMapUrlDialog,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '服务域名变化时可单独调整，不会改写计划中的标准图片链接。',
+              style: _secondaryTextStyle,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
           title:
               'Anitabi 图片源 ${_anitabiImageSourceLabel(settings.anitabiImageSource)}',
           children: [
@@ -1252,7 +1520,7 @@ class _DataSourceSettingsPageState extends State<_DataSourceSettingsPage> {
             ),
             const SizedBox(height: 10),
             Text(
-              _anitabiImageSourceDescription(settings.anitabiImageSource),
+              _anitabiImageSourceDescription(settings),
               style: _secondaryTextStyle,
             ),
           ],
@@ -3314,6 +3582,7 @@ class _SettingsDivider extends StatelessWidget {
 
 class _MapUrlRow extends StatelessWidget {
   const _MapUrlRow({
+    super.key,
     required this.icon,
     required this.label,
     required this.onTap,
@@ -3746,12 +4015,13 @@ String _anitabiImageSourceLabel(AnitabiImageSource source) {
   };
 }
 
-String _anitabiImageSourceDescription(AnitabiImageSource source) {
-  return switch (source) {
+String _anitabiImageSourceDescription(AppSettings settings) {
+  return switch (settings.anitabiImageSource) {
     AnitabiImageSource.auto =>
-      '优先使用 image.anitabi.cn；如果下载到错误页或被拦截，会尝试 img-tc.anitabi.cn。',
-    AnitabiImageSource.official => '固定使用 image.anitabi.cn，保留 Anitabi 官方默认图片源。',
-    AnitabiImageSource.mirror => '固定使用 img-tc.anitabi.cn，适合官方默认源经常被拦截时使用。',
+      '优先使用 ${settings.anitabiOfficialImageBaseUrl}；失败后尝试 ${settings.anitabiMirrorImageBaseUrl}。',
+    AnitabiImageSource.official =>
+      '固定使用 ${settings.anitabiOfficialImageBaseUrl}。',
+    AnitabiImageSource.mirror => '固定使用 ${settings.anitabiMirrorImageBaseUrl}。',
   };
 }
 

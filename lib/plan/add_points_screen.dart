@@ -1109,7 +1109,7 @@ class _AnitabiLinkImportScreenState extends State<_AnitabiLinkImportScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            const _LinkExampleCard(),
+            _LinkExampleCard(siteBaseUrl: widget.settings.anitabiSiteBaseUrl),
           ],
         ),
       ),
@@ -1133,9 +1133,9 @@ class _AnitabiLinkImportScreenState extends State<_AnitabiLinkImportScreen> {
 }
 
 class _LinkExampleCard extends StatelessWidget {
-  const _LinkExampleCard();
+  const _LinkExampleCard({required this.siteBaseUrl});
 
-  static const _linkPrefix = 'https://www.anitabi.cn/map?';
+  final String siteBaseUrl;
   static const _bangumiId = 'bangumiId=186515';
   static const _middle = '&';
   static const _pointId = 'pid=95ff4037';
@@ -1163,7 +1163,7 @@ class _LinkExampleCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          const _ExampleLinkText(),
+          _ExampleLinkText(linkPrefix: '$siteBaseUrl/map?'),
           const SizedBox(height: 12),
           const Text(
             '如果链接里包含作品 ID，会只加载对应作品；\n如果还包含点位 ID，会自动选中该点位。\n没有作品 ID 的链接需要先在 Anitabi 中进入对应作品后重新复制。',
@@ -1181,7 +1181,9 @@ class _LinkExampleCard extends StatelessWidget {
 }
 
 class _ExampleLinkText extends StatelessWidget {
-  const _ExampleLinkText();
+  const _ExampleLinkText({required this.linkPrefix});
+
+  final String linkPrefix;
 
   @override
   Widget build(BuildContext context) {
@@ -1199,10 +1201,7 @@ class _ExampleLinkText extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.start,
           runSpacing: 4,
           children: [
-            const _ExamplePlainText(
-              text: _LinkExampleCard._linkPrefix,
-              style: normalStyle,
-            ),
+            _ExamplePlainText(text: linkPrefix, style: normalStyle),
             _highlight(_LinkExampleCard._bangumiId),
             const _ExamplePlainText(
               text: _LinkExampleCard._middle,
@@ -1211,7 +1210,7 @@ class _ExampleLinkText extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        _ExampleNoteRow(normalStyle: normalStyle),
+        _ExampleNoteRow(normalStyle: normalStyle, linkPrefix: linkPrefix),
         const SizedBox(height: 6),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.start,
@@ -1252,9 +1251,10 @@ class _ExampleLinkText extends StatelessWidget {
 }
 
 class _ExampleNoteRow extends StatelessWidget {
-  const _ExampleNoteRow({required this.normalStyle});
+  const _ExampleNoteRow({required this.normalStyle, required this.linkPrefix});
 
   final TextStyle normalStyle;
+  final String linkPrefix;
 
   @override
   Widget build(BuildContext context) {
@@ -1262,7 +1262,7 @@ class _ExampleNoteRow extends StatelessWidget {
       builder: (context, constraints) {
         final textDirection = Directionality.of(context);
         final bangumiLeft = _measureTextWidth(
-          _LinkExampleCard._linkPrefix,
+          linkPrefix,
           normalStyle,
           textDirection,
         );

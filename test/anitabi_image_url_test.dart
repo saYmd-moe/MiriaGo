@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miriago/data/anitabi_image_url.dart';
+import 'package:miriago/data/anitabi_service_config.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
 
 void main() {
@@ -80,4 +81,28 @@ void main() {
       'https://img-tc.anitabi.cn/points/115908/id.jpg',
     ]);
   });
+
+  test(
+    'uses configured image services without changing canonical storage URL',
+    () {
+      const config = AnitabiServiceConfig(
+        officialImageBaseUrl: 'https://official.example/assets',
+        mirrorImageBaseUrl: 'https://mirror.example/cache',
+      );
+      const canonicalUrl =
+          'https://image.anitabi.cn/points/115908/id.jpg?plan=h160';
+
+      expect(candidateAnitabiImageUrls(canonicalUrl, serviceConfig: config), [
+        'https://official.example/assets/points/115908/id.jpg?plan=h160',
+        'https://mirror.example/cache/points/115908/id.jpg?plan=h160',
+      ]);
+      expect(
+        canonicalAnitabiImageUrl(
+          'https://mirror.example/cache/points/115908/id.jpg?plan=h160',
+          serviceConfig: config,
+        ),
+        canonicalUrl,
+      );
+    },
+  );
 }

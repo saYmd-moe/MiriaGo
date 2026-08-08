@@ -106,6 +106,7 @@ pub struct WriteAssetRequest {
 pub struct FetchAnitabiStaticJsonRequest {
     pub file_name: String,
     pub version: Option<String>,
+    pub base_url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -404,11 +405,52 @@ pub fn fetch_anitabi_static_json(
         .and_then(safe_anitabi_static_version)
         .map(|version| format!("?v={version}"))
         .unwrap_or_default();
-    let primary_url = format!("https://www.anitabi.cn/d/{file_name}{query}");
-    let fallback_url = format!("https://anitabi.cn/d/{file_name}{query}");
-
-    let body = fetch_text(&primary_url).or_else(|_| fetch_text(&fallback_url))?;
+    let base_url = safe_public_https_base_url(&request.base_url)?;
+    let primary_url = format!("{base_url}/{file_name}{query}");
+    let body = fetch_text(&primary_url)?;
     Ok(AnitabiStaticJsonResult { body })
+}
+
+fn safe_public_https_base_url(value: &str) -> Result<String, String> {
+    let parsed = reqwest::Url::parse(value.trim()).map_err(|_| "invalid HTTPS base URL")?;
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err("invalid HTTPS base URL".to_string());
+    }
+    let host = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+    if is_local_or_private_host(&host) {
+        return Err("local or private hosts are not allowed".to_string());
+    }
+    Ok(value.trim().trim_end_matches('/').to_string())
+}
+
+fn is_local_or_private_host(host: &str) -> bool {
+    if host == "localhost"
+        || host.ends_with(".localhost")
+        || host.ends_with(".local")
+        || host == "::1"
+    {
+        return true;
+    }
+    let octets = host
+        .split('.')
+        .map(str::parse::<u8>)
+        .collect::<Result<Vec<_>, _>>();
+    let Ok(octets) = octets else {
+        return false;
+    };
+    if octets.len() != 4 {
+        return false;
+    }
+    matches!(
+        (octets[0], octets[1]),
+        (0, _) | (10, _) | (127, _) | (169, 254) | (172, 16..=31) | (192, 168)
+    )
 }
 
 fn normalize_extension(extension: &str) -> String {
@@ -550,7 +592,19 @@ fn safe_directory_name(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{safe_asset_path, safe_local_asset_path};
+    use super::{safe_asset_path, safe_local_asset_path, safe_public_https_base_url};
+
+    #[test]
+    fn anitabi_static_base_url_rejects_unsafe_hosts() {
+        assert_eq!(
+            safe_public_https_base_url("https://ww.anitabi.cn/d").unwrap(),
+            "https://ww.anitabi.cn/d"
+        );
+        assert!(safe_public_https_base_url("http://ww.anitabi.cn/d").is_err());
+        assert!(safe_public_https_base_url("https://localhost:8080/d").is_err());
+        assert!(safe_public_https_base_url("https://192.168.1.2/d").is_err());
+        assert!(safe_public_https_base_url("https://example.com/d?token=x").is_err());
+    }
 
     #[test]
     fn asset_paths_allow_safe_relative_assets() {

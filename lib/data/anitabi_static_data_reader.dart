@@ -3,28 +3,36 @@ import 'package:http/http.dart' as http;
 
 import '../desktop/tauri_bridge.dart';
 import 'anitabi_client.dart';
+import 'anitabi_service_config.dart';
 
 class AnitabiStaticDataReader {
-  AnitabiStaticDataReader({http.Client? httpClient})
+  AnitabiStaticDataReader({http.Client? httpClient, this.serviceConfig})
     : _httpClient = httpClient ?? http.Client();
 
   final http.Client _httpClient;
+  final AnitabiServiceConfig? serviceConfig;
 
   Future<String> read(String fileName, {String? version}) async {
     _validateFileName(fileName);
+    final config = serviceConfig ?? AnitabiServiceConfig.current;
 
     if (isTauriLauncherAvailable) {
       return fetchDesktopAnitabiStaticJson(
         fileName: fileName,
         version: version,
+        baseUrl: config.staticDataBaseUrl,
       );
     }
 
     if (kIsWeb) {
-      final proxyUri = _withVersion(
-        Uri.base.resolve('/__anitabi_static__/$fileName'),
-        version,
-      );
+      final proxyUri = Uri.base
+          .resolve('/__anitabi_static__/$fileName')
+          .replace(
+            queryParameters: {
+              if (version != null && version.isNotEmpty) 'v': version,
+              'upstream': config.staticDataBaseUrl,
+            },
+          );
       try {
         return (await _checkedGet(proxyUri)).body;
       } catch (error) {
@@ -32,30 +40,12 @@ class AnitabiStaticDataReader {
       }
     }
 
-    final primaryUri = _withVersion(
-      Uri.parse('https://www.anitabi.cn/d/$fileName'),
-      version,
-    );
+    final primaryUri = config.staticDataUri(fileName, version: version);
     try {
       return (await _checkedGet(primaryUri)).body;
     } catch (error) {
-      final fallbackUri = _withVersion(
-        Uri.parse('https://anitabi.cn/d/$fileName'),
-        version,
-      );
-      try {
-        return (await _checkedGet(fallbackUri)).body;
-      } catch (_) {
-        throw AnitabiStaticDataUnavailableException(error);
-      }
+      throw AnitabiStaticDataUnavailableException(error);
     }
-  }
-
-  Uri _withVersion(Uri uri, String? version) {
-    if (version == null || version.isEmpty) {
-      return uri;
-    }
-    return uri.replace(queryParameters: {'v': version});
   }
 
   Future<http.Response> _checkedGet(Uri uri) async {

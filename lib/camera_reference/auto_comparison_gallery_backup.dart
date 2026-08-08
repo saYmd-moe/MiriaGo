@@ -62,9 +62,8 @@ Future<AutoComparisonGalleryResult> autoSaveComparisonImageToGallery({
   AutoComparisonGallerySaver gallerySaver = saveImageToGallery,
 }) async {
   final savedConfig = await loadConfig();
-  final config = (savedConfig ?? ComparisonExportConfig.lastUsed).withSettings(
-    settings,
-  );
+  final config = (savedConfig ?? ComparisonExportConfig.fromSettings(settings))
+      .withSettings(settings);
   final referenceImagePath = _firstExistingLocalPath([
     record.referenceImagePath,
     pointReferenceFullImagePath,

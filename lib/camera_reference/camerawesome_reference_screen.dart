@@ -15,6 +15,8 @@ import '../data/anitabi_image_url.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
 import '../plan/reference_image_status.dart';
+import '../records/visit_record_file_ops_stub.dart'
+    if (dart.library.io) '../records/visit_record_file_ops_io.dart';
 import '../widgets/anitabi_network_image.dart';
 import '../widgets/reference_thumbnail_stub.dart'
     if (dart.library.io) '../widgets/reference_thumbnail_io.dart';
@@ -167,8 +169,11 @@ class _CamerawesomeReferenceScreenState
   }
 
   Future<void> _pickGalleryImage() async {
-    final picked = await _pickImageInPortrait();
+    final restoreLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
+    final picked = await _pickImageInPortrait(restoreOrientation: false);
     if (picked == null || !mounted) {
+      await _restoreCameraOrientation(landscape: restoreLandscape);
       return;
     }
 
@@ -186,23 +191,29 @@ class _CamerawesomeReferenceScreenState
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('照片导入失败，请重新选择。')));
+      await _restoreCameraOrientation(landscape: restoreLandscape);
       return;
     }
-    await _openConfirmation(photoPath, capturedAtOverride: capturedAt);
+    await _openConfirmation(
+      photoPath,
+      capturedAtOverride: capturedAt,
+      restoreLandscape: restoreLandscape,
+    );
+    if (mounted) {
+      setState(() => _galleryImage = null);
+    }
   }
 
-  Future<XFile?> _pickImageInPortrait() async {
+  Future<XFile?> _pickImageInPortrait({bool restoreOrientation = true}) async {
+    final restoreLandscape =
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
     try {
       return await _imagePicker.pickImage(source: ImageSource.gallery);
     } finally {
-      if (mounted) {
-        await SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.landscapeLeft,
-          DeviceOrientation.landscapeRight,
-        ]);
+      if (mounted && restoreOrientation) {
+        await _restoreCameraOrientation(landscape: restoreLandscape);
       }
     }
   }
@@ -223,47 +234,69 @@ class _CamerawesomeReferenceScreenState
     await _openConfirmation(path);
   }
 
-  Future<void> _openConfirmation(
+  Future<VisitRecordConfirmationResult?> _openConfirmation(
     String photoPath, {
     DateTime? capturedAtOverride,
+    bool? restoreLandscape,
   }) async {
     if (!mounted) {
-      return;
+      return null;
     }
+
+    final shouldRestoreLandscape =
+        restoreLandscape ??
+        MediaQuery.orientationOf(context) == Orientation.landscape;
 
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => VisitRecordConfirmationScreen(
-          point: widget.point,
-          controller: widget.controller,
-          photoPath: photoPath,
-          referenceMode: _mode.label,
-          referenceBytes: _localReferenceBytes,
-          referenceImagePath: widget.point.referenceFullImagePath,
-          referenceImageUrl: _localReferenceBytes != null
-              ? null
-              : _remoteReferenceImageUrl,
-          capturedAtOverride: capturedAtOverride,
-          settings: widget.settings,
-          saveVisitPhotoToGallery: shouldAutoSaveVisitPhotoToGallery(
-            widget.settings,
+    final result = await Navigator.of(context)
+        .push<VisitRecordConfirmationResult>(
+          MaterialPageRoute<VisitRecordConfirmationResult>(
+            builder: (_) => VisitRecordConfirmationScreen(
+              point: widget.point,
+              controller: widget.controller,
+              photoPath: photoPath,
+              referenceMode: _mode.label,
+              referenceBytes: _localReferenceBytes,
+              referenceImagePath: widget.point.referenceFullImagePath,
+              referenceImageUrl: _localReferenceBytes != null
+                  ? null
+                  : _remoteReferenceImageUrl,
+              capturedAtOverride: capturedAtOverride,
+              settings: widget.settings,
+              saveVisitPhotoToGallery: shouldAutoSaveVisitPhotoToGallery(
+                widget.settings,
+              ),
+              autoSaveComparisonToGallery: shouldAutoSaveComparisonToGallery(
+                widget.settings,
+              ),
+            ),
           ),
-          autoSaveComparisonToGallery: shouldAutoSaveComparisonToGallery(
-            widget.settings,
-          ),
-        ),
-      ),
-    );
+        );
 
-    if (mounted) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
+    if (result == null) {
+      deleteVisitRecordLocalFile(photoPath);
     }
+    if (!mounted) {
+      return result;
+    }
+    if (result == VisitRecordConfirmationResult.completed) {
+      Navigator.of(context).pop();
+      return result;
+    }
+    await _restoreCameraOrientation(landscape: shouldRestoreLandscape);
+    return result;
+  }
+
+  Future<void> _restoreCameraOrientation({required bool landscape}) {
+    return SystemChrome.setPreferredOrientations(
+      landscape
+          ? const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ]
+          : const [DeviceOrientation.portraitUp],
+    );
   }
 
   void _setZoom(CameraState state, double value) {

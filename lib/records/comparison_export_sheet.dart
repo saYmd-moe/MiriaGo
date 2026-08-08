@@ -6,8 +6,6 @@ import '../plan/pilgrimage_models.dart';
 import '../widgets/image_viewer_screen.dart';
 import 'comparison_export_config.dart';
 import 'comparison_export_config_editor.dart';
-import 'comparison_export_config_storage_stub.dart'
-    if (dart.library.io) 'comparison_export_config_storage_io.dart';
 import 'comparison_exporter_stub.dart'
     if (dart.library.io) 'comparison_exporter_io.dart'
     if (dart.library.js_interop) 'comparison_exporter_web.dart';
@@ -81,29 +79,16 @@ class _ComparisonExportSheetState extends State<ComparisonExportSheet> {
 
   Future<void> _loadSavedConfig() async {
     final settings = await widget.repository.loadAppSettings();
-    final saved = await loadComparisonExportConfig();
     if (!mounted) {
       return;
     }
 
-    final migratedConfig = (saved ?? _config).copyWith(
-      showPilgrimName: settings.comparisonShowPilgrimName,
-      pilgrimName: settings.comparisonPilgrimName.isEmpty
-          ? saved?.pilgrimName
-          : settings.comparisonPilgrimName,
-    );
-    final migratedSettings = migratedConfig.applyToSettings(settings);
-    if (migratedSettings.comparisonPilgrimName !=
-            settings.comparisonPilgrimName ||
-        migratedSettings.comparisonShowPilgrimName !=
-            settings.comparisonShowPilgrimName) {
-      await widget.repository.saveAppSettings(migratedSettings);
-    }
+    final migratedConfig = ComparisonExportConfig.fromSettings(settings);
     if (!mounted) {
       return;
     }
     setState(() {
-      _settings = migratedSettings;
+      _settings = settings;
       _config = migratedConfig;
       ComparisonExportConfig.lastUsed = migratedConfig;
       _pilgrimNameController.text = migratedConfig.pilgrimName;
@@ -115,10 +100,7 @@ class _ComparisonExportSheetState extends State<ComparisonExportSheet> {
     ComparisonExportConfig.lastUsed = config;
     final settings = config.applyToSettings(_settings);
     _settings = settings;
-    await Future.wait([
-      saveComparisonExportConfig(config),
-      widget.repository.saveAppSettings(settings),
-    ]);
+    await widget.repository.saveAppSettings(settings);
   }
 
   @override
@@ -160,10 +142,7 @@ class _ComparisonExportSheetState extends State<ComparisonExportSheet> {
     setState(() => _exporting = true);
     ComparisonExportConfig.lastUsed = _config;
     final settings = _config.applyToSettings(_settings);
-    await Future.wait([
-      saveComparisonExportConfig(_config),
-      widget.repository.saveAppSettings(settings),
-    ]);
+    await widget.repository.saveAppSettings(settings);
 
     final result = await exportComparisonImage(
       referenceImagePath: widget.referenceImagePath,

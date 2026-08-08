@@ -245,9 +245,16 @@ impl DesktopDatabase {
                   map_tile_provider TEXT NOT NULL DEFAULT 'openFreeMap',
                   open_free_map_style TEXT NOT NULL DEFAULT 'liberty',
                   anitabi_image_source TEXT NOT NULL DEFAULT 'auto',
+                  anitabi_site_base_url TEXT NOT NULL DEFAULT 'https://ww.anitabi.cn',
+                  anitabi_static_data_base_url TEXT NOT NULL DEFAULT 'https://ww.anitabi.cn/d',
+                  anitabi_api_base_url TEXT NOT NULL DEFAULT 'https://api.anitabi.cn',
+                  anitabi_official_image_base_url TEXT NOT NULL DEFAULT 'https://image.anitabi.cn',
+                  anitabi_mirror_image_base_url TEXT NOT NULL DEFAULT 'https://img-tc.anitabi.cn',
                   navigation_app TEXT NOT NULL DEFAULT 'googleMaps',
                   custom_xyz_tile_url TEXT NOT NULL DEFAULT '',
                   custom_maplibre_style_url TEXT NOT NULL DEFAULT '',
+                  comparison_export_config_json TEXT NOT NULL DEFAULT '',
+                  comparison_export_config_migrated INTEGER NOT NULL DEFAULT 1,
                   map_thumbnail_visible_threshold INTEGER NOT NULL DEFAULT 40,
                   map_thumbnail_concurrent_loads INTEGER NOT NULL DEFAULT 10,
                   show_plan_group_progress INTEGER NOT NULL DEFAULT 1,
@@ -372,9 +379,34 @@ impl DesktopDatabase {
             ("map_tile_provider", "TEXT NOT NULL DEFAULT 'openFreeMap'"),
             ("open_free_map_style", "TEXT NOT NULL DEFAULT 'liberty'"),
             ("anitabi_image_source", "TEXT NOT NULL DEFAULT 'auto'"),
+            (
+                "anitabi_site_base_url",
+                "TEXT NOT NULL DEFAULT 'https://ww.anitabi.cn'",
+            ),
+            (
+                "anitabi_static_data_base_url",
+                "TEXT NOT NULL DEFAULT 'https://ww.anitabi.cn/d'",
+            ),
+            (
+                "anitabi_api_base_url",
+                "TEXT NOT NULL DEFAULT 'https://api.anitabi.cn'",
+            ),
+            (
+                "anitabi_official_image_base_url",
+                "TEXT NOT NULL DEFAULT 'https://image.anitabi.cn'",
+            ),
+            (
+                "anitabi_mirror_image_base_url",
+                "TEXT NOT NULL DEFAULT 'https://img-tc.anitabi.cn'",
+            ),
             ("navigation_app", "TEXT NOT NULL DEFAULT 'googleMaps'"),
             ("custom_xyz_tile_url", "TEXT NOT NULL DEFAULT ''"),
             ("custom_maplibre_style_url", "TEXT NOT NULL DEFAULT ''"),
+            ("comparison_export_config_json", "TEXT NOT NULL DEFAULT ''"),
+            (
+                "comparison_export_config_migrated",
+                "INTEGER NOT NULL DEFAULT 1",
+            ),
             (
                 "map_thumbnail_visible_threshold",
                 "INTEGER NOT NULL DEFAULT 40",
@@ -525,7 +557,12 @@ impl DesktopDatabase {
                         camera_min_zoom, camera_max_zoom, reference_image_scale,
                         nearest_assign_distance_meters, theme_palette,
                         map_tile_provider, open_free_map_style, anitabi_image_source,
+                        anitabi_site_base_url, anitabi_static_data_base_url,
+                        anitabi_api_base_url, anitabi_official_image_base_url,
+                        anitabi_mirror_image_base_url,
                         navigation_app, custom_xyz_tile_url, custom_maplibre_style_url,
+                        comparison_export_config_json,
+                        comparison_export_config_migrated,
                         map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
                         show_plan_group_progress,
                         map_marker_clustering_enabled, map_marker_cluster_radius,
@@ -547,18 +584,25 @@ impl DesktopDatabase {
                         "mapTileProvider": row.get::<_, String>(8)?,
                         "openFreeMapStyle": row.get::<_, String>(9)?,
                         "anitabiImageSource": row.get::<_, String>(10)?,
-                        "navigationApp": row.get::<_, String>(11)?,
-                        "customXyzTileUrl": row.get::<_, String>(12)?,
-                        "customMapLibreStyleUrl": row.get::<_, String>(13)?,
-                        "mapThumbnailVisibleThreshold": row.get::<_, i64>(14)?,
-                        "mapThumbnailConcurrentLoads": row.get::<_, i64>(15)?,
-                        "showPlanGroupProgress": row.get::<_, bool>(16)?,
-                        "mapMarkerClusteringEnabled": row.get::<_, bool>(17)?,
-                        "mapMarkerClusterRadius": row.get::<_, i64>(18)?,
-                        "mapMarkerClusterMaxZoom": row.get::<_, i64>(19)?,
-                        "mapGroupAreaRadiusMeters": row.get::<_, i64>(20)?,
-                        "mapMarkerScale": row.get::<_, f64>(21)?,
-                        "mapMaxZoom": row.get::<_, i64>(22)?,
+                        "anitabiSiteBaseUrl": row.get::<_, String>(11)?,
+                        "anitabiStaticDataBaseUrl": row.get::<_, String>(12)?,
+                        "anitabiApiBaseUrl": row.get::<_, String>(13)?,
+                        "anitabiOfficialImageBaseUrl": row.get::<_, String>(14)?,
+                        "anitabiMirrorImageBaseUrl": row.get::<_, String>(15)?,
+                        "navigationApp": row.get::<_, String>(16)?,
+                        "customXyzTileUrl": row.get::<_, String>(17)?,
+                        "customMapLibreStyleUrl": row.get::<_, String>(18)?,
+                        "comparisonExportConfigJson": row.get::<_, String>(19)?,
+                        "comparisonExportConfigMigrated": row.get::<_, bool>(20)?,
+                        "mapThumbnailVisibleThreshold": row.get::<_, i64>(21)?,
+                        "mapThumbnailConcurrentLoads": row.get::<_, i64>(22)?,
+                        "showPlanGroupProgress": row.get::<_, bool>(23)?,
+                        "mapMarkerClusteringEnabled": row.get::<_, bool>(24)?,
+                        "mapMarkerClusterRadius": row.get::<_, i64>(25)?,
+                        "mapMarkerClusterMaxZoom": row.get::<_, i64>(26)?,
+                        "mapGroupAreaRadiusMeters": row.get::<_, i64>(27)?,
+                        "mapMarkerScale": row.get::<_, f64>(28)?,
+                        "mapMaxZoom": row.get::<_, i64>(29)?,
                     }))
                 },
             )
@@ -889,14 +933,18 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
            id, ui_scale, camera_capture_aspect_ratio, camera_fallback_aspect_ratio,
            camera_min_zoom, camera_max_zoom, reference_image_scale,
            nearest_assign_distance_meters, theme_palette, map_tile_provider,
-           open_free_map_style, anitabi_image_source, navigation_app,
+           open_free_map_style, anitabi_image_source,
+           anitabi_site_base_url, anitabi_static_data_base_url,
+           anitabi_api_base_url, anitabi_official_image_base_url,
+           anitabi_mirror_image_base_url, navigation_app,
            custom_xyz_tile_url, custom_maplibre_style_url,
+           comparison_export_config_json, comparison_export_config_migrated,
            map_thumbnail_visible_threshold, map_thumbnail_concurrent_loads,
            show_plan_group_progress,
            map_marker_clustering_enabled, map_marker_cluster_radius,
            map_marker_cluster_max_zoom, map_group_area_radius_meters,
            map_marker_scale, map_max_zoom
-         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
+         ) VALUES ('default', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
         params![
             f64_value(settings, "uiScale", 1.0),
             string_value(settings, "cameraCaptureAspectRatio", "auto"),
@@ -909,9 +957,28 @@ fn insert_settings(tx: &Transaction<'_>, settings: Option<&Value>) -> Result<(),
             string_value(settings, "mapTileProvider", "openFreeMap"),
             string_value(settings, "openFreeMapStyle", "liberty"),
             string_value(settings, "anitabiImageSource", "auto"),
+            string_value(settings, "anitabiSiteBaseUrl", "https://ww.anitabi.cn"),
+            string_value(
+                settings,
+                "anitabiStaticDataBaseUrl",
+                "https://ww.anitabi.cn/d",
+            ),
+            string_value(settings, "anitabiApiBaseUrl", "https://api.anitabi.cn"),
+            string_value(
+                settings,
+                "anitabiOfficialImageBaseUrl",
+                "https://image.anitabi.cn",
+            ),
+            string_value(
+                settings,
+                "anitabiMirrorImageBaseUrl",
+                "https://img-tc.anitabi.cn",
+            ),
             string_value(settings, "navigationApp", "googleMaps"),
             string_value(settings, "customXyzTileUrl", ""),
             string_value(settings, "customMapLibreStyleUrl", ""),
+            string_value(settings, "comparisonExportConfigJson", ""),
+            bool_value(settings, "comparisonExportConfigMigrated", true),
             i64_value(settings, "mapThumbnailVisibleThreshold", 40).clamp(0, 200),
             i64_value(settings, "mapThumbnailConcurrentLoads", 10).clamp(1, 30),
             bool_value(settings, "showPlanGroupProgress", true),
@@ -1120,9 +1187,16 @@ fn default_settings_json() -> Value {
         "mapTileProvider": "openFreeMap",
         "openFreeMapStyle": "liberty",
         "anitabiImageSource": "auto",
+        "anitabiSiteBaseUrl": "https://ww.anitabi.cn",
+        "anitabiStaticDataBaseUrl": "https://ww.anitabi.cn/d",
+        "anitabiApiBaseUrl": "https://api.anitabi.cn",
+        "anitabiOfficialImageBaseUrl": "https://image.anitabi.cn",
+        "anitabiMirrorImageBaseUrl": "https://img-tc.anitabi.cn",
         "navigationApp": "googleMaps",
         "customXyzTileUrl": "",
         "customMapLibreStyleUrl": "",
+        "comparisonExportConfigJson": "",
+        "comparisonExportConfigMigrated": true,
         "mapThumbnailVisibleThreshold": 40,
         "mapThumbnailConcurrentLoads": 10,
         "showPlanGroupProgress": true,
@@ -1215,6 +1289,13 @@ mod tests {
             .save_settings_json(
                 r#"{
                   "navigationApp": "amap",
+                  "anitabiSiteBaseUrl": "https://site.example/anitabi",
+                  "anitabiStaticDataBaseUrl": "https://static.example/data",
+                  "anitabiApiBaseUrl": "https://api.example/v2",
+                  "anitabiOfficialImageBaseUrl": "https://images.example/official",
+                  "anitabiMirrorImageBaseUrl": "https://images.example/mirror",
+                  "comparisonExportConfigJson": "{\"outputWidth\":\"w2560\"}",
+                  "comparisonExportConfigMigrated": true,
                   "showPlanGroupProgress": false,
                   "mapMarkerClusteringEnabled": false,
                   "mapMarkerClusterRadius": 56,
@@ -1228,6 +1309,28 @@ mod tests {
 
         let settings = database.load_settings_json().expect("load settings");
         assert_eq!(settings["navigationApp"], "amap");
+        assert_eq!(
+            settings["anitabiSiteBaseUrl"],
+            "https://site.example/anitabi"
+        );
+        assert_eq!(
+            settings["anitabiStaticDataBaseUrl"],
+            "https://static.example/data"
+        );
+        assert_eq!(settings["anitabiApiBaseUrl"], "https://api.example/v2");
+        assert_eq!(
+            settings["anitabiOfficialImageBaseUrl"],
+            "https://images.example/official"
+        );
+        assert_eq!(
+            settings["anitabiMirrorImageBaseUrl"],
+            "https://images.example/mirror"
+        );
+        assert_eq!(
+            settings["comparisonExportConfigJson"],
+            r#"{"outputWidth":"w2560"}"#
+        );
+        assert_eq!(settings["comparisonExportConfigMigrated"], true);
         assert_eq!(settings["showPlanGroupProgress"], false);
         assert_eq!(settings["mapMarkerClusteringEnabled"], false);
         assert_eq!(settings["mapMarkerClusterRadius"], 56);
@@ -1290,6 +1393,23 @@ mod tests {
                 [],
             )
             .expect("drop plan group progress column");
+        for column in [
+            "anitabi_site_base_url",
+            "anitabi_static_data_base_url",
+            "anitabi_api_base_url",
+            "anitabi_official_image_base_url",
+            "anitabi_mirror_image_base_url",
+            "comparison_export_config_json",
+            "comparison_export_config_migrated",
+        ] {
+            database
+                .connection
+                .execute(
+                    &format!("ALTER TABLE app_settings DROP COLUMN {column}"),
+                    [],
+                )
+                .expect("drop Anitabi service column");
+        }
 
         database
             .ensure_app_settings_columns()
@@ -1297,6 +1417,22 @@ mod tests {
         let settings = database.load_settings_json().expect("load settings");
         assert_eq!(settings["uiScale"], 0.9);
         assert_eq!(settings["navigationApp"], "googleMaps");
+        assert_eq!(settings["anitabiSiteBaseUrl"], "https://ww.anitabi.cn");
+        assert_eq!(
+            settings["anitabiStaticDataBaseUrl"],
+            "https://ww.anitabi.cn/d"
+        );
+        assert_eq!(settings["anitabiApiBaseUrl"], "https://api.anitabi.cn");
+        assert_eq!(
+            settings["anitabiOfficialImageBaseUrl"],
+            "https://image.anitabi.cn"
+        );
+        assert_eq!(
+            settings["anitabiMirrorImageBaseUrl"],
+            "https://img-tc.anitabi.cn"
+        );
+        assert_eq!(settings["comparisonExportConfigJson"], "");
+        assert_eq!(settings["comparisonExportConfigMigrated"], true);
         assert_eq!(settings["showPlanGroupProgress"], true);
         assert_eq!(settings["mapMarkerClusteringEnabled"], true);
         assert_eq!(settings["mapMarkerClusterRadius"], 40);

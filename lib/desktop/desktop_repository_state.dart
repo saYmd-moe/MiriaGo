@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../data/anitabi_image_url.dart';
 import '../data/sample_pilgrimage_repository.dart';
+import '../data/anitabi_service_config.dart';
 import '../plan/pilgrimage_models.dart';
 
 const desktopRepositoryStateSchemaVersion = 1;
@@ -78,6 +79,11 @@ Map<String, Object?> _settingsJson(AppSettings settings) {
     'mapTileProvider': settings.mapTileProvider.name,
     'openFreeMapStyle': settings.openFreeMapStyle.name,
     'anitabiImageSource': settings.anitabiImageSource.name,
+    'anitabiSiteBaseUrl': settings.anitabiSiteBaseUrl,
+    'anitabiStaticDataBaseUrl': settings.anitabiStaticDataBaseUrl,
+    'anitabiApiBaseUrl': settings.anitabiApiBaseUrl,
+    'anitabiOfficialImageBaseUrl': settings.anitabiOfficialImageBaseUrl,
+    'anitabiMirrorImageBaseUrl': settings.anitabiMirrorImageBaseUrl,
     'navigationApp': settings.navigationApp.name,
     'customXyzTileUrl': settings.customXyzTileUrl,
     'customMapLibreStyleUrl': settings.customMapLibreStyleUrl,
@@ -85,6 +91,8 @@ Map<String, Object?> _settingsJson(AppSettings settings) {
     'autoSaveComparisonToGallery': settings.autoSaveComparisonToGallery,
     'comparisonShowPilgrimName': settings.comparisonShowPilgrimName,
     'comparisonPilgrimName': settings.comparisonPilgrimName,
+    'comparisonExportConfigJson': settings.comparisonExportConfigJson,
+    'comparisonExportConfigMigrated': settings.comparisonExportConfigMigrated,
     'customThemeColorName': settings.customThemeColorName,
     'customThemeColorValue': settings.customThemeColorValue,
     'customThemeColors': settings.customThemeColors
@@ -140,6 +148,26 @@ AppSettings _settingsFromJson(Map<String, Object?> json) {
     anitabiImageSource:
         _enumByName(AnitabiImageSource.values, json['anitabiImageSource']) ??
         AnitabiImageSource.auto,
+    anitabiSiteBaseUrl: normalizeAnitabiBaseUrl(
+      _stringValue(json['anitabiSiteBaseUrl'], fallback: ''),
+      fallback: defaultAnitabiSiteBaseUrl,
+    ),
+    anitabiStaticDataBaseUrl: normalizeAnitabiBaseUrl(
+      _stringValue(json['anitabiStaticDataBaseUrl'], fallback: ''),
+      fallback: defaultAnitabiStaticDataBaseUrl,
+    ),
+    anitabiApiBaseUrl: normalizeAnitabiBaseUrl(
+      _stringValue(json['anitabiApiBaseUrl'], fallback: ''),
+      fallback: defaultAnitabiApiBaseUrl,
+    ),
+    anitabiOfficialImageBaseUrl: normalizeAnitabiBaseUrl(
+      _stringValue(json['anitabiOfficialImageBaseUrl'], fallback: ''),
+      fallback: defaultAnitabiOfficialImageBaseUrl,
+    ),
+    anitabiMirrorImageBaseUrl: normalizeAnitabiBaseUrl(
+      _stringValue(json['anitabiMirrorImageBaseUrl'], fallback: ''),
+      fallback: defaultAnitabiMirrorImageBaseUrl,
+    ),
     navigationApp:
         _enumByName(NavigationApp.values, json['navigationApp']) ??
         NavigationApp.googleMaps,
@@ -158,6 +186,12 @@ AppSettings _settingsFromJson(Map<String, Object?> json) {
       json['comparisonPilgrimName'],
       fallback: '',
     ),
+    comparisonExportConfigJson: _stringValue(
+      json['comparisonExportConfigJson'],
+      fallback: '',
+    ),
+    comparisonExportConfigMigrated:
+        _boolValue(json['comparisonExportConfigMigrated']) ?? false,
     customThemeColorName: _stringValue(
       json['customThemeColorName'],
       fallback: '\u81ea\u5b9a\u4e49',

@@ -5,17 +5,25 @@ import 'package:latlong2/latlong.dart';
 
 import '../plan/pilgrimage_models.dart';
 import 'anitabi_image_url.dart';
+import 'anitabi_service_config.dart';
 import 'anitabi_static_data_reader.dart';
 
 class AnitabiClient {
   AnitabiClient({
     http.Client? httpClient,
     AnitabiStaticDataReader? staticDataReader,
+    AnitabiServiceConfig? serviceConfig,
   }) : _httpClient = httpClient ?? http.Client(),
+       _serviceConfig = serviceConfig,
        _staticDataReader =
-           staticDataReader ?? AnitabiStaticDataReader(httpClient: httpClient);
+           staticDataReader ??
+           AnitabiStaticDataReader(
+             httpClient: httpClient,
+             serviceConfig: serviceConfig,
+           );
 
   final http.Client _httpClient;
+  final AnitabiServiceConfig? _serviceConfig;
   final AnitabiStaticDataReader _staticDataReader;
   AnitabiStaticIndex? _cachedStaticIndex;
 
@@ -24,7 +32,9 @@ class AnitabiClient {
   }
 
   Future<AnitabiBangumiLite> fetchBangumiLite(int bangumiId) async {
-    final uri = Uri.parse('https://api.anitabi.cn/bangumi/$bangumiId/lite');
+    final uri = (_serviceConfig ?? AnitabiServiceConfig.current).apiUri(
+      'bangumi/$bangumiId/lite',
+    );
     final response = await _httpClient.get(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AnitabiException(response.statusCode, response.body);

@@ -22,6 +22,7 @@ import 'package:miriago/plan/point_manager_screen.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
 import 'package:miriago/plan/pilgrimage_plan_controller.dart';
 import 'package:miriago/records/records_screen.dart';
+import 'package:miriago/records/comparison_export_config.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
 import 'package:miriago/widgets/reference_image_placeholder.dart';
 
@@ -1441,6 +1442,38 @@ void main() {
     expect(find.textContaining('桌面启动器'), findsNothing);
   });
 
+  testWidgets('restores app and comparison settings together', (tester) async {
+    final configured = const ComparisonExportConfig(
+      borderWidthPercent: 2,
+      outputWidth: ComparisonOutputWidth.w3840,
+      showLabels: true,
+    ).applyToSettings(const AppSettings(uiScale: 0.85, mapMaxZoom: 24));
+    final repository = SamplePilgrimageRepository(settings: configured);
+    await tester.pumpWidget(MiriaGoApp(repository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('恢复初始设置'));
+    await tester.pumpAndSettle();
+    tester
+        .widget<FilledButton>(find.widgetWithText(FilledButton, '恢复'))
+        .onPressed!();
+    await tester.pumpAndSettle();
+
+    final settings = await repository.loadAppSettings();
+    expect(settings.uiScale, 1);
+    expect(settings.mapMaxZoom, 22);
+    expect(settings.comparisonExportConfigJson, isEmpty);
+    expect(settings.comparisonExportConfigMigrated, isTrue);
+    expect(
+      ComparisonExportConfig.lastUsed.outputWidth,
+      ComparisonOutputWidth.auto,
+    );
+    expect(ComparisonExportConfig.lastUsed.showLabels, isFalse);
+    expect(find.text('已恢复初始设置'), findsOneWidget);
+  });
+
   testWidgets('separates appearance, map display, and data source settings', (
     tester,
   ) async {
@@ -1503,6 +1536,46 @@ void main() {
     Navigator.of(tester.element(find.text('地图显示').first)).pop();
     await tester.pumpAndSettle();
     await tester.tap(find.text('数据源设置'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Anitabi 服务地址'),
+      280,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('anitabi-service-settings-entry')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('anitabi-site-base-url')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('anitabi-static-data-base-url')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('anitabi-api-base-url')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('anitabi-official-image-base-url')),
+      120,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(
+      find.byKey(const ValueKey('anitabi-official-image-base-url')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('anitabi-mirror-image-base-url')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('anitabi-service-test-all')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('anitabi-service-restore-defaults')),
+      findsOneWidget,
+    );
+
+    Navigator.of(tester.element(find.text('Anitabi 服务地址').first)).pop();
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -2578,7 +2651,7 @@ void main() {
 
     await tester.enterText(
       find.byType(TextFormField),
-      'https://www.anitabi.cn/map?pid=qdmnf6iqj',
+      'https://ww.anitabi.cn/map?pid=qdmnf6iqj',
     );
     await tester.tap(find.text('打开 Anitabi 点位'));
     await tester.pumpAndSettle();
@@ -2594,7 +2667,7 @@ void main() {
     await _openAddPointsFromEmptyPlan(tester);
     _invokeKeyedAction(tester, 'add-points-anitabi-link');
     await tester.pumpAndSettle();
-    const link = 'https://www.anitabi.cn/map?bangumiId=282923&pid=djnfcvo';
+    const link = 'https://ww.anitabi.cn/map?bangumiId=282923&pid=djnfcvo';
     _mockClipboardRead(tester, link);
 
     await tester.tap(find.byTooltip('粘贴'));

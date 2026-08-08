@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app_theme.dart';
 import 'data/anitabi_image_source_scope.dart';
+import 'data/anitabi_service_config.dart';
 import 'data/pilgrimage_repository.dart';
 import 'data/sample_pilgrimage_repository.dart';
 import 'map/pilgrimage_map_screen.dart';
@@ -18,6 +19,7 @@ import 'plan_transfer/plan_import_file_stub.dart'
     if (dart.library.io) 'plan_transfer/plan_import_file_io.dart';
 import 'plan_transfer/plan_import_preview_screen.dart';
 import 'records/records_screen.dart';
+import 'records/comparison_export_config_migration.dart';
 import 'settings/settings_screen.dart';
 import 'widgets/app_scaled_route.dart';
 
@@ -58,11 +60,16 @@ class _AppShellState extends State<AppShell> {
 
     try {
       final plan = await widget.repository.loadActivePlan();
-      final settings = await widget.repository.loadAppSettings();
+      final loadedSettings = await widget.repository.loadAppSettings();
+      final settings = await migrateComparisonExportConfigSettings(
+        repository: widget.repository,
+        settings: loadedSettings,
+      );
       if (!mounted) {
         return;
       }
 
+      _applyAnitabiServiceConfig(settings);
       _planController?.dispose();
       setState(() {
         _planController = PilgrimagePlanController(
@@ -162,10 +169,15 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _saveSettings(AppSettings settings) async {
+    _applyAnitabiServiceConfig(settings);
     setState(() {
       _settings = settings;
     });
     await widget.repository.saveAppSettings(settings);
+  }
+
+  void _applyAnitabiServiceConfig(AppSettings settings) {
+    AnitabiServiceConfig.current = settings.anitabiServiceConfig;
   }
 
   Future<void> _loadInitialIncomingPlanFile() async {
