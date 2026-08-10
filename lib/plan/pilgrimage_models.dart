@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import '../data/anitabi_service_config.dart';
+
 const Object _unset = Object();
 
 enum VisitStatus { pending, current, completed }
@@ -157,6 +159,11 @@ class AppSettings {
     this.mapTileProvider = MapTileProvider.openFreeMap,
     this.openFreeMapStyle = OpenFreeMapStyle.liberty,
     this.anitabiImageSource = AnitabiImageSource.auto,
+    this.anitabiSiteBaseUrl = defaultAnitabiSiteBaseUrl,
+    this.anitabiStaticDataBaseUrl = defaultAnitabiStaticDataBaseUrl,
+    this.anitabiApiBaseUrl = defaultAnitabiApiBaseUrl,
+    this.anitabiOfficialImageBaseUrl = defaultAnitabiOfficialImageBaseUrl,
+    this.anitabiMirrorImageBaseUrl = defaultAnitabiMirrorImageBaseUrl,
     this.navigationApp = NavigationApp.googleMaps,
     this.customXyzTileUrl = '',
     this.customMapLibreStyleUrl = '',
@@ -164,6 +171,8 @@ class AppSettings {
     this.autoSaveComparisonToGallery = false,
     this.comparisonShowPilgrimName = false,
     this.comparisonPilgrimName = '',
+    this.comparisonExportConfigJson = '',
+    this.comparisonExportConfigMigrated = true,
     this.customThemeColorName = '\u81ea\u5b9a\u4e49',
     this.customThemeColorValue = 0xFF16C6A8,
     this.customThemeColors = const [],
@@ -193,6 +202,11 @@ class AppSettings {
   final MapTileProvider mapTileProvider;
   final OpenFreeMapStyle openFreeMapStyle;
   final AnitabiImageSource anitabiImageSource;
+  final String anitabiSiteBaseUrl;
+  final String anitabiStaticDataBaseUrl;
+  final String anitabiApiBaseUrl;
+  final String anitabiOfficialImageBaseUrl;
+  final String anitabiMirrorImageBaseUrl;
   final NavigationApp navigationApp;
   final String customXyzTileUrl;
   final String customMapLibreStyleUrl;
@@ -200,6 +214,8 @@ class AppSettings {
   final bool autoSaveComparisonToGallery;
   final bool comparisonShowPilgrimName;
   final String comparisonPilgrimName;
+  final String comparisonExportConfigJson;
+  final bool comparisonExportConfigMigrated;
   final String customThemeColorName;
   final int customThemeColorValue;
   final List<CustomThemeColor> customThemeColors;
@@ -229,6 +245,11 @@ class AppSettings {
     MapTileProvider? mapTileProvider,
     OpenFreeMapStyle? openFreeMapStyle,
     AnitabiImageSource? anitabiImageSource,
+    String? anitabiSiteBaseUrl,
+    String? anitabiStaticDataBaseUrl,
+    String? anitabiApiBaseUrl,
+    String? anitabiOfficialImageBaseUrl,
+    String? anitabiMirrorImageBaseUrl,
     NavigationApp? navigationApp,
     String? customXyzTileUrl,
     String? customMapLibreStyleUrl,
@@ -236,6 +257,8 @@ class AppSettings {
     bool? autoSaveComparisonToGallery,
     bool? comparisonShowPilgrimName,
     String? comparisonPilgrimName,
+    String? comparisonExportConfigJson,
+    bool? comparisonExportConfigMigrated,
     String? customThemeColorName,
     int? customThemeColorValue,
     List<CustomThemeColor>? customThemeColors,
@@ -268,6 +291,14 @@ class AppSettings {
       mapTileProvider: mapTileProvider ?? this.mapTileProvider,
       openFreeMapStyle: openFreeMapStyle ?? this.openFreeMapStyle,
       anitabiImageSource: anitabiImageSource ?? this.anitabiImageSource,
+      anitabiSiteBaseUrl: anitabiSiteBaseUrl ?? this.anitabiSiteBaseUrl,
+      anitabiStaticDataBaseUrl:
+          anitabiStaticDataBaseUrl ?? this.anitabiStaticDataBaseUrl,
+      anitabiApiBaseUrl: anitabiApiBaseUrl ?? this.anitabiApiBaseUrl,
+      anitabiOfficialImageBaseUrl:
+          anitabiOfficialImageBaseUrl ?? this.anitabiOfficialImageBaseUrl,
+      anitabiMirrorImageBaseUrl:
+          anitabiMirrorImageBaseUrl ?? this.anitabiMirrorImageBaseUrl,
       navigationApp: navigationApp ?? this.navigationApp,
       customXyzTileUrl: customXyzTileUrl ?? this.customXyzTileUrl,
       customMapLibreStyleUrl:
@@ -280,6 +311,10 @@ class AppSettings {
           comparisonShowPilgrimName ?? this.comparisonShowPilgrimName,
       comparisonPilgrimName:
           comparisonPilgrimName ?? this.comparisonPilgrimName,
+      comparisonExportConfigJson:
+          comparisonExportConfigJson ?? this.comparisonExportConfigJson,
+      comparisonExportConfigMigrated:
+          comparisonExportConfigMigrated ?? this.comparisonExportConfigMigrated,
       customThemeColorName: customThemeColorName ?? this.customThemeColorName,
       customThemeColorValue:
           customThemeColorValue ?? this.customThemeColorValue,
@@ -306,6 +341,16 @@ class AppSettings {
       mapMaxZoom: mapMaxZoom ?? this.mapMaxZoom,
     );
   }
+}
+
+extension AppSettingsAnitabiServiceConfig on AppSettings {
+  AnitabiServiceConfig get anitabiServiceConfig => AnitabiServiceConfig(
+    siteBaseUrl: anitabiSiteBaseUrl,
+    staticDataBaseUrl: anitabiStaticDataBaseUrl,
+    apiBaseUrl: anitabiApiBaseUrl,
+    officialImageBaseUrl: anitabiOfficialImageBaseUrl,
+    mirrorImageBaseUrl: anitabiMirrorImageBaseUrl,
+  );
 }
 
 class PilgrimageVisitRecord {

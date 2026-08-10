@@ -369,6 +369,97 @@ void main() {
     expect((await repository.loadAppSettings()).showPlanGroupProgress, isFalse);
   });
 
+  test('schema 35 to 36 adds configurable Anitabi service addresses', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.createPlan(name: 'Anitabi 地址迁移', area: '宇治');
+    await repository.saveAppSettings(
+      const AppSettings(customXyzTileUrl: 'https://example.com/tiles'),
+    );
+    for (final column in [
+      'anitabi_site_base_url',
+      'anitabi_static_data_base_url',
+      'anitabi_api_base_url',
+      'anitabi_official_image_base_url',
+      'anitabi_mirror_image_base_url',
+    ]) {
+      await database.customStatement(
+        'ALTER TABLE app_settings_entries DROP COLUMN $column',
+      );
+    }
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      35,
+      database.schemaVersion,
+    );
+
+    final columns = await _tableColumnNames(database, 'app_settings_entries');
+    expect(
+      columns,
+      containsAll([
+        'anitabi_site_base_url',
+        'anitabi_static_data_base_url',
+        'anitabi_api_base_url',
+        'anitabi_official_image_base_url',
+        'anitabi_mirror_image_base_url',
+      ]),
+    );
+    final migratedPlan = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    final settings = await repository.loadAppSettings();
+    expect(migratedPlan.name, plan.name);
+    expect(settings.customXyzTileUrl, 'https://example.com/tiles');
+    expect(settings.anitabiSiteBaseUrl, 'https://ww.anitabi.cn');
+    expect(settings.anitabiStaticDataBaseUrl, 'https://ww.anitabi.cn/d');
+    expect(settings.anitabiApiBaseUrl, 'https://api.anitabi.cn');
+    expect(settings.anitabiOfficialImageBaseUrl, 'https://image.anitabi.cn');
+    expect(settings.anitabiMirrorImageBaseUrl, 'https://img-tc.anitabi.cn');
+  });
+
+  test('schema 36 to 37 adds unified comparison config storage', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = SqlitePilgrimageRepository(database: database);
+    final plan = await repository.createPlan(name: '对比图迁移', area: '东京');
+    await repository.saveAppSettings(
+      const AppSettings(customXyzTileUrl: 'https://example.com/tiles'),
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN comparison_export_config_json',
+    );
+    await database.customStatement(
+      'ALTER TABLE app_settings_entries '
+      'DROP COLUMN comparison_export_config_migrated',
+    );
+
+    await database.migration.onUpgrade(
+      database.createMigrator(),
+      36,
+      database.schemaVersion,
+    );
+
+    final columns = await _tableColumnNames(database, 'app_settings_entries');
+    expect(
+      columns,
+      containsAll([
+        'comparison_export_config_json',
+        'comparison_export_config_migrated',
+      ]),
+    );
+    final migratedPlan = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    final settings = await repository.loadAppSettings();
+    expect(migratedPlan.name, plan.name);
+    expect(settings.customXyzTileUrl, 'https://example.com/tiles');
+    expect(settings.comparisonExportConfigJson, isEmpty);
+    expect(settings.comparisonExportConfigMigrated, isFalse);
+  });
+
   test(
     'pending-coordinate point is never promoted to current target',
     () async {
@@ -1392,6 +1483,11 @@ void main() {
         mapTileProvider: MapTileProvider.customXyz,
         openFreeMapStyle: OpenFreeMapStyle.dark,
         anitabiImageSource: AnitabiImageSource.mirror,
+        anitabiSiteBaseUrl: 'https://site.example/anitabi',
+        anitabiStaticDataBaseUrl: 'https://static.example/data',
+        anitabiApiBaseUrl: 'https://api.example/v2',
+        anitabiOfficialImageBaseUrl: 'https://images.example/official',
+        anitabiMirrorImageBaseUrl: 'https://images.example/mirror',
         customXyzTileUrl: 'https://example.com/{z}/{x}/{y}.png',
         customMapLibreStyleUrl: 'https://example.com/style.json',
         fontScale: 1.2,
@@ -1401,6 +1497,8 @@ void main() {
         autoSaveComparisonToGallery: true,
         comparisonShowPilgrimName: true,
         comparisonPilgrimName: 'BilyHurington',
+        comparisonExportConfigJson: '{"outputWidth":"w2560"}',
+        comparisonExportConfigMigrated: true,
         customThemeColorName: '薄荷',
         customThemeColorValue: 0xFF00AA99,
         customThemeColors: [
@@ -1436,6 +1534,14 @@ void main() {
     expect(settings.mapTileProvider, MapTileProvider.customXyz);
     expect(settings.openFreeMapStyle, OpenFreeMapStyle.dark);
     expect(settings.anitabiImageSource, AnitabiImageSource.mirror);
+    expect(settings.anitabiSiteBaseUrl, 'https://site.example/anitabi');
+    expect(settings.anitabiStaticDataBaseUrl, 'https://static.example/data');
+    expect(settings.anitabiApiBaseUrl, 'https://api.example/v2');
+    expect(
+      settings.anitabiOfficialImageBaseUrl,
+      'https://images.example/official',
+    );
+    expect(settings.anitabiMirrorImageBaseUrl, 'https://images.example/mirror');
     expect(settings.customXyzTileUrl, 'https://example.com/{z}/{x}/{y}.png');
     expect(settings.customMapLibreStyleUrl, 'https://example.com/style.json');
     expect(settings.fontScale, 1.2);
@@ -1445,6 +1551,8 @@ void main() {
     expect(settings.autoSaveComparisonToGallery, isTrue);
     expect(settings.comparisonShowPilgrimName, isTrue);
     expect(settings.comparisonPilgrimName, 'BilyHurington');
+    expect(settings.comparisonExportConfigJson, '{"outputWidth":"w2560"}');
+    expect(settings.comparisonExportConfigMigrated, isTrue);
     expect(settings.customThemeColorName, '薄荷');
     expect(settings.customThemeColorValue, 0xFF00AA99);
     expect(settings.customThemeColors, hasLength(2));

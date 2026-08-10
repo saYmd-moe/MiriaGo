@@ -9,3 +9,7 @@ Future<ComparisonExportConfig?> loadComparisonExportConfig() async {
 Future<void> saveComparisonExportConfig(ComparisonExportConfig config) async {
   _cachedConfig = config;
 }
+
+Future<void> clearComparisonExportConfig() async {
+  _cachedConfig = null;
+}

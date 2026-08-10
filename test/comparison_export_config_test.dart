@@ -4,6 +4,8 @@ import 'package:miriago/app_theme.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
 import 'package:miriago/records/comparison_export_config.dart';
 import 'package:miriago/records/comparison_export_config_editor.dart';
+import 'package:miriago/records/comparison_export_config_migration.dart';
+import 'package:miriago/data/sample_pilgrimage_repository.dart';
 
 void main() {
   test('serializes comparison export config for global reuse', () {
@@ -36,19 +38,67 @@ void main() {
     });
   });
 
-  test('applies pilgrim identity to app settings', () {
+  test('round-trips the complete config through app settings', () {
     const config = ComparisonExportConfig(
+      borderWidthPercent: 1.25,
+      borderColor: Colors.black,
+      outputWidth: ComparisonOutputWidth.w2560,
+      showLabels: true,
       showPilgrimName: true,
       pilgrimName: '巡礼者',
+      showColorGradingParams: true,
+      metadataFields: {
+        ComparisonMetadataField.coordinates,
+        ComparisonMetadataField.episodeLabel,
+      },
     );
 
     final settings = config.applyToSettings(const AppSettings());
-    final restored = const ComparisonExportConfig().withSettings(settings);
+    final restored = ComparisonExportConfig.fromSettings(settings);
 
+    expect(settings.comparisonExportConfigJson, isNotEmpty);
+    expect(settings.comparisonExportConfigMigrated, isTrue);
     expect(settings.comparisonShowPilgrimName, isTrue);
     expect(settings.comparisonPilgrimName, '巡礼者');
+    expect(restored.borderWidthPercent, 1.25);
+    expect(restored.borderColor, Colors.black);
+    expect(restored.outputWidth, ComparisonOutputWidth.w2560);
+    expect(restored.showLabels, isTrue);
     expect(restored.showPilgrimName, isTrue);
     expect(restored.pilgrimName, '巡礼者');
+    expect(restored.showColorGradingParams, isTrue);
+    expect(restored.metadataFields, {
+      ComparisonMetadataField.coordinates,
+      ComparisonMetadataField.episodeLabel,
+    });
+  });
+
+  test('migrates the legacy comparison config once', () async {
+    final repository = SamplePilgrimageRepository(
+      settings: const AppSettings(comparisonExportConfigMigrated: false),
+    );
+    var cleared = false;
+    const legacy = ComparisonExportConfig(
+      borderWidthPercent: 2,
+      outputWidth: ComparisonOutputWidth.w3840,
+      showLabels: true,
+    );
+
+    final migrated = await migrateComparisonExportConfigSettings(
+      repository: repository,
+      settings: await repository.loadAppSettings(),
+      loadLegacyConfig: () async => legacy,
+      clearLegacyConfig: () async => cleared = true,
+    );
+
+    expect(cleared, isTrue);
+    expect(migrated.comparisonExportConfigMigrated, isTrue);
+    final restored = ComparisonExportConfig.fromSettings(
+      await repository.loadAppSettings(),
+    );
+    expect(restored.borderWidthPercent, 2);
+    expect(restored.outputWidth, ComparisonOutputWidth.w3840);
+    expect(restored.showLabels, isTrue);
   });
 
   test('summarizes default comparison export config', () {

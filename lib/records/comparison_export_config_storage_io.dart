@@ -34,3 +34,12 @@ Future<void> saveComparisonExportConfig(ComparisonExportConfig config) async {
     await file.writeAsString(jsonEncode(config.toJson()));
   } catch (_) {}
 }
+
+Future<void> clearComparisonExportConfig() async {
+  try {
+    final file = await _configFile();
+    if (file.existsSync()) {
+      await file.delete();
+    }
+  } catch (_) {}
+}

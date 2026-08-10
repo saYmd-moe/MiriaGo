@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 
+import '../anitabi_service_config.dart';
+
 part 'app_database.g.dart';
 
 class Plans extends Table {
@@ -123,6 +125,16 @@ class AppSettingsEntries extends Table {
       text().withDefault(const Constant('liberty'))();
   TextColumn get anitabiImageSource =>
       text().withDefault(const Constant('auto'))();
+  TextColumn get anitabiSiteBaseUrl =>
+      text().withDefault(const Constant(defaultAnitabiSiteBaseUrl))();
+  TextColumn get anitabiStaticDataBaseUrl =>
+      text().withDefault(const Constant(defaultAnitabiStaticDataBaseUrl))();
+  TextColumn get anitabiApiBaseUrl =>
+      text().withDefault(const Constant(defaultAnitabiApiBaseUrl))();
+  TextColumn get anitabiOfficialImageBaseUrl =>
+      text().withDefault(const Constant(defaultAnitabiOfficialImageBaseUrl))();
+  TextColumn get anitabiMirrorImageBaseUrl =>
+      text().withDefault(const Constant(defaultAnitabiMirrorImageBaseUrl))();
   TextColumn get navigationApp =>
       text().withDefault(const Constant('googleMaps'))();
   TextColumn get customXyzTileUrl => text().withDefault(const Constant(''))();
@@ -136,6 +148,10 @@ class AppSettingsEntries extends Table {
       boolean().withDefault(const Constant(false))();
   TextColumn get comparisonPilgrimName =>
       text().withDefault(const Constant(''))();
+  TextColumn get comparisonExportConfigJson =>
+      text().withDefault(const Constant(''))();
+  BoolColumn get comparisonExportConfigMigrated =>
+      boolean().withDefault(const Constant(true))();
   TextColumn get customThemeColorName =>
       text().withDefault(const Constant('自定义'))();
   IntColumn get customThemeColorValue =>
@@ -174,7 +190,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 35;
+  int get schemaVersion => 37;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -541,6 +557,63 @@ class AppDatabase extends _$AppDatabase {
           appSettingsEntries,
           appSettingsEntries.showPlanGroupProgress,
         );
+      }
+      if (from < 36) {
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'anitabi_site_base_url',
+          appSettingsEntries,
+          appSettingsEntries.anitabiSiteBaseUrl,
+        );
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'anitabi_static_data_base_url',
+          appSettingsEntries,
+          appSettingsEntries.anitabiStaticDataBaseUrl,
+        );
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'anitabi_api_base_url',
+          appSettingsEntries,
+          appSettingsEntries.anitabiApiBaseUrl,
+        );
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'anitabi_official_image_base_url',
+          appSettingsEntries,
+          appSettingsEntries.anitabiOfficialImageBaseUrl,
+        );
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'anitabi_mirror_image_base_url',
+          appSettingsEntries,
+          appSettingsEntries.anitabiMirrorImageBaseUrl,
+        );
+      }
+      if (from < 37) {
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'comparison_export_config_json',
+          appSettingsEntries,
+          appSettingsEntries.comparisonExportConfigJson,
+        );
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'comparison_export_config_migrated',
+          appSettingsEntries,
+          appSettingsEntries.comparisonExportConfigMigrated,
+        );
+        await customStatement('''
+          UPDATE app_settings_entries
+          SET comparison_export_config_migrated = 0
+        ''');
       }
     },
   );

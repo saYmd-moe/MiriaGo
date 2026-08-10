@@ -14,6 +14,11 @@ void main() {
         mapTileProvider: MapTileProvider.customMapLibreStyle,
         openFreeMapStyle: OpenFreeMapStyle.fiord,
         anitabiImageSource: AnitabiImageSource.mirror,
+        anitabiSiteBaseUrl: 'https://site.example/anitabi',
+        anitabiStaticDataBaseUrl: 'https://static.example/data',
+        anitabiApiBaseUrl: 'https://api.example/v2',
+        anitabiOfficialImageBaseUrl: 'https://images.example/official',
+        anitabiMirrorImageBaseUrl: 'https://images.example/mirror',
         customXyzTileUrl: 'https://example.com/{z}/{x}/{y}.png',
         customMapLibreStyleUrl: 'https://example.com/style.json',
         saveVisitPhotoToGallery: false,
@@ -26,6 +31,8 @@ void main() {
           CustomThemeColor(name: '湖蓝', value: 0xFF168AAD),
           CustomThemeColor(name: '莓红', value: 0xFFC43D62),
         ],
+        comparisonExportConfigJson: '{"outputWidth":"w1920"}',
+        comparisonExportConfigMigrated: true,
         mapThumbnailVisibleThreshold: 55,
         mapThumbnailConcurrentLoads: 12,
         showPlanGroupProgress: false,
@@ -77,6 +84,20 @@ void main() {
     );
     expect(decoded.settings.openFreeMapStyle, OpenFreeMapStyle.fiord);
     expect(decoded.settings.anitabiImageSource, AnitabiImageSource.mirror);
+    expect(decoded.settings.anitabiSiteBaseUrl, 'https://site.example/anitabi');
+    expect(
+      decoded.settings.anitabiStaticDataBaseUrl,
+      'https://static.example/data',
+    );
+    expect(decoded.settings.anitabiApiBaseUrl, 'https://api.example/v2');
+    expect(
+      decoded.settings.anitabiOfficialImageBaseUrl,
+      'https://images.example/official',
+    );
+    expect(
+      decoded.settings.anitabiMirrorImageBaseUrl,
+      'https://images.example/mirror',
+    );
     expect(
       decoded.settings.customXyzTileUrl,
       'https://example.com/{z}/{x}/{y}.png',
@@ -96,6 +117,11 @@ void main() {
     expect(decoded.settings.customThemeColors[0].value, 0xFF168AAD);
     expect(decoded.settings.customThemeColors[1].name, '莓红');
     expect(decoded.settings.customThemeColors[1].value, 0xFFC43D62);
+    expect(
+      decoded.settings.comparisonExportConfigJson,
+      '{"outputWidth":"w1920"}',
+    );
+    expect(decoded.settings.comparisonExportConfigMigrated, isTrue);
     expect(decoded.settings.mapThumbnailVisibleThreshold, 55);
     expect(decoded.settings.mapThumbnailConcurrentLoads, 12);
     expect(decoded.settings.showPlanGroupProgress, isFalse);

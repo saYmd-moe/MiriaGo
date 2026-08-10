@@ -2,6 +2,7 @@ import 'package:http/http.dart' as http;
 
 import '../plan/pilgrimage_models.dart';
 import 'anitabi_image_url.dart';
+import 'anitabi_service_config.dart';
 import 'image_bytes.dart';
 
 typedef AnitabiImageHttpGetter =
@@ -11,9 +12,14 @@ Future<List<int>?> fetchAnitabiImageBytes(
   String url, {
   AnitabiImageSource source = AnitabiImageSource.auto,
   AnitabiImageHttpGetter? get,
+  AnitabiServiceConfig? serviceConfig,
   Duration timeout = const Duration(seconds: 12),
 }) async {
-  final candidates = candidateAnitabiImageUrls(url, source: source);
+  final candidates = candidateAnitabiImageUrls(
+    url,
+    source: source,
+    serviceConfig: serviceConfig,
+  );
   if (candidates.isEmpty) {
     return null;
   }

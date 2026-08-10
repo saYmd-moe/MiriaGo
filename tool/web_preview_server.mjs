@@ -80,40 +80,63 @@ function safeAnitabiVersion(version) {
   return /^[A-Za-z0-9_-]+$/.test(version) ? version : '';
 }
 
-async function fetchAnitabiStatic(fileName, version) {
-  const query = version ? `?v=${encodeURIComponent(version)}` : '';
-  for (const baseUrl of ['https://www.anitabi.cn/d', 'https://anitabi.cn/d']) {
-    const response = await fetch(`${baseUrl}/${fileName}${query}`, {
-      headers: {'user-agent': 'MiriaGo local web preview'},
-    });
-    if (response.ok) {
-      return response;
+function safePublicHttpsBaseUrl(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const octets = host.split('.').map(Number);
+    const privateIpv4 = octets.length === 4 && octets.every(Number.isInteger) && (
+      octets[0] === 0 || octets[0] === 10 || octets[0] === 127 ||
+      (octets[0] === 169 && octets[1] === 254) ||
+      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168)
+    );
+    if (url.protocol !== 'https:' || url.username || url.password ||
+        url.search || url.hash || host === 'localhost' ||
+        host.endsWith('.localhost') || host.endsWith('.local') ||
+        host === '::1' || privateIpv4) {
+      return null;
     }
+    return value.replace(/\/+$/, '');
+  } catch (_) {
+    return null;
   }
-  return null;
+}
+
+async function fetchAnitabiStatic(fileName, version, upstreamValue) {
+  const query = version ? `?v=${encodeURIComponent(version)}` : '';
+  const baseUrl = safePublicHttpsBaseUrl(upstreamValue);
+  if (baseUrl == null) {
+    return null;
+  }
+  const response = await fetch(`${baseUrl}/${fileName}${query}`, {
+    headers: {'user-agent': 'MiriaGo local web preview'},
+  });
+  return response.ok ? response : null;
 }
 
 async function serveAnitabiStatic(url, response) {
   const fileName = decodeURIComponent(url.pathname.split('/').pop() ?? '');
   const version = safeAnitabiVersion(url.searchParams.get('v') ?? '');
+  const upstream = url.searchParams.get('upstream') ?? 'https://ww.anitabi.cn/d';
   if (!anitabiFilePattern.test(fileName)) {
     text(response, 400, 'Invalid Anitabi static file name.');
     return;
   }
 
   try {
-    const upstream = await fetchAnitabiStatic(fileName, version);
-    if (upstream == null) {
+    const upstreamResponse = await fetchAnitabiStatic(fileName, version, upstream);
+    if (upstreamResponse == null) {
       text(response, 502, `Unable to fetch Anitabi static file: ${fileName}`);
       return;
     }
 
     response.writeHead(200, {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json; charset=utf-8',
+      'content-type': upstreamResponse.headers.get('content-type') ?? 'application/json; charset=utf-8',
       'cache-control': 'no-store',
       'access-control-allow-origin': '*',
     });
-    response.end(Buffer.from(await upstream.arrayBuffer()));
+    response.end(Buffer.from(await upstreamResponse.arrayBuffer()));
   } catch (error) {
     text(response, 502, `Anitabi proxy error: ${error}`);
   }

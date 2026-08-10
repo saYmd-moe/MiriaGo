@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../plan/pilgrimage_models.dart';
@@ -69,6 +71,22 @@ class ComparisonExportConfig {
 
   static ComparisonExportConfig lastUsed = const ComparisonExportConfig();
 
+  factory ComparisonExportConfig.fromSettings(AppSettings settings) {
+    ComparisonExportConfig config = const ComparisonExportConfig();
+    final encoded = settings.comparisonExportConfigJson.trim();
+    if (encoded.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(encoded);
+        if (decoded is Map) {
+          config = ComparisonExportConfig.fromJson(
+            Map<String, Object?>.from(decoded),
+          );
+        }
+      } catch (_) {}
+    }
+    return config.withSettings(settings);
+  }
+
   ComparisonExportConfig withSettings(AppSettings settings) {
     return copyWith(
       showPilgrimName: settings.comparisonShowPilgrimName,
@@ -80,6 +98,8 @@ class ComparisonExportConfig {
     return settings.copyWith(
       comparisonShowPilgrimName: showPilgrimName,
       comparisonPilgrimName: pilgrimName,
+      comparisonExportConfigJson: jsonEncode(toJson()),
+      comparisonExportConfigMigrated: true,
     );
   }
 

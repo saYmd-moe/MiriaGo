@@ -44,7 +44,9 @@ class AnitabiMapImportScreen extends StatefulWidget {
     this.initialSettings,
     AnitabiClient? anitabiClient,
     super.key,
-  }) : anitabiClient = anitabiClient ?? AnitabiClient();
+  }) : anitabiClient =
+           anitabiClient ??
+           AnitabiClient(serviceConfig: initialSettings?.anitabiServiceConfig);
 
   final PilgrimagePlan plan;
   final PilgrimageRepository repository;

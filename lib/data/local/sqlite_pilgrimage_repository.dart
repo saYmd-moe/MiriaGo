@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../plan/pilgrimage_models.dart';
 import '../anitabi_image_url.dart';
+import '../anitabi_service_config.dart';
 import '../app_managed_file_paths_stub.dart'
     if (dart.library.io) '../app_managed_file_paths_io.dart';
 import '../pilgrimage_repository.dart';
@@ -80,6 +81,26 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
       mapTileProvider: _mapTileProviderFromName(row.mapTileProvider),
       openFreeMapStyle: _openFreeMapStyleFromName(row.openFreeMapStyle),
       anitabiImageSource: _anitabiImageSourceFromName(row.anitabiImageSource),
+      anitabiSiteBaseUrl: normalizeAnitabiBaseUrl(
+        row.anitabiSiteBaseUrl,
+        fallback: defaultAnitabiSiteBaseUrl,
+      ),
+      anitabiStaticDataBaseUrl: normalizeAnitabiBaseUrl(
+        row.anitabiStaticDataBaseUrl,
+        fallback: defaultAnitabiStaticDataBaseUrl,
+      ),
+      anitabiApiBaseUrl: normalizeAnitabiBaseUrl(
+        row.anitabiApiBaseUrl,
+        fallback: defaultAnitabiApiBaseUrl,
+      ),
+      anitabiOfficialImageBaseUrl: normalizeAnitabiBaseUrl(
+        row.anitabiOfficialImageBaseUrl,
+        fallback: defaultAnitabiOfficialImageBaseUrl,
+      ),
+      anitabiMirrorImageBaseUrl: normalizeAnitabiBaseUrl(
+        row.anitabiMirrorImageBaseUrl,
+        fallback: defaultAnitabiMirrorImageBaseUrl,
+      ),
       navigationApp: _navigationAppFromName(row.navigationApp),
       customXyzTileUrl: row.customXyzTileUrl,
       customMapLibreStyleUrl: row.customMapLibreStyleUrl,
@@ -87,6 +108,8 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
       autoSaveComparisonToGallery: row.autoSaveComparisonToGallery,
       comparisonShowPilgrimName: row.comparisonShowPilgrimName,
       comparisonPilgrimName: row.comparisonPilgrimName,
+      comparisonExportConfigJson: row.comparisonExportConfigJson,
+      comparisonExportConfigMigrated: row.comparisonExportConfigMigrated,
       customThemeColorName: row.customThemeColorName,
       customThemeColorValue: row.customThemeColorValue,
       customThemeColors: _customThemeColorsFromJson(row.customThemeColorsJson),
@@ -1056,6 +1079,17 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
             mapTileProvider: Value(settings.mapTileProvider.name),
             openFreeMapStyle: Value(settings.openFreeMapStyle.name),
             anitabiImageSource: Value(settings.anitabiImageSource.name),
+            anitabiSiteBaseUrl: Value(settings.anitabiSiteBaseUrl.trim()),
+            anitabiStaticDataBaseUrl: Value(
+              settings.anitabiStaticDataBaseUrl.trim(),
+            ),
+            anitabiApiBaseUrl: Value(settings.anitabiApiBaseUrl.trim()),
+            anitabiOfficialImageBaseUrl: Value(
+              settings.anitabiOfficialImageBaseUrl.trim(),
+            ),
+            anitabiMirrorImageBaseUrl: Value(
+              settings.anitabiMirrorImageBaseUrl.trim(),
+            ),
             navigationApp: Value(settings.navigationApp.name),
             customXyzTileUrl: Value(settings.customXyzTileUrl.trim()),
             customMapLibreStyleUrl: Value(
@@ -1069,6 +1103,12 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
               settings.comparisonShowPilgrimName,
             ),
             comparisonPilgrimName: Value(settings.comparisonPilgrimName.trim()),
+            comparisonExportConfigJson: Value(
+              settings.comparisonExportConfigJson.trim(),
+            ),
+            comparisonExportConfigMigrated: Value(
+              settings.comparisonExportConfigMigrated,
+            ),
             customThemeColorName: Value(settings.customThemeColorName.trim()),
             customThemeColorValue: Value(settings.customThemeColorValue),
             customThemeColorsJson: Value(

@@ -4284,6 +4284,67 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         requiredDuringInsert: false,
         defaultValue: const Constant('auto'),
       );
+  static const VerificationMeta _anitabiSiteBaseUrlMeta =
+      const VerificationMeta('anitabiSiteBaseUrl');
+  @override
+  late final GeneratedColumn<String> anitabiSiteBaseUrl =
+      GeneratedColumn<String>(
+        'anitabi_site_base_url',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(defaultAnitabiSiteBaseUrl),
+      );
+  static const VerificationMeta _anitabiStaticDataBaseUrlMeta =
+      const VerificationMeta('anitabiStaticDataBaseUrl');
+  @override
+  late final GeneratedColumn<String> anitabiStaticDataBaseUrl =
+      GeneratedColumn<String>(
+        'anitabi_static_data_base_url',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(defaultAnitabiStaticDataBaseUrl),
+      );
+  static const VerificationMeta _anitabiApiBaseUrlMeta = const VerificationMeta(
+    'anitabiApiBaseUrl',
+  );
+  @override
+  late final GeneratedColumn<String> anitabiApiBaseUrl =
+      GeneratedColumn<String>(
+        'anitabi_api_base_url',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(defaultAnitabiApiBaseUrl),
+      );
+  static const VerificationMeta _anitabiOfficialImageBaseUrlMeta =
+      const VerificationMeta('anitabiOfficialImageBaseUrl');
+  @override
+  late final GeneratedColumn<String> anitabiOfficialImageBaseUrl =
+      GeneratedColumn<String>(
+        'anitabi_official_image_base_url',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(defaultAnitabiOfficialImageBaseUrl),
+      );
+  static const VerificationMeta _anitabiMirrorImageBaseUrlMeta =
+      const VerificationMeta('anitabiMirrorImageBaseUrl');
+  @override
+  late final GeneratedColumn<String> anitabiMirrorImageBaseUrl =
+      GeneratedColumn<String>(
+        'anitabi_mirror_image_base_url',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(defaultAnitabiMirrorImageBaseUrl),
+      );
   static const VerificationMeta _navigationAppMeta = const VerificationMeta(
     'navigationApp',
   );
@@ -4376,6 +4437,33 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         type: DriftSqlType.string,
         requiredDuringInsert: false,
         defaultValue: const Constant(''),
+      );
+  static const VerificationMeta _comparisonExportConfigJsonMeta =
+      const VerificationMeta('comparisonExportConfigJson');
+  @override
+  late final GeneratedColumn<String> comparisonExportConfigJson =
+      GeneratedColumn<String>(
+        'comparison_export_config_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(''),
+      );
+  static const VerificationMeta _comparisonExportConfigMigratedMeta =
+      const VerificationMeta('comparisonExportConfigMigrated');
+  @override
+  late final GeneratedColumn<bool> comparisonExportConfigMigrated =
+      GeneratedColumn<bool>(
+        'comparison_export_config_migrated',
+        aliasedName,
+        false,
+        type: DriftSqlType.bool,
+        requiredDuringInsert: false,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("comparison_export_config_migrated" IN (0, 1))',
+        ),
+        defaultValue: const Constant(true),
       );
   static const VerificationMeta _customThemeColorNameMeta =
       const VerificationMeta('customThemeColorName');
@@ -4565,6 +4653,11 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
     mapTileProvider,
     openFreeMapStyle,
     anitabiImageSource,
+    anitabiSiteBaseUrl,
+    anitabiStaticDataBaseUrl,
+    anitabiApiBaseUrl,
+    anitabiOfficialImageBaseUrl,
+    anitabiMirrorImageBaseUrl,
     navigationApp,
     customXyzTileUrl,
     customMapLibreStyleUrl,
@@ -4572,6 +4665,8 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
     autoSaveComparisonToGallery,
     comparisonShowPilgrimName,
     comparisonPilgrimName,
+    comparisonExportConfigJson,
+    comparisonExportConfigMigrated,
     customThemeColorName,
     customThemeColorValue,
     customThemeColorsJson,
@@ -4712,6 +4807,51 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         ),
       );
     }
+    if (data.containsKey('anitabi_site_base_url')) {
+      context.handle(
+        _anitabiSiteBaseUrlMeta,
+        anitabiSiteBaseUrl.isAcceptableOrUnknown(
+          data['anitabi_site_base_url']!,
+          _anitabiSiteBaseUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('anitabi_static_data_base_url')) {
+      context.handle(
+        _anitabiStaticDataBaseUrlMeta,
+        anitabiStaticDataBaseUrl.isAcceptableOrUnknown(
+          data['anitabi_static_data_base_url']!,
+          _anitabiStaticDataBaseUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('anitabi_api_base_url')) {
+      context.handle(
+        _anitabiApiBaseUrlMeta,
+        anitabiApiBaseUrl.isAcceptableOrUnknown(
+          data['anitabi_api_base_url']!,
+          _anitabiApiBaseUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('anitabi_official_image_base_url')) {
+      context.handle(
+        _anitabiOfficialImageBaseUrlMeta,
+        anitabiOfficialImageBaseUrl.isAcceptableOrUnknown(
+          data['anitabi_official_image_base_url']!,
+          _anitabiOfficialImageBaseUrlMeta,
+        ),
+      );
+    }
+    if (data.containsKey('anitabi_mirror_image_base_url')) {
+      context.handle(
+        _anitabiMirrorImageBaseUrlMeta,
+        anitabiMirrorImageBaseUrl.isAcceptableOrUnknown(
+          data['anitabi_mirror_image_base_url']!,
+          _anitabiMirrorImageBaseUrlMeta,
+        ),
+      );
+    }
     if (data.containsKey('navigation_app')) {
       context.handle(
         _navigationAppMeta,
@@ -4772,6 +4912,24 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         comparisonPilgrimName.isAcceptableOrUnknown(
           data['comparison_pilgrim_name']!,
           _comparisonPilgrimNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('comparison_export_config_json')) {
+      context.handle(
+        _comparisonExportConfigJsonMeta,
+        comparisonExportConfigJson.isAcceptableOrUnknown(
+          data['comparison_export_config_json']!,
+          _comparisonExportConfigJsonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('comparison_export_config_migrated')) {
+      context.handle(
+        _comparisonExportConfigMigratedMeta,
+        comparisonExportConfigMigrated.isAcceptableOrUnknown(
+          data['comparison_export_config_migrated']!,
+          _comparisonExportConfigMigratedMeta,
         ),
       );
     }
@@ -4966,6 +5124,26 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
         DriftSqlType.string,
         data['${effectivePrefix}anitabi_image_source'],
       )!,
+      anitabiSiteBaseUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anitabi_site_base_url'],
+      )!,
+      anitabiStaticDataBaseUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anitabi_static_data_base_url'],
+      )!,
+      anitabiApiBaseUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anitabi_api_base_url'],
+      )!,
+      anitabiOfficialImageBaseUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anitabi_official_image_base_url'],
+      )!,
+      anitabiMirrorImageBaseUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}anitabi_mirror_image_base_url'],
+      )!,
       navigationApp: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}navigation_app'],
@@ -4993,6 +5171,14 @@ class $AppSettingsEntriesTable extends AppSettingsEntries
       comparisonPilgrimName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}comparison_pilgrim_name'],
+      )!,
+      comparisonExportConfigJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}comparison_export_config_json'],
+      )!,
+      comparisonExportConfigMigrated: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}comparison_export_config_migrated'],
       )!,
       customThemeColorName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
@@ -5075,6 +5261,11 @@ class AppSettingsEntry extends DataClass
   final String mapTileProvider;
   final String openFreeMapStyle;
   final String anitabiImageSource;
+  final String anitabiSiteBaseUrl;
+  final String anitabiStaticDataBaseUrl;
+  final String anitabiApiBaseUrl;
+  final String anitabiOfficialImageBaseUrl;
+  final String anitabiMirrorImageBaseUrl;
   final String navigationApp;
   final String customXyzTileUrl;
   final String customMapLibreStyleUrl;
@@ -5082,6 +5273,8 @@ class AppSettingsEntry extends DataClass
   final bool autoSaveComparisonToGallery;
   final bool comparisonShowPilgrimName;
   final String comparisonPilgrimName;
+  final String comparisonExportConfigJson;
+  final bool comparisonExportConfigMigrated;
   final String customThemeColorName;
   final int customThemeColorValue;
   final String customThemeColorsJson;
@@ -5111,6 +5304,11 @@ class AppSettingsEntry extends DataClass
     required this.mapTileProvider,
     required this.openFreeMapStyle,
     required this.anitabiImageSource,
+    required this.anitabiSiteBaseUrl,
+    required this.anitabiStaticDataBaseUrl,
+    required this.anitabiApiBaseUrl,
+    required this.anitabiOfficialImageBaseUrl,
+    required this.anitabiMirrorImageBaseUrl,
     required this.navigationApp,
     required this.customXyzTileUrl,
     required this.customMapLibreStyleUrl,
@@ -5118,6 +5316,8 @@ class AppSettingsEntry extends DataClass
     required this.autoSaveComparisonToGallery,
     required this.comparisonShowPilgrimName,
     required this.comparisonPilgrimName,
+    required this.comparisonExportConfigJson,
+    required this.comparisonExportConfigMigrated,
     required this.customThemeColorName,
     required this.customThemeColorValue,
     required this.customThemeColorsJson,
@@ -5154,6 +5354,17 @@ class AppSettingsEntry extends DataClass
     map['map_tile_provider'] = Variable<String>(mapTileProvider);
     map['open_free_map_style'] = Variable<String>(openFreeMapStyle);
     map['anitabi_image_source'] = Variable<String>(anitabiImageSource);
+    map['anitabi_site_base_url'] = Variable<String>(anitabiSiteBaseUrl);
+    map['anitabi_static_data_base_url'] = Variable<String>(
+      anitabiStaticDataBaseUrl,
+    );
+    map['anitabi_api_base_url'] = Variable<String>(anitabiApiBaseUrl);
+    map['anitabi_official_image_base_url'] = Variable<String>(
+      anitabiOfficialImageBaseUrl,
+    );
+    map['anitabi_mirror_image_base_url'] = Variable<String>(
+      anitabiMirrorImageBaseUrl,
+    );
     map['navigation_app'] = Variable<String>(navigationApp);
     map['custom_xyz_tile_url'] = Variable<String>(customXyzTileUrl);
     map['custom_map_libre_style_url'] = Variable<String>(
@@ -5169,6 +5380,12 @@ class AppSettingsEntry extends DataClass
       comparisonShowPilgrimName,
     );
     map['comparison_pilgrim_name'] = Variable<String>(comparisonPilgrimName);
+    map['comparison_export_config_json'] = Variable<String>(
+      comparisonExportConfigJson,
+    );
+    map['comparison_export_config_migrated'] = Variable<bool>(
+      comparisonExportConfigMigrated,
+    );
     map['custom_theme_color_name'] = Variable<String>(customThemeColorName);
     map['custom_theme_color_value'] = Variable<int>(customThemeColorValue);
     map['custom_theme_colors_json'] = Variable<String>(customThemeColorsJson);
@@ -5214,6 +5431,11 @@ class AppSettingsEntry extends DataClass
       mapTileProvider: Value(mapTileProvider),
       openFreeMapStyle: Value(openFreeMapStyle),
       anitabiImageSource: Value(anitabiImageSource),
+      anitabiSiteBaseUrl: Value(anitabiSiteBaseUrl),
+      anitabiStaticDataBaseUrl: Value(anitabiStaticDataBaseUrl),
+      anitabiApiBaseUrl: Value(anitabiApiBaseUrl),
+      anitabiOfficialImageBaseUrl: Value(anitabiOfficialImageBaseUrl),
+      anitabiMirrorImageBaseUrl: Value(anitabiMirrorImageBaseUrl),
       navigationApp: Value(navigationApp),
       customXyzTileUrl: Value(customXyzTileUrl),
       customMapLibreStyleUrl: Value(customMapLibreStyleUrl),
@@ -5221,6 +5443,8 @@ class AppSettingsEntry extends DataClass
       autoSaveComparisonToGallery: Value(autoSaveComparisonToGallery),
       comparisonShowPilgrimName: Value(comparisonShowPilgrimName),
       comparisonPilgrimName: Value(comparisonPilgrimName),
+      comparisonExportConfigJson: Value(comparisonExportConfigJson),
+      comparisonExportConfigMigrated: Value(comparisonExportConfigMigrated),
       customThemeColorName: Value(customThemeColorName),
       customThemeColorValue: Value(customThemeColorValue),
       customThemeColorsJson: Value(customThemeColorsJson),
@@ -5266,6 +5490,19 @@ class AppSettingsEntry extends DataClass
       anitabiImageSource: serializer.fromJson<String>(
         json['anitabiImageSource'],
       ),
+      anitabiSiteBaseUrl: serializer.fromJson<String>(
+        json['anitabiSiteBaseUrl'],
+      ),
+      anitabiStaticDataBaseUrl: serializer.fromJson<String>(
+        json['anitabiStaticDataBaseUrl'],
+      ),
+      anitabiApiBaseUrl: serializer.fromJson<String>(json['anitabiApiBaseUrl']),
+      anitabiOfficialImageBaseUrl: serializer.fromJson<String>(
+        json['anitabiOfficialImageBaseUrl'],
+      ),
+      anitabiMirrorImageBaseUrl: serializer.fromJson<String>(
+        json['anitabiMirrorImageBaseUrl'],
+      ),
       navigationApp: serializer.fromJson<String>(json['navigationApp']),
       customXyzTileUrl: serializer.fromJson<String>(json['customXyzTileUrl']),
       customMapLibreStyleUrl: serializer.fromJson<String>(
@@ -5282,6 +5519,12 @@ class AppSettingsEntry extends DataClass
       ),
       comparisonPilgrimName: serializer.fromJson<String>(
         json['comparisonPilgrimName'],
+      ),
+      comparisonExportConfigJson: serializer.fromJson<String>(
+        json['comparisonExportConfigJson'],
+      ),
+      comparisonExportConfigMigrated: serializer.fromJson<bool>(
+        json['comparisonExportConfigMigrated'],
       ),
       customThemeColorName: serializer.fromJson<String>(
         json['customThemeColorName'],
@@ -5345,6 +5588,17 @@ class AppSettingsEntry extends DataClass
       'mapTileProvider': serializer.toJson<String>(mapTileProvider),
       'openFreeMapStyle': serializer.toJson<String>(openFreeMapStyle),
       'anitabiImageSource': serializer.toJson<String>(anitabiImageSource),
+      'anitabiSiteBaseUrl': serializer.toJson<String>(anitabiSiteBaseUrl),
+      'anitabiStaticDataBaseUrl': serializer.toJson<String>(
+        anitabiStaticDataBaseUrl,
+      ),
+      'anitabiApiBaseUrl': serializer.toJson<String>(anitabiApiBaseUrl),
+      'anitabiOfficialImageBaseUrl': serializer.toJson<String>(
+        anitabiOfficialImageBaseUrl,
+      ),
+      'anitabiMirrorImageBaseUrl': serializer.toJson<String>(
+        anitabiMirrorImageBaseUrl,
+      ),
       'navigationApp': serializer.toJson<String>(navigationApp),
       'customXyzTileUrl': serializer.toJson<String>(customXyzTileUrl),
       'customMapLibreStyleUrl': serializer.toJson<String>(
@@ -5360,6 +5614,12 @@ class AppSettingsEntry extends DataClass
         comparisonShowPilgrimName,
       ),
       'comparisonPilgrimName': serializer.toJson<String>(comparisonPilgrimName),
+      'comparisonExportConfigJson': serializer.toJson<String>(
+        comparisonExportConfigJson,
+      ),
+      'comparisonExportConfigMigrated': serializer.toJson<bool>(
+        comparisonExportConfigMigrated,
+      ),
       'customThemeColorName': serializer.toJson<String>(customThemeColorName),
       'customThemeColorValue': serializer.toJson<int>(customThemeColorValue),
       'customThemeColorsJson': serializer.toJson<String>(customThemeColorsJson),
@@ -5406,6 +5666,11 @@ class AppSettingsEntry extends DataClass
     String? mapTileProvider,
     String? openFreeMapStyle,
     String? anitabiImageSource,
+    String? anitabiSiteBaseUrl,
+    String? anitabiStaticDataBaseUrl,
+    String? anitabiApiBaseUrl,
+    String? anitabiOfficialImageBaseUrl,
+    String? anitabiMirrorImageBaseUrl,
     String? navigationApp,
     String? customXyzTileUrl,
     String? customMapLibreStyleUrl,
@@ -5413,6 +5678,8 @@ class AppSettingsEntry extends DataClass
     bool? autoSaveComparisonToGallery,
     bool? comparisonShowPilgrimName,
     String? comparisonPilgrimName,
+    String? comparisonExportConfigJson,
+    bool? comparisonExportConfigMigrated,
     String? customThemeColorName,
     int? customThemeColorValue,
     String? customThemeColorsJson,
@@ -5444,6 +5711,14 @@ class AppSettingsEntry extends DataClass
     mapTileProvider: mapTileProvider ?? this.mapTileProvider,
     openFreeMapStyle: openFreeMapStyle ?? this.openFreeMapStyle,
     anitabiImageSource: anitabiImageSource ?? this.anitabiImageSource,
+    anitabiSiteBaseUrl: anitabiSiteBaseUrl ?? this.anitabiSiteBaseUrl,
+    anitabiStaticDataBaseUrl:
+        anitabiStaticDataBaseUrl ?? this.anitabiStaticDataBaseUrl,
+    anitabiApiBaseUrl: anitabiApiBaseUrl ?? this.anitabiApiBaseUrl,
+    anitabiOfficialImageBaseUrl:
+        anitabiOfficialImageBaseUrl ?? this.anitabiOfficialImageBaseUrl,
+    anitabiMirrorImageBaseUrl:
+        anitabiMirrorImageBaseUrl ?? this.anitabiMirrorImageBaseUrl,
     navigationApp: navigationApp ?? this.navigationApp,
     customXyzTileUrl: customXyzTileUrl ?? this.customXyzTileUrl,
     customMapLibreStyleUrl:
@@ -5455,6 +5730,10 @@ class AppSettingsEntry extends DataClass
     comparisonShowPilgrimName:
         comparisonShowPilgrimName ?? this.comparisonShowPilgrimName,
     comparisonPilgrimName: comparisonPilgrimName ?? this.comparisonPilgrimName,
+    comparisonExportConfigJson:
+        comparisonExportConfigJson ?? this.comparisonExportConfigJson,
+    comparisonExportConfigMigrated:
+        comparisonExportConfigMigrated ?? this.comparisonExportConfigMigrated,
     customThemeColorName: customThemeColorName ?? this.customThemeColorName,
     customThemeColorValue: customThemeColorValue ?? this.customThemeColorValue,
     customThemeColorsJson: customThemeColorsJson ?? this.customThemeColorsJson,
@@ -5514,6 +5793,21 @@ class AppSettingsEntry extends DataClass
       anitabiImageSource: data.anitabiImageSource.present
           ? data.anitabiImageSource.value
           : this.anitabiImageSource,
+      anitabiSiteBaseUrl: data.anitabiSiteBaseUrl.present
+          ? data.anitabiSiteBaseUrl.value
+          : this.anitabiSiteBaseUrl,
+      anitabiStaticDataBaseUrl: data.anitabiStaticDataBaseUrl.present
+          ? data.anitabiStaticDataBaseUrl.value
+          : this.anitabiStaticDataBaseUrl,
+      anitabiApiBaseUrl: data.anitabiApiBaseUrl.present
+          ? data.anitabiApiBaseUrl.value
+          : this.anitabiApiBaseUrl,
+      anitabiOfficialImageBaseUrl: data.anitabiOfficialImageBaseUrl.present
+          ? data.anitabiOfficialImageBaseUrl.value
+          : this.anitabiOfficialImageBaseUrl,
+      anitabiMirrorImageBaseUrl: data.anitabiMirrorImageBaseUrl.present
+          ? data.anitabiMirrorImageBaseUrl.value
+          : this.anitabiMirrorImageBaseUrl,
       navigationApp: data.navigationApp.present
           ? data.navigationApp.value
           : this.navigationApp,
@@ -5535,6 +5829,13 @@ class AppSettingsEntry extends DataClass
       comparisonPilgrimName: data.comparisonPilgrimName.present
           ? data.comparisonPilgrimName.value
           : this.comparisonPilgrimName,
+      comparisonExportConfigJson: data.comparisonExportConfigJson.present
+          ? data.comparisonExportConfigJson.value
+          : this.comparisonExportConfigJson,
+      comparisonExportConfigMigrated:
+          data.comparisonExportConfigMigrated.present
+          ? data.comparisonExportConfigMigrated.value
+          : this.comparisonExportConfigMigrated,
       customThemeColorName: data.customThemeColorName.present
           ? data.customThemeColorName.value
           : this.customThemeColorName,
@@ -5597,6 +5898,11 @@ class AppSettingsEntry extends DataClass
           ..write('mapTileProvider: $mapTileProvider, ')
           ..write('openFreeMapStyle: $openFreeMapStyle, ')
           ..write('anitabiImageSource: $anitabiImageSource, ')
+          ..write('anitabiSiteBaseUrl: $anitabiSiteBaseUrl, ')
+          ..write('anitabiStaticDataBaseUrl: $anitabiStaticDataBaseUrl, ')
+          ..write('anitabiApiBaseUrl: $anitabiApiBaseUrl, ')
+          ..write('anitabiOfficialImageBaseUrl: $anitabiOfficialImageBaseUrl, ')
+          ..write('anitabiMirrorImageBaseUrl: $anitabiMirrorImageBaseUrl, ')
           ..write('navigationApp: $navigationApp, ')
           ..write('customXyzTileUrl: $customXyzTileUrl, ')
           ..write('customMapLibreStyleUrl: $customMapLibreStyleUrl, ')
@@ -5604,6 +5910,10 @@ class AppSettingsEntry extends DataClass
           ..write('autoSaveComparisonToGallery: $autoSaveComparisonToGallery, ')
           ..write('comparisonShowPilgrimName: $comparisonShowPilgrimName, ')
           ..write('comparisonPilgrimName: $comparisonPilgrimName, ')
+          ..write('comparisonExportConfigJson: $comparisonExportConfigJson, ')
+          ..write(
+            'comparisonExportConfigMigrated: $comparisonExportConfigMigrated, ',
+          )
           ..write('customThemeColorName: $customThemeColorName, ')
           ..write('customThemeColorValue: $customThemeColorValue, ')
           ..write('customThemeColorsJson: $customThemeColorsJson, ')
@@ -5644,6 +5954,11 @@ class AppSettingsEntry extends DataClass
     mapTileProvider,
     openFreeMapStyle,
     anitabiImageSource,
+    anitabiSiteBaseUrl,
+    anitabiStaticDataBaseUrl,
+    anitabiApiBaseUrl,
+    anitabiOfficialImageBaseUrl,
+    anitabiMirrorImageBaseUrl,
     navigationApp,
     customXyzTileUrl,
     customMapLibreStyleUrl,
@@ -5651,6 +5966,8 @@ class AppSettingsEntry extends DataClass
     autoSaveComparisonToGallery,
     comparisonShowPilgrimName,
     comparisonPilgrimName,
+    comparisonExportConfigJson,
+    comparisonExportConfigMigrated,
     customThemeColorName,
     customThemeColorValue,
     customThemeColorsJson,
@@ -5685,6 +6002,12 @@ class AppSettingsEntry extends DataClass
           other.mapTileProvider == this.mapTileProvider &&
           other.openFreeMapStyle == this.openFreeMapStyle &&
           other.anitabiImageSource == this.anitabiImageSource &&
+          other.anitabiSiteBaseUrl == this.anitabiSiteBaseUrl &&
+          other.anitabiStaticDataBaseUrl == this.anitabiStaticDataBaseUrl &&
+          other.anitabiApiBaseUrl == this.anitabiApiBaseUrl &&
+          other.anitabiOfficialImageBaseUrl ==
+              this.anitabiOfficialImageBaseUrl &&
+          other.anitabiMirrorImageBaseUrl == this.anitabiMirrorImageBaseUrl &&
           other.navigationApp == this.navigationApp &&
           other.customXyzTileUrl == this.customXyzTileUrl &&
           other.customMapLibreStyleUrl == this.customMapLibreStyleUrl &&
@@ -5693,6 +6016,9 @@ class AppSettingsEntry extends DataClass
               this.autoSaveComparisonToGallery &&
           other.comparisonShowPilgrimName == this.comparisonShowPilgrimName &&
           other.comparisonPilgrimName == this.comparisonPilgrimName &&
+          other.comparisonExportConfigJson == this.comparisonExportConfigJson &&
+          other.comparisonExportConfigMigrated ==
+              this.comparisonExportConfigMigrated &&
           other.customThemeColorName == this.customThemeColorName &&
           other.customThemeColorValue == this.customThemeColorValue &&
           other.customThemeColorsJson == this.customThemeColorsJson &&
@@ -5728,6 +6054,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
   final Value<String> mapTileProvider;
   final Value<String> openFreeMapStyle;
   final Value<String> anitabiImageSource;
+  final Value<String> anitabiSiteBaseUrl;
+  final Value<String> anitabiStaticDataBaseUrl;
+  final Value<String> anitabiApiBaseUrl;
+  final Value<String> anitabiOfficialImageBaseUrl;
+  final Value<String> anitabiMirrorImageBaseUrl;
   final Value<String> navigationApp;
   final Value<String> customXyzTileUrl;
   final Value<String> customMapLibreStyleUrl;
@@ -5735,6 +6066,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
   final Value<bool> autoSaveComparisonToGallery;
   final Value<bool> comparisonShowPilgrimName;
   final Value<String> comparisonPilgrimName;
+  final Value<String> comparisonExportConfigJson;
+  final Value<bool> comparisonExportConfigMigrated;
   final Value<String> customThemeColorName;
   final Value<int> customThemeColorValue;
   final Value<String> customThemeColorsJson;
@@ -5765,6 +6098,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     this.mapTileProvider = const Value.absent(),
     this.openFreeMapStyle = const Value.absent(),
     this.anitabiImageSource = const Value.absent(),
+    this.anitabiSiteBaseUrl = const Value.absent(),
+    this.anitabiStaticDataBaseUrl = const Value.absent(),
+    this.anitabiApiBaseUrl = const Value.absent(),
+    this.anitabiOfficialImageBaseUrl = const Value.absent(),
+    this.anitabiMirrorImageBaseUrl = const Value.absent(),
     this.navigationApp = const Value.absent(),
     this.customXyzTileUrl = const Value.absent(),
     this.customMapLibreStyleUrl = const Value.absent(),
@@ -5772,6 +6110,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     this.autoSaveComparisonToGallery = const Value.absent(),
     this.comparisonShowPilgrimName = const Value.absent(),
     this.comparisonPilgrimName = const Value.absent(),
+    this.comparisonExportConfigJson = const Value.absent(),
+    this.comparisonExportConfigMigrated = const Value.absent(),
     this.customThemeColorName = const Value.absent(),
     this.customThemeColorValue = const Value.absent(),
     this.customThemeColorsJson = const Value.absent(),
@@ -5803,6 +6143,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     this.mapTileProvider = const Value.absent(),
     this.openFreeMapStyle = const Value.absent(),
     this.anitabiImageSource = const Value.absent(),
+    this.anitabiSiteBaseUrl = const Value.absent(),
+    this.anitabiStaticDataBaseUrl = const Value.absent(),
+    this.anitabiApiBaseUrl = const Value.absent(),
+    this.anitabiOfficialImageBaseUrl = const Value.absent(),
+    this.anitabiMirrorImageBaseUrl = const Value.absent(),
     this.navigationApp = const Value.absent(),
     this.customXyzTileUrl = const Value.absent(),
     this.customMapLibreStyleUrl = const Value.absent(),
@@ -5810,6 +6155,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     this.autoSaveComparisonToGallery = const Value.absent(),
     this.comparisonShowPilgrimName = const Value.absent(),
     this.comparisonPilgrimName = const Value.absent(),
+    this.comparisonExportConfigJson = const Value.absent(),
+    this.comparisonExportConfigMigrated = const Value.absent(),
     this.customThemeColorName = const Value.absent(),
     this.customThemeColorValue = const Value.absent(),
     this.customThemeColorsJson = const Value.absent(),
@@ -5841,6 +6188,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     Expression<String>? mapTileProvider,
     Expression<String>? openFreeMapStyle,
     Expression<String>? anitabiImageSource,
+    Expression<String>? anitabiSiteBaseUrl,
+    Expression<String>? anitabiStaticDataBaseUrl,
+    Expression<String>? anitabiApiBaseUrl,
+    Expression<String>? anitabiOfficialImageBaseUrl,
+    Expression<String>? anitabiMirrorImageBaseUrl,
     Expression<String>? navigationApp,
     Expression<String>? customXyzTileUrl,
     Expression<String>? customMapLibreStyleUrl,
@@ -5848,6 +6200,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     Expression<bool>? autoSaveComparisonToGallery,
     Expression<bool>? comparisonShowPilgrimName,
     Expression<String>? comparisonPilgrimName,
+    Expression<String>? comparisonExportConfigJson,
+    Expression<bool>? comparisonExportConfigMigrated,
     Expression<String>? customThemeColorName,
     Expression<int>? customThemeColorValue,
     Expression<String>? customThemeColorsJson,
@@ -5883,6 +6237,15 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
       if (openFreeMapStyle != null) 'open_free_map_style': openFreeMapStyle,
       if (anitabiImageSource != null)
         'anitabi_image_source': anitabiImageSource,
+      if (anitabiSiteBaseUrl != null)
+        'anitabi_site_base_url': anitabiSiteBaseUrl,
+      if (anitabiStaticDataBaseUrl != null)
+        'anitabi_static_data_base_url': anitabiStaticDataBaseUrl,
+      if (anitabiApiBaseUrl != null) 'anitabi_api_base_url': anitabiApiBaseUrl,
+      if (anitabiOfficialImageBaseUrl != null)
+        'anitabi_official_image_base_url': anitabiOfficialImageBaseUrl,
+      if (anitabiMirrorImageBaseUrl != null)
+        'anitabi_mirror_image_base_url': anitabiMirrorImageBaseUrl,
       if (navigationApp != null) 'navigation_app': navigationApp,
       if (customXyzTileUrl != null) 'custom_xyz_tile_url': customXyzTileUrl,
       if (customMapLibreStyleUrl != null)
@@ -5895,6 +6258,10 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
         'comparison_show_pilgrim_name': comparisonShowPilgrimName,
       if (comparisonPilgrimName != null)
         'comparison_pilgrim_name': comparisonPilgrimName,
+      if (comparisonExportConfigJson != null)
+        'comparison_export_config_json': comparisonExportConfigJson,
+      if (comparisonExportConfigMigrated != null)
+        'comparison_export_config_migrated': comparisonExportConfigMigrated,
       if (customThemeColorName != null)
         'custom_theme_color_name': customThemeColorName,
       if (customThemeColorValue != null)
@@ -5940,6 +6307,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     Value<String>? mapTileProvider,
     Value<String>? openFreeMapStyle,
     Value<String>? anitabiImageSource,
+    Value<String>? anitabiSiteBaseUrl,
+    Value<String>? anitabiStaticDataBaseUrl,
+    Value<String>? anitabiApiBaseUrl,
+    Value<String>? anitabiOfficialImageBaseUrl,
+    Value<String>? anitabiMirrorImageBaseUrl,
     Value<String>? navigationApp,
     Value<String>? customXyzTileUrl,
     Value<String>? customMapLibreStyleUrl,
@@ -5947,6 +6319,8 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     Value<bool>? autoSaveComparisonToGallery,
     Value<bool>? comparisonShowPilgrimName,
     Value<String>? comparisonPilgrimName,
+    Value<String>? comparisonExportConfigJson,
+    Value<bool>? comparisonExportConfigMigrated,
     Value<String>? customThemeColorName,
     Value<int>? customThemeColorValue,
     Value<String>? customThemeColorsJson,
@@ -5980,6 +6354,14 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
       mapTileProvider: mapTileProvider ?? this.mapTileProvider,
       openFreeMapStyle: openFreeMapStyle ?? this.openFreeMapStyle,
       anitabiImageSource: anitabiImageSource ?? this.anitabiImageSource,
+      anitabiSiteBaseUrl: anitabiSiteBaseUrl ?? this.anitabiSiteBaseUrl,
+      anitabiStaticDataBaseUrl:
+          anitabiStaticDataBaseUrl ?? this.anitabiStaticDataBaseUrl,
+      anitabiApiBaseUrl: anitabiApiBaseUrl ?? this.anitabiApiBaseUrl,
+      anitabiOfficialImageBaseUrl:
+          anitabiOfficialImageBaseUrl ?? this.anitabiOfficialImageBaseUrl,
+      anitabiMirrorImageBaseUrl:
+          anitabiMirrorImageBaseUrl ?? this.anitabiMirrorImageBaseUrl,
       navigationApp: navigationApp ?? this.navigationApp,
       customXyzTileUrl: customXyzTileUrl ?? this.customXyzTileUrl,
       customMapLibreStyleUrl:
@@ -5992,6 +6374,10 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
           comparisonShowPilgrimName ?? this.comparisonShowPilgrimName,
       comparisonPilgrimName:
           comparisonPilgrimName ?? this.comparisonPilgrimName,
+      comparisonExportConfigJson:
+          comparisonExportConfigJson ?? this.comparisonExportConfigJson,
+      comparisonExportConfigMigrated:
+          comparisonExportConfigMigrated ?? this.comparisonExportConfigMigrated,
       customThemeColorName: customThemeColorName ?? this.customThemeColorName,
       customThemeColorValue:
           customThemeColorValue ?? this.customThemeColorValue,
@@ -6072,6 +6458,27 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     if (anitabiImageSource.present) {
       map['anitabi_image_source'] = Variable<String>(anitabiImageSource.value);
     }
+    if (anitabiSiteBaseUrl.present) {
+      map['anitabi_site_base_url'] = Variable<String>(anitabiSiteBaseUrl.value);
+    }
+    if (anitabiStaticDataBaseUrl.present) {
+      map['anitabi_static_data_base_url'] = Variable<String>(
+        anitabiStaticDataBaseUrl.value,
+      );
+    }
+    if (anitabiApiBaseUrl.present) {
+      map['anitabi_api_base_url'] = Variable<String>(anitabiApiBaseUrl.value);
+    }
+    if (anitabiOfficialImageBaseUrl.present) {
+      map['anitabi_official_image_base_url'] = Variable<String>(
+        anitabiOfficialImageBaseUrl.value,
+      );
+    }
+    if (anitabiMirrorImageBaseUrl.present) {
+      map['anitabi_mirror_image_base_url'] = Variable<String>(
+        anitabiMirrorImageBaseUrl.value,
+      );
+    }
     if (navigationApp.present) {
       map['navigation_app'] = Variable<String>(navigationApp.value);
     }
@@ -6101,6 +6508,16 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
     if (comparisonPilgrimName.present) {
       map['comparison_pilgrim_name'] = Variable<String>(
         comparisonPilgrimName.value,
+      );
+    }
+    if (comparisonExportConfigJson.present) {
+      map['comparison_export_config_json'] = Variable<String>(
+        comparisonExportConfigJson.value,
+      );
+    }
+    if (comparisonExportConfigMigrated.present) {
+      map['comparison_export_config_migrated'] = Variable<bool>(
+        comparisonExportConfigMigrated.value,
       );
     }
     if (customThemeColorName.present) {
@@ -6192,6 +6609,11 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
           ..write('mapTileProvider: $mapTileProvider, ')
           ..write('openFreeMapStyle: $openFreeMapStyle, ')
           ..write('anitabiImageSource: $anitabiImageSource, ')
+          ..write('anitabiSiteBaseUrl: $anitabiSiteBaseUrl, ')
+          ..write('anitabiStaticDataBaseUrl: $anitabiStaticDataBaseUrl, ')
+          ..write('anitabiApiBaseUrl: $anitabiApiBaseUrl, ')
+          ..write('anitabiOfficialImageBaseUrl: $anitabiOfficialImageBaseUrl, ')
+          ..write('anitabiMirrorImageBaseUrl: $anitabiMirrorImageBaseUrl, ')
           ..write('navigationApp: $navigationApp, ')
           ..write('customXyzTileUrl: $customXyzTileUrl, ')
           ..write('customMapLibreStyleUrl: $customMapLibreStyleUrl, ')
@@ -6199,6 +6621,10 @@ class AppSettingsEntriesCompanion extends UpdateCompanion<AppSettingsEntry> {
           ..write('autoSaveComparisonToGallery: $autoSaveComparisonToGallery, ')
           ..write('comparisonShowPilgrimName: $comparisonShowPilgrimName, ')
           ..write('comparisonPilgrimName: $comparisonPilgrimName, ')
+          ..write('comparisonExportConfigJson: $comparisonExportConfigJson, ')
+          ..write(
+            'comparisonExportConfigMigrated: $comparisonExportConfigMigrated, ',
+          )
           ..write('customThemeColorName: $customThemeColorName, ')
           ..write('customThemeColorValue: $customThemeColorValue, ')
           ..write('customThemeColorsJson: $customThemeColorsJson, ')
@@ -9100,6 +9526,11 @@ typedef $$AppSettingsEntriesTableCreateCompanionBuilder =
       Value<String> mapTileProvider,
       Value<String> openFreeMapStyle,
       Value<String> anitabiImageSource,
+      Value<String> anitabiSiteBaseUrl,
+      Value<String> anitabiStaticDataBaseUrl,
+      Value<String> anitabiApiBaseUrl,
+      Value<String> anitabiOfficialImageBaseUrl,
+      Value<String> anitabiMirrorImageBaseUrl,
       Value<String> navigationApp,
       Value<String> customXyzTileUrl,
       Value<String> customMapLibreStyleUrl,
@@ -9107,6 +9538,8 @@ typedef $$AppSettingsEntriesTableCreateCompanionBuilder =
       Value<bool> autoSaveComparisonToGallery,
       Value<bool> comparisonShowPilgrimName,
       Value<String> comparisonPilgrimName,
+      Value<String> comparisonExportConfigJson,
+      Value<bool> comparisonExportConfigMigrated,
       Value<String> customThemeColorName,
       Value<int> customThemeColorValue,
       Value<String> customThemeColorsJson,
@@ -9139,6 +9572,11 @@ typedef $$AppSettingsEntriesTableUpdateCompanionBuilder =
       Value<String> mapTileProvider,
       Value<String> openFreeMapStyle,
       Value<String> anitabiImageSource,
+      Value<String> anitabiSiteBaseUrl,
+      Value<String> anitabiStaticDataBaseUrl,
+      Value<String> anitabiApiBaseUrl,
+      Value<String> anitabiOfficialImageBaseUrl,
+      Value<String> anitabiMirrorImageBaseUrl,
       Value<String> navigationApp,
       Value<String> customXyzTileUrl,
       Value<String> customMapLibreStyleUrl,
@@ -9146,6 +9584,8 @@ typedef $$AppSettingsEntriesTableUpdateCompanionBuilder =
       Value<bool> autoSaveComparisonToGallery,
       Value<bool> comparisonShowPilgrimName,
       Value<String> comparisonPilgrimName,
+      Value<String> comparisonExportConfigJson,
+      Value<bool> comparisonExportConfigMigrated,
       Value<String> customThemeColorName,
       Value<int> customThemeColorValue,
       Value<String> customThemeColorsJson,
@@ -9242,6 +9682,31 @@ class $$AppSettingsEntriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get anitabiSiteBaseUrl => $composableBuilder(
+    column: $table.anitabiSiteBaseUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get anitabiStaticDataBaseUrl => $composableBuilder(
+    column: $table.anitabiStaticDataBaseUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get anitabiApiBaseUrl => $composableBuilder(
+    column: $table.anitabiApiBaseUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get anitabiOfficialImageBaseUrl => $composableBuilder(
+    column: $table.anitabiOfficialImageBaseUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get anitabiMirrorImageBaseUrl => $composableBuilder(
+    column: $table.anitabiMirrorImageBaseUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get navigationApp => $composableBuilder(
     column: $table.navigationApp,
     builder: (column) => ColumnFilters(column),
@@ -9274,6 +9739,16 @@ class $$AppSettingsEntriesTableFilterComposer
 
   ColumnFilters<String> get comparisonPilgrimName => $composableBuilder(
     column: $table.comparisonPilgrimName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get comparisonExportConfigJson => $composableBuilder(
+    column: $table.comparisonExportConfigJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get comparisonExportConfigMigrated => $composableBuilder(
+    column: $table.comparisonExportConfigMigrated,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -9427,6 +9902,31 @@ class $$AppSettingsEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get anitabiSiteBaseUrl => $composableBuilder(
+    column: $table.anitabiSiteBaseUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get anitabiStaticDataBaseUrl => $composableBuilder(
+    column: $table.anitabiStaticDataBaseUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get anitabiApiBaseUrl => $composableBuilder(
+    column: $table.anitabiApiBaseUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get anitabiOfficialImageBaseUrl => $composableBuilder(
+    column: $table.anitabiOfficialImageBaseUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get anitabiMirrorImageBaseUrl => $composableBuilder(
+    column: $table.anitabiMirrorImageBaseUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get navigationApp => $composableBuilder(
     column: $table.navigationApp,
     builder: (column) => ColumnOrderings(column),
@@ -9461,6 +9961,17 @@ class $$AppSettingsEntriesTableOrderingComposer
     column: $table.comparisonPilgrimName,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get comparisonExportConfigJson => $composableBuilder(
+    column: $table.comparisonExportConfigJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get comparisonExportConfigMigrated =>
+      $composableBuilder(
+        column: $table.comparisonExportConfigMigrated,
+        builder: (column) => ColumnOrderings(column),
+      );
 
   ColumnOrderings<String> get customThemeColorName => $composableBuilder(
     column: $table.customThemeColorName,
@@ -9606,6 +10117,31 @@ class $$AppSettingsEntriesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get anitabiSiteBaseUrl => $composableBuilder(
+    column: $table.anitabiSiteBaseUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get anitabiStaticDataBaseUrl => $composableBuilder(
+    column: $table.anitabiStaticDataBaseUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get anitabiApiBaseUrl => $composableBuilder(
+    column: $table.anitabiApiBaseUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get anitabiOfficialImageBaseUrl => $composableBuilder(
+    column: $table.anitabiOfficialImageBaseUrl,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get anitabiMirrorImageBaseUrl => $composableBuilder(
+    column: $table.anitabiMirrorImageBaseUrl,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get navigationApp => $composableBuilder(
     column: $table.navigationApp,
     builder: (column) => column,
@@ -9640,6 +10176,17 @@ class $$AppSettingsEntriesTableAnnotationComposer
     column: $table.comparisonPilgrimName,
     builder: (column) => column,
   );
+
+  GeneratedColumn<String> get comparisonExportConfigJson => $composableBuilder(
+    column: $table.comparisonExportConfigJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get comparisonExportConfigMigrated =>
+      $composableBuilder(
+        column: $table.comparisonExportConfigMigrated,
+        builder: (column) => column,
+      );
 
   GeneratedColumn<String> get customThemeColorName => $composableBuilder(
     column: $table.customThemeColorName,
@@ -9769,6 +10316,12 @@ class $$AppSettingsEntriesTableTableManager
                 Value<String> mapTileProvider = const Value.absent(),
                 Value<String> openFreeMapStyle = const Value.absent(),
                 Value<String> anitabiImageSource = const Value.absent(),
+                Value<String> anitabiSiteBaseUrl = const Value.absent(),
+                Value<String> anitabiStaticDataBaseUrl = const Value.absent(),
+                Value<String> anitabiApiBaseUrl = const Value.absent(),
+                Value<String> anitabiOfficialImageBaseUrl =
+                    const Value.absent(),
+                Value<String> anitabiMirrorImageBaseUrl = const Value.absent(),
                 Value<String> navigationApp = const Value.absent(),
                 Value<String> customXyzTileUrl = const Value.absent(),
                 Value<String> customMapLibreStyleUrl = const Value.absent(),
@@ -9776,6 +10329,9 @@ class $$AppSettingsEntriesTableTableManager
                 Value<bool> autoSaveComparisonToGallery = const Value.absent(),
                 Value<bool> comparisonShowPilgrimName = const Value.absent(),
                 Value<String> comparisonPilgrimName = const Value.absent(),
+                Value<String> comparisonExportConfigJson = const Value.absent(),
+                Value<bool> comparisonExportConfigMigrated =
+                    const Value.absent(),
                 Value<String> customThemeColorName = const Value.absent(),
                 Value<int> customThemeColorValue = const Value.absent(),
                 Value<String> customThemeColorsJson = const Value.absent(),
@@ -9808,6 +10364,11 @@ class $$AppSettingsEntriesTableTableManager
                 mapTileProvider: mapTileProvider,
                 openFreeMapStyle: openFreeMapStyle,
                 anitabiImageSource: anitabiImageSource,
+                anitabiSiteBaseUrl: anitabiSiteBaseUrl,
+                anitabiStaticDataBaseUrl: anitabiStaticDataBaseUrl,
+                anitabiApiBaseUrl: anitabiApiBaseUrl,
+                anitabiOfficialImageBaseUrl: anitabiOfficialImageBaseUrl,
+                anitabiMirrorImageBaseUrl: anitabiMirrorImageBaseUrl,
                 navigationApp: navigationApp,
                 customXyzTileUrl: customXyzTileUrl,
                 customMapLibreStyleUrl: customMapLibreStyleUrl,
@@ -9815,6 +10376,8 @@ class $$AppSettingsEntriesTableTableManager
                 autoSaveComparisonToGallery: autoSaveComparisonToGallery,
                 comparisonShowPilgrimName: comparisonShowPilgrimName,
                 comparisonPilgrimName: comparisonPilgrimName,
+                comparisonExportConfigJson: comparisonExportConfigJson,
+                comparisonExportConfigMigrated: comparisonExportConfigMigrated,
                 customThemeColorName: customThemeColorName,
                 customThemeColorValue: customThemeColorValue,
                 customThemeColorsJson: customThemeColorsJson,
@@ -9848,6 +10411,12 @@ class $$AppSettingsEntriesTableTableManager
                 Value<String> mapTileProvider = const Value.absent(),
                 Value<String> openFreeMapStyle = const Value.absent(),
                 Value<String> anitabiImageSource = const Value.absent(),
+                Value<String> anitabiSiteBaseUrl = const Value.absent(),
+                Value<String> anitabiStaticDataBaseUrl = const Value.absent(),
+                Value<String> anitabiApiBaseUrl = const Value.absent(),
+                Value<String> anitabiOfficialImageBaseUrl =
+                    const Value.absent(),
+                Value<String> anitabiMirrorImageBaseUrl = const Value.absent(),
                 Value<String> navigationApp = const Value.absent(),
                 Value<String> customXyzTileUrl = const Value.absent(),
                 Value<String> customMapLibreStyleUrl = const Value.absent(),
@@ -9855,6 +10424,9 @@ class $$AppSettingsEntriesTableTableManager
                 Value<bool> autoSaveComparisonToGallery = const Value.absent(),
                 Value<bool> comparisonShowPilgrimName = const Value.absent(),
                 Value<String> comparisonPilgrimName = const Value.absent(),
+                Value<String> comparisonExportConfigJson = const Value.absent(),
+                Value<bool> comparisonExportConfigMigrated =
+                    const Value.absent(),
                 Value<String> customThemeColorName = const Value.absent(),
                 Value<int> customThemeColorValue = const Value.absent(),
                 Value<String> customThemeColorsJson = const Value.absent(),
@@ -9887,6 +10459,11 @@ class $$AppSettingsEntriesTableTableManager
                 mapTileProvider: mapTileProvider,
                 openFreeMapStyle: openFreeMapStyle,
                 anitabiImageSource: anitabiImageSource,
+                anitabiSiteBaseUrl: anitabiSiteBaseUrl,
+                anitabiStaticDataBaseUrl: anitabiStaticDataBaseUrl,
+                anitabiApiBaseUrl: anitabiApiBaseUrl,
+                anitabiOfficialImageBaseUrl: anitabiOfficialImageBaseUrl,
+                anitabiMirrorImageBaseUrl: anitabiMirrorImageBaseUrl,
                 navigationApp: navigationApp,
                 customXyzTileUrl: customXyzTileUrl,
                 customMapLibreStyleUrl: customMapLibreStyleUrl,
@@ -9894,6 +10471,8 @@ class $$AppSettingsEntriesTableTableManager
                 autoSaveComparisonToGallery: autoSaveComparisonToGallery,
                 comparisonShowPilgrimName: comparisonShowPilgrimName,
                 comparisonPilgrimName: comparisonPilgrimName,
+                comparisonExportConfigJson: comparisonExportConfigJson,
+                comparisonExportConfigMigrated: comparisonExportConfigMigrated,
                 customThemeColorName: customThemeColorName,
                 customThemeColorValue: customThemeColorValue,
                 customThemeColorsJson: customThemeColorsJson,

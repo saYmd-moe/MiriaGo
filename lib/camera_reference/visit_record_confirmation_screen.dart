@@ -22,6 +22,8 @@ import 'camera_storage_stub.dart'
     if (dart.library.io) 'camera_storage_io.dart'
     as camera_storage;
 
+enum VisitRecordConfirmationResult { saved, completed }
+
 class VisitRecordConfirmationScreen extends StatefulWidget {
   const VisitRecordConfirmationScreen({
     required this.point,
@@ -148,10 +150,9 @@ class _VisitRecordConfirmationScreenState
       context,
     ).showReplacingSnackBar(SnackBar(content: Text(message)));
     if (completePoint) {
-      Navigator.of(context).pop();
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(VisitRecordConfirmationResult.completed);
     } else {
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(VisitRecordConfirmationResult.saved);
     }
   }
 
