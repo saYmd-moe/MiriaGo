@@ -1062,10 +1062,16 @@ void main() {
     final createEntry = find.byKey(
       const ValueKey('plan-point-group-create-entry'),
     );
-    await tester.dragUntilVisible(
-      createEntry,
-      find.byType(ListView).last,
-      const Offset(0, -240),
+    expect(createEntry, findsOneWidget);
+    expect(
+      tester.getBottomLeft(createEntry).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey('plan-point-group-options-list')),
+            )
+            .dy,
+      ),
     );
     await tester.tap(createEntry);
     await tester.pumpAndSettle();
