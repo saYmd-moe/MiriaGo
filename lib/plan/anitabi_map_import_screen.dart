@@ -20,6 +20,7 @@ import '../data/reference_image_cache_stub.dart'
     as reference_image_cache;
 import '../widgets/copyable_text.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/auto_caching_reference_thumbnail.dart';
 import '../widgets/image_viewer_screen.dart';
 import '../widgets/image_load_limiter.dart';
@@ -32,7 +33,7 @@ import '../utils/selected_item_order.dart';
 import 'nearest_group_assign_screen.dart';
 import 'pilgrimage_models.dart';
 import 'pilgrimage_work_dropdown.dart';
-import 'plan_group_manager_screen.dart';
+import 'plan_group_picker_sheet.dart';
 import 'work_manager_screen.dart';
 
 class AnitabiMapImportScreen extends StatefulWidget {
@@ -891,6 +892,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       );
     });
 
+    var shouldShowOrganizeGuide = false;
     try {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showReplacingSnackBar(
@@ -1022,9 +1024,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
           ),
         ),
       );
-      if (pilgrimagePoints.length > 1) {
-        await _showOrganizeImportedPointsGuide(pilgrimagePoints.length);
-      }
+      shouldShowOrganizeGuide = pilgrimagePoints.length > 1;
     } catch (error, stackTrace) {
       debugPrint('Failed to import Anitabi points: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -1035,12 +1035,28 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       ScaffoldMessenger.of(
         context,
       ).showReplacingSnackBar(SnackBar(content: Text(failureMessage)));
+      return;
     } finally {
       if (mounted) {
         setState(() {
           _isImporting = false;
           _importProgress = null;
         });
+      }
+    }
+
+    if (!mounted || !shouldShowOrganizeGuide) {
+      return;
+    }
+    try {
+      await _showOrganizeImportedPointsGuide(pilgrimagePoints);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to organize imported Anitabi points: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showReplacingSnackBar(
+          const SnackBar(content: Text('点位已导入，但整理流程打开失败，可以稍后在计划中调整片区。')),
+        );
       }
     }
   }
@@ -1055,41 +1071,21 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       title: title,
       message: message,
       confirmLabel: confirmLabel,
-      icon: Icons.playlist_add_check_outlined,
     );
   }
 
-  Future<void> _showOrganizeImportedPointsGuide(int importedCount) async {
+  Future<void> _showOrganizeImportedPointsGuide(
+    List<PilgrimagePoint> importedPoints,
+  ) async {
     final action = await showDialog<_ImportOrganizeAction>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('整理刚导入的点位'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('已导入 $importedCount 个点位，并暂时放在未分组。可以先创建片区和关键点，再按最近关键点快速分配。'),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: () => Navigator.of(
-                context,
-              ).pop(_ImportOrganizeAction.nearestAssign),
-              child: const Text('最近分配'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_ImportOrganizeAction.groupManager),
-              child: const Text('片区管理'),
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(_ImportOrganizeAction.later),
-              child: const Text('稍后'),
-            ),
-          ],
-        ),
+      builder: (context) => _ImportOrganizeDialog(
+        importedCount: importedPoints.length,
+        onNearestAssign: () =>
+            Navigator.of(context).pop(_ImportOrganizeAction.nearestAssign),
+        onAssignToGroup: () =>
+            Navigator.of(context).pop(_ImportOrganizeAction.assignToGroup),
+        onLater: () => Navigator.of(context).pop(_ImportOrganizeAction.later),
       ),
     );
     if (!mounted || action == null || action == _ImportOrganizeAction.later) {
@@ -1097,8 +1093,10 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
     }
 
     switch (action) {
-      case _ImportOrganizeAction.groupManager:
-        await _openGroupManager();
+      case _ImportOrganizeAction.assignToGroup:
+        await _assignImportedPointsToGroup(
+          importedPoints.map((point) => point.id).toSet(),
+        );
       case _ImportOrganizeAction.nearestAssign:
         await _openNearestAssign();
       case _ImportOrganizeAction.later:
@@ -1106,18 +1104,111 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
     }
   }
 
-  Future<void> _openGroupManager() async {
-    await Navigator.of(context).push<bool>(
-      appScaledMaterialPageRoute<bool>(
-        settings: _settings,
-        builder: (_) => PlanGroupManagerScreen(
-          plan: _importedPlan,
-          repository: widget.repository,
-        ),
-      ),
+  Future<void> _assignImportedPointsToGroup(Set<String> pointIds) async {
+    const ungroupedOptionId = '__ungrouped__';
+    final groups = _importedPlan.groups.toList(growable: false)
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final selectedGroupId = await showPlanGroupSelectionSheet(
+      context: context,
+      title: '分配到片区',
+      subtitle: '选择一个片区作为刚导入点位的所属片区',
+      selectedOptionId: ungroupedOptionId,
+      options: [
+        const PlanGroupSelectionOption(id: ungroupedOptionId, title: '未分入片区'),
+        for (final group in groups)
+          PlanGroupSelectionOption(id: group.id, title: group.name),
+      ],
+      onCreateOption: () async {
+        final created = await _createGroupForAssignment();
+        return created == null
+            ? null
+            : PlanGroupSelectionOption(id: created.id, title: created.name);
+      },
     );
-    if (mounted) {
-      await _reloadImportedPlan();
+    if (!mounted || selectedGroupId == null) {
+      return;
+    }
+
+    final groupId = selectedGroupId == ungroupedOptionId
+        ? null
+        : selectedGroupId;
+    try {
+      final updatedPlan = await widget.repository.movePointsToGroup(
+        planId: _importedPlan.id,
+        pointIds: pointIds,
+        groupId: groupId,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _replaceImportedPlan(updatedPlan);
+        _didUpdatePlan = true;
+      });
+      final groupName = groupId == null
+          ? '未分入片区'
+          : updatedPlan.groups
+                    .where((group) => group.id == groupId)
+                    .map((group) => group.name)
+                    .firstOrNull ??
+                '所选片区';
+      ScaffoldMessenger.of(context).showReplacingSnackBar(
+        SnackBar(content: Text('已将 ${pointIds.length} 个点位分配到「$groupName」')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showReplacingSnackBar(const SnackBar(content: Text('点位分配失败，请稍后重试。')));
+      }
+    }
+  }
+
+  Future<PilgrimagePlanGroup?> _createGroupForAssignment() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => const _ImportedPointsCreateGroupDialog(),
+    );
+    final trimmedName = name?.trim();
+    if (trimmedName == null || trimmedName.isEmpty || !mounted) {
+      return null;
+    }
+
+    final nextOrderIndex = _importedPlan.groups.isEmpty
+        ? 0
+        : _importedPlan.groups
+                  .map((group) => group.orderIndex)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
+    final now = DateTime.now();
+    final group = PilgrimagePlanGroup(
+      id: 'group-${now.microsecondsSinceEpoch}',
+      name: trimmedName,
+      orderIndex: nextOrderIndex,
+      createdAt: now,
+    );
+    try {
+      final updatedPlan = await widget.repository.createPlanGroup(
+        planId: _importedPlan.id,
+        group: group,
+      );
+      if (!mounted) {
+        return null;
+      }
+      setState(() {
+        _replaceImportedPlan(updatedPlan);
+        _didUpdatePlan = true;
+      });
+      return updatedPlan.groups
+          .where((candidate) => candidate.id == group.id)
+          .firstOrNull;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showReplacingSnackBar(const SnackBar(content: Text('片区创建失败，请稍后重试。')));
+      }
+      return null;
     }
   }
 
@@ -1770,7 +1861,139 @@ class _ImportProgress {
   }
 }
 
-enum _ImportOrganizeAction { later, groupManager, nearestAssign }
+class _ImportOrganizeDialog extends StatelessWidget {
+  const _ImportOrganizeDialog({
+    required this.importedCount,
+    required this.onNearestAssign,
+    required this.onAssignToGroup,
+    required this.onLater,
+  });
+
+  final int importedCount;
+  final VoidCallback onNearestAssign;
+  final VoidCallback onAssignToGroup;
+  final VoidCallback onLater;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                '整理刚导入的点位',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text.rich(
+                TextSpan(
+                  text: '已导入 ',
+                  children: [
+                    TextSpan(
+                      text: '$importedCount 个点位',
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const TextSpan(text: '，并暂时放在未分组。可以直接分配到片区，或按最近关键点快速分配。'),
+                  ],
+                ),
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  height: 1.55,
+                  letterSpacing: 0,
+                ),
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: onNearestAssign,
+                child: const Text('最近分配'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: onAssignToGroup,
+                child: const Text('分配到片区'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(onPressed: onLater, child: const Text('稍后')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportedPointsCreateGroupDialog extends StatefulWidget {
+  const _ImportedPointsCreateGroupDialog();
+
+  @override
+  State<_ImportedPointsCreateGroupDialog> createState() =>
+      _ImportedPointsCreateGroupDialogState();
+}
+
+class _ImportedPointsCreateGroupDialogState
+    extends State<_ImportedPointsCreateGroupDialog> {
+  final _controller = TextEditingController();
+  String? _errorText;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = _controller.text.trim();
+    if (name.isEmpty) {
+      setState(() => _errorText = '片区名不能为空');
+      return;
+    }
+    Navigator.of(context).pop(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppInputDialog(
+      title: '新建片区',
+      content: AppDialogField(
+        label: '片区名称',
+        child: TextField(
+          key: const ValueKey('anitabi-import-group-name-field'),
+          controller: _controller,
+          autofocus: true,
+          decoration: appDialogInputDecoration(errorText: _errorText),
+          textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() => _errorText = null);
+            }
+          },
+          onSubmitted: (_) => _submit(),
+        ),
+      ),
+      confirmLabel: '创建',
+      onConfirm: _submit,
+    );
+  }
+}
+
+enum _ImportOrganizeAction { later, assignToGroup, nearestAssign }
 
 class _ThumbnailCacheResult {
   const _ThumbnailCacheResult._({

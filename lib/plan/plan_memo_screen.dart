@@ -3,6 +3,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../app_theme.dart';
+import '../widgets/confirm_action_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_plan_controller.dart';
 
@@ -67,24 +68,16 @@ class _PlanMemoScreenState extends State<PlanMemoScreen> {
     if (!_isEditing || !_hasUnsavedChanges) {
       return true;
     }
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('放弃未保存内容？'),
-        content: const Text('当前备忘录还有未保存的修改。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('继续编辑'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('放弃'),
-          ),
-        ],
-      ),
+    final discard = await showConfirmActionDialog(
+      context,
+      title: '放弃未保存内容？',
+      message: '当前备忘录还有未保存的修改。',
+      confirmLabel: '放弃',
+      cancelLabel: '继续编辑',
+      notice: '未保存的修改不会被保留',
+      emphasizedValues: const ['未保存的修改'],
     );
-    return discard ?? false;
+    return discard;
   }
 
   Future<void> _handleBack() async {

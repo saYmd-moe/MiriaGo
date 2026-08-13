@@ -14,6 +14,7 @@ import '../plan/plan_group_utils.dart';
 import '../plan/reference_image_status.dart';
 import '../point_detail/point_detail_sheet.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/confirm_action_dialog.dart';
 import '../widgets/anitabi_network_image.dart';
 import '../widgets/image_viewer_screen.dart';
 import '../widgets/reference_image_placeholder.dart';
@@ -63,16 +64,6 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
         title: const Text('记录详情'),
         actions: [
           IconButton(
-            tooltip: '自动调色',
-            onPressed: () => _openColorGrading(context),
-            icon: const Icon(Icons.auto_fix_high_outlined),
-          ),
-          IconButton(
-            tooltip: '导出对比图',
-            onPressed: () => _exportComparison(context, resolvedPoint),
-            icon: const Icon(Icons.ios_share_outlined),
-          ),
-          IconButton(
             tooltip: '删除记录',
             onPressed: () => _confirmDelete(context),
             icon: const Icon(Icons.delete_outline),
@@ -80,6 +71,7 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
         ],
       ),
       body: ListView(
+        key: const ValueKey('record-detail-scroll-view'),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           _RecordComparisonPanel(
@@ -88,72 +80,18 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
             referenceImageUrl: referenceImageUrl,
           ),
           const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      resolvedPoint?.name ?? _record.displayPointNameSnapshot,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      resolvedPoint == null
-                          ? _recordSnapshotSubtitle(_record)
-                          : '${resolvedPoint.work.title} / ${resolvedPoint.subtitle}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (resolvedPoint != null) ...[
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: OutlinedButton(
-                    onPressed: () => _showPointDetail(resolvedPoint),
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      minimumSize: Size.zero,
-                    ),
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.place_outlined, size: 18),
-                        SizedBox(height: 3),
-                        Text(
-                          '点位详情',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 16),
           if (resolvedPoint == null) ...[
             const _OrphanRecordNotice(),
             const SizedBox(height: 12),
           ],
-          _DetailSection(
+          _RecordInfoDashboard(
+            title: resolvedPoint?.name ?? _record.displayPointNameSnapshot,
+            subtitle: resolvedPoint == null
+                ? _recordSnapshotSubtitle(_record)
+                : '${resolvedPoint.work.title} / ${resolvedPoint.subtitle}',
+            onHeaderTap: resolvedPoint == null
+                ? null
+                : () => _showPointDetail(resolvedPoint),
             children: [
               _DetailRow(
                 icon: Icons.schedule,
@@ -173,6 +111,11 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
                 ),
               ],
             ],
+          ),
+          const SizedBox(height: 12),
+          _RecordActionPanel(
+            onColorGrading: () => _openColorGrading(context),
+            onExportComparison: () => _exportComparison(context, resolvedPoint),
           ),
         ],
       ),
@@ -265,38 +208,46 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('删除记录'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('只删除这条巡礼记录，不会改变点位完成状态。'),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: deleteFiles,
-                        onChanged: (v) =>
-                            setState(() => deleteFiles = v ?? false),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
+            return ConfirmActionDialog(
+              title: '删除记录',
+              message: '将删除这条巡礼记录，不会改变点位完成状态。',
+              confirmLabel: '删除',
+              destructive: true,
+              emphasizedValues: const ['这条巡礼记录'],
+              additionalContent: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => deleteFiles = !deleteFiles),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: deleteFiles,
+                      checkColor: Colors.white,
+                      fillColor: WidgetStateProperty.resolveWith((states) {
+                        return states.contains(WidgetState.selected)
+                            ? ConfirmActionDialog.dangerColor
+                            : Colors.transparent;
+                      }),
+                      side: const BorderSide(
+                        color: AppColors.border,
+                        width: 1.5,
                       ),
-                      const Text('同时删除照片文件'),
-                    ],
-                  ),
-                ],
+                      onChanged: (value) =>
+                          setState(() => deleteFiles = value ?? false),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      '同时删除照片文件',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('删除'),
-                ),
-              ],
             );
           },
         );
@@ -656,15 +607,22 @@ class _OrphanRecordNotice extends StatelessWidget {
   }
 }
 
-class _DetailSection extends StatelessWidget {
-  const _DetailSection({required this.children});
+class _RecordInfoDashboard extends StatelessWidget {
+  const _RecordInfoDashboard({
+    required this.title,
+    required this.subtitle,
+    required this.children,
+    this.onHeaderTap,
+  });
 
+  final String title;
+  final String subtitle;
   final List<Widget> children;
+  final VoidCallback? onHeaderTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
@@ -672,11 +630,198 @@ class _DetailSection extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var index = 0; index < children.length; index += 1) ...[
-            if (index > 0) const Divider(height: 18),
-            children[index],
-          ],
+          InkWell(
+            onTap: onHeaderTap,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (onHeaderTap != null) ...[
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSecondary,
+                      size: 24,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const _DashboardBorder(),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                for (var index = 0; index < children.length; index += 1) ...[
+                  if (index > 0) const _DashboardBorder(verticalMargin: 9),
+                  children[index],
+                ],
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _DashboardBorder extends StatelessWidget {
+  const _DashboardBorder({this.verticalMargin = 0});
+
+  final double verticalMargin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 1,
+      margin: EdgeInsets.symmetric(vertical: verticalMargin),
+      color: AppColors.border.withValues(alpha: 0.65),
+    );
+  }
+}
+
+class _RecordActionPanel extends StatelessWidget {
+  const _RecordActionPanel({
+    required this.onColorGrading,
+    required this.onExportComparison,
+  });
+
+  final VoidCallback onColorGrading;
+  final VoidCallback onExportComparison;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SizedBox(
+        height: 56,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _RecordAction(
+                icon: Icons.auto_fix_high_outlined,
+                title: '自动调色',
+                subtitle: '优化巡礼照片',
+                onTap: onColorGrading,
+              ),
+            ),
+            const VerticalDivider(
+              width: 9,
+              indent: 8,
+              endIndent: 8,
+              color: AppColors.border,
+            ),
+            Expanded(
+              child: _RecordAction(
+                icon: Icons.ios_share_outlined,
+                title: '导出对比图',
+                subtitle: '生成分享图片',
+                onTap: onExportComparison,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecordAction extends StatelessWidget {
+  const _RecordAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          height: 56,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                Icon(icon, size: 20, color: AppColors.textPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

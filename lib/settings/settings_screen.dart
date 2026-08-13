@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -15,6 +17,8 @@ import '../records/comparison_export_config_editor.dart';
 import '../records/comparison_export_config_storage_stub.dart'
     if (dart.library.io) '../records/comparison_export_config_storage_io.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 
 bool get _showFutureThemeModeSettings => false;
@@ -334,26 +338,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmResetSettings() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('恢复初始设置'),
-          content: const Text('所有外观、拍摄和地图设置将恢复为默认值。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('恢复'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '恢复初始设置',
+      message: '所有外观、拍摄和地图设置将恢复为默认值。',
+      confirmLabel: '恢复',
+      notice: '恢复后仍可重新调整各项设置',
+      emphasizedValues: const ['所有外观、拍摄和地图设置'],
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     const settings = AppSettings();
@@ -400,36 +393,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(title),
+        return AppInputDialog(
+          title: title,
           content: Form(
             key: formKey,
-            child: TextFormField(
-              controller: controller,
-              autofocus: true,
-              decoration: InputDecoration(
-                helperText: helperText,
-                border: const OutlineInputBorder(),
+            child: AppDialogField(
+              label: 'URL 地址',
+              child: TextFormField(
+                controller: controller,
+                autofocus: true,
+                decoration: appDialogInputDecoration(helperText: helperText),
+                keyboardType: TextInputType.url,
+                validator: (value) => validator(value ?? ''),
               ),
-              keyboardType: TextInputType.url,
-              validator: (value) => validator(value ?? ''),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (!formKey.currentState!.validate()) {
-                  return;
-                }
-                Navigator.of(context).pop(controller.text);
-              },
-              child: const Text('保存'),
-            ),
-          ],
+          confirmLabel: '保存',
+          onConfirm: () {
+            if (!formKey.currentState!.validate()) {
+              return;
+            }
+            Navigator.of(context).pop(controller.text);
+          },
         );
       },
     );
@@ -2863,17 +2848,21 @@ class _CustomAspectRatioDialogState extends State<_CustomAspectRatioDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('\u81ea\u5b9a\u4e49\u6bd4\u4f8b'),
+    return AppInputDialog(
+      title: '\u81ea\u5b9a\u4e49\u6bd4\u4f8b',
       content: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Expanded(
-            child: TextField(
-              controller: _widthController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+            child: AppDialogField(
+              label: '\u5bbd',
+              child: TextField(
+                controller: _widthController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: appDialogInputDecoration(),
               ),
-              decoration: const InputDecoration(labelText: '\u5bbd'),
             ),
           ),
           const Padding(
@@ -2884,24 +2873,22 @@ class _CustomAspectRatioDialogState extends State<_CustomAspectRatioDialog> {
             ),
           ),
           Expanded(
-            child: TextField(
-              controller: _heightController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
+            child: AppDialogField(
+              label: '\u9ad8',
+              child: TextField(
+                controller: _heightController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: appDialogInputDecoration(),
+                onSubmitted: (_) => _submit(),
               ),
-              decoration: const InputDecoration(labelText: '\u9ad8'),
-              onSubmitted: (_) => _submit(),
             ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('\u53d6\u6d88'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('\u4fdd\u5b58')),
-      ],
+      confirmLabel: '\u4fdd\u5b58',
+      onConfirm: _submit,
     );
   }
 }
@@ -3259,107 +3246,287 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('\u81ea\u5b9a\u4e49\u4e3b\u9898\u8272'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              height: 54,
-              decoration: BoxDecoration(
-                color: _color,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.border),
+    return AppInputDialog(
+      title: '\u81ea\u5b9a\u4e49\u4e3b\u9898\u8272',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            height: 54,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _color,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              _hexFromColor(_color),
+              style: TextStyle(
+                color: _color.computeLuminance() > 0.5
+                    ? AppColors.textPrimary
+                    : Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
               ),
             ),
-            const SizedBox(height: 14),
-            TextField(
+          ),
+          const SizedBox(height: 14),
+          AppDialogField(
+            label: '\u540d\u79f0',
+            child: TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: '\u540d\u79f0'),
+              decoration: appDialogInputDecoration(),
             ),
-            const SizedBox(height: 10),
-            TextField(
+          ),
+          const SizedBox(height: 10),
+          AppDialogField(
+            label: '\u8272\u53f7',
+            child: TextField(
+              key: const ValueKey('custom-theme-color-hex-field'),
               controller: _hexController,
-              decoration: const InputDecoration(
-                labelText: '\u8272\u53f7',
-                hintText: '#0F8B8D',
-              ),
+              decoration: appDialogInputDecoration(hintText: '#0F8B8D'),
               onChanged: (_) => _applyHex(),
               onSubmitted: (_) => _submit(),
             ),
-            const SizedBox(height: 14),
-            _ColorChannelSlider(
-              label: 'R',
-              value: _color.r.round(),
-              onChanged: (value) => _setColor(
-                Color.fromARGB(255, value, _color.g.round(), _color.b.round()),
-              ),
-            ),
-            _ColorChannelSlider(
-              label: 'G',
-              value: _color.g.round(),
-              onChanged: (value) => _setColor(
-                Color.fromARGB(255, _color.r.round(), value, _color.b.round()),
-              ),
-            ),
-            _ColorChannelSlider(
-              label: 'B',
-              value: _color.b.round(),
-              onChanged: (value) => _setColor(
-                Color.fromARGB(255, _color.r.round(), _color.g.round(), value),
-              ),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 14),
+          _HsvColorPalette(color: _color, onChanged: _setColor),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('\u53d6\u6d88'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('\u6dfb\u52a0')),
-      ],
+      confirmLabel: '\u6dfb\u52a0',
+      onConfirm: _submit,
     );
   }
 }
 
-class _ColorChannelSlider extends StatelessWidget {
-  const _ColorChannelSlider({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
+class _HsvColorPalette extends StatelessWidget {
+  const _HsvColorPalette({required this.color, required this.onChanged});
 
-  final String label;
-  final int value;
-  final ValueChanged<int> onChanged;
+  final Color color;
+  final ValueChanged<Color> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(width: 18, child: Text(label, style: _captionTextStyle)),
-        Expanded(
-          child: Slider(
-            value: value.toDouble(),
-            min: 0,
-            max: 255,
-            divisions: 255,
-            label: value.toString(),
-            onChanged: (next) => onChanged(next.round()),
-          ),
-        ),
-        SizedBox(
-          width: 34,
-          child: Text(
-            value.toString(),
-            textAlign: TextAlign.right,
-            style: _captionTextStyle,
-          ),
-        ),
-      ],
+    final hsv = HSVColor.fromColor(color);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final paletteSize = math.min(constraints.maxWidth - 44, 230.0);
+
+        void updateHueSaturation(Offset position) {
+          final hue = (position.dx.clamp(0, paletteSize) / paletteSize * 360)
+              .clamp(0.0, 359.999);
+          final saturation =
+              1 - position.dy.clamp(0, paletteSize) / paletteSize;
+          onChanged(
+            hsv
+                .withHue(hue)
+                .withSaturation(saturation)
+                .toColor()
+                .withAlpha(255),
+          );
+        }
+
+        void updateValue(double y) {
+          final value = 1 - y.clamp(0, paletteSize) / paletteSize;
+          onChanged(hsv.withValue(value).toColor().withAlpha(255));
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Semantics(
+              slider: true,
+              label: '色相和饱和度',
+              value:
+                  '色相 ${hsv.hue.round()} 度，饱和度 ${(hsv.saturation * 100).round()}%',
+              increasedValue:
+                  '色相 ${((hsv.hue + 5) % 360).round()} 度，饱和度 ${(hsv.saturation * 100).round()}%',
+              decreasedValue:
+                  '色相 ${((hsv.hue - 5) % 360).round()} 度，饱和度 ${(hsv.saturation * 100).round()}%',
+              onIncrease: () => onChanged(
+                hsv.withHue((hsv.hue + 5) % 360).toColor().withAlpha(255),
+              ),
+              onDecrease: () => onChanged(
+                hsv.withHue((hsv.hue - 5) % 360).toColor().withAlpha(255),
+              ),
+              child: GestureDetector(
+                key: const ValueKey('custom-theme-color-palette'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) =>
+                    updateHueSaturation(details.localPosition),
+                onPanDown: (details) =>
+                    updateHueSaturation(details.localPosition),
+                onPanUpdate: (details) =>
+                    updateHueSaturation(details.localPosition),
+                child: CustomPaint(
+                  size: Size.square(paletteSize),
+                  painter: _HueSaturationPalettePainter(hsv),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Semantics(
+              slider: true,
+              label: '明度',
+              value: '${(hsv.value * 100).round()}%',
+              increasedValue:
+                  '${((hsv.value + 0.05).clamp(0.0, 1.0) * 100).round()}%',
+              decreasedValue:
+                  '${((hsv.value - 0.05).clamp(0.0, 1.0) * 100).round()}%',
+              onIncrease: () => onChanged(
+                hsv
+                    .withValue((hsv.value + 0.05).clamp(0.0, 1.0))
+                    .toColor()
+                    .withAlpha(255),
+              ),
+              onDecrease: () => onChanged(
+                hsv
+                    .withValue((hsv.value - 0.05).clamp(0.0, 1.0))
+                    .toColor()
+                    .withAlpha(255),
+              ),
+              child: GestureDetector(
+                key: const ValueKey('custom-theme-color-value'),
+                behavior: HitTestBehavior.opaque,
+                onTapDown: (details) => updateValue(details.localPosition.dy),
+                onPanDown: (details) => updateValue(details.localPosition.dy),
+                onPanUpdate: (details) => updateValue(details.localPosition.dy),
+                child: CustomPaint(
+                  size: Size(28, paletteSize),
+                  painter: _ColorValuePainter(hsv),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
+  }
+}
+
+class _HueSaturationPalettePainter extends CustomPainter {
+  const _HueSaturationPalettePainter(this.hsv);
+
+  final HSVColor hsv;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final shape = RRect.fromRectAndRadius(rect, const Radius.circular(6));
+    canvas.save();
+    canvas.clipRRect(shape);
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [
+            Color(0xFFFF0000),
+            Color(0xFFFFFF00),
+            Color(0xFF00FF00),
+            Color(0xFF00FFFF),
+            Color(0xFF0000FF),
+            Color(0xFFFF00FF),
+            Color(0xFFFF0000),
+          ],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.transparent, Colors.white],
+        ).createShader(rect),
+    );
+    canvas.restore();
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = AppColors.border,
+    );
+
+    final selector = Offset(
+      hsv.hue / 360 * size.width,
+      (1 - hsv.saturation) * size.height,
+    );
+    canvas.drawCircle(
+      selector,
+      8,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..color = Colors.white,
+    );
+    canvas.drawCircle(
+      selector,
+      8,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = AppColors.textPrimary,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HueSaturationPalettePainter oldDelegate) {
+    return oldDelegate.hsv.hue != hsv.hue ||
+        oldDelegate.hsv.saturation != hsv.saturation;
+  }
+}
+
+class _ColorValuePainter extends CustomPainter {
+  const _ColorValuePainter(this.hsv);
+
+  final HSVColor hsv;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const barWidth = 12.0;
+    final rect = Rect.fromLTWH(
+      (size.width - barWidth) / 2,
+      0,
+      barWidth,
+      size.height,
+    );
+    final shape = RRect.fromRectAndRadius(rect, const Radius.circular(6));
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [hsv.withValue(1).toColor(), Colors.black],
+        ).createShader(rect),
+    );
+    canvas.drawRRect(
+      shape,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = AppColors.border,
+    );
+
+    final selector = Offset(size.width / 2, (1 - hsv.value) * size.height);
+    canvas.drawCircle(selector, 8, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      selector,
+      6,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = AppColors.textPrimary,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ColorValuePainter oldDelegate) {
+    return oldDelegate.hsv.hue != hsv.hue ||
+        oldDelegate.hsv.saturation != hsv.saturation ||
+        oldDelegate.hsv.value != hsv.value;
   }
 }
 

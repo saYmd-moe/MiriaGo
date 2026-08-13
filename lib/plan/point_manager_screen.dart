@@ -13,6 +13,7 @@ import '../data/user_reference_image_stub.dart'
 import '../point_detail/point_detail_sheet.dart';
 import '../utils/selected_item_order.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import 'add_points_screen.dart';
 import 'nearest_group_assign_screen.dart';
@@ -846,10 +847,10 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     final confirmed = await showConfirmActionDialog(
       context,
       title: '删除点位',
-      message: '确定从计划中删除「${point.name}」吗？',
+      message: '将从计划中删除「${point.name}」。',
       confirmLabel: '删除',
-      icon: Icons.delete_outline,
       destructive: true,
+      emphasizedValues: [point.name],
     );
     if (!confirmed || !mounted) {
       return;
@@ -870,10 +871,10 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     final confirmed = await showConfirmActionDialog(
       context,
       title: '批量删除点位',
-      message: '确定从计划中删除 ${_selectedPointIds.length} 个点位吗？',
+      message: '将从计划中删除 ${_selectedPointIds.length} 个点位。',
       confirmLabel: '删除',
-      icon: Icons.delete_outline,
       destructive: true,
+      emphasizedValues: ['${_selectedPointIds.length} 个点位'],
     );
     if (!confirmed || !mounted) {
       return;
@@ -1089,24 +1090,15 @@ class _PointManagerScreenState extends State<PointManagerScreen> {
     if (points.isEmpty) {
       return _showInfo('当前计划没有需要缓存的参考图');
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('缓存完整参考图'),
-        content: Text('将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('开始缓存'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '缓存完整参考图',
+      message: '将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。',
+      confirmLabel: '开始缓存',
+      notice: '建议在 Wi-Fi 环境下进行缓存',
+      emphasizedValues: ['${points.length} 张'],
     );
-    if (confirmed == true) {
+    if (confirmed) {
       await _cacheFullReferenceImages();
     }
   }
@@ -1151,28 +1143,26 @@ class _PointManagerCreateGroupDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('新建片区'),
-      content: TextField(
-        key: const ValueKey('point-manager-group-name-field'),
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: '片区名称', errorText: _errorText),
-        textInputAction: TextInputAction.done,
-        onChanged: (_) {
-          if (_errorText != null) {
-            setState(() => _errorText = null);
-          }
-        },
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+    return AppInputDialog(
+      title: '新建片区',
+      content: AppDialogField(
+        label: '片区名称',
+        child: TextField(
+          key: const ValueKey('point-manager-group-name-field'),
+          controller: _controller,
+          autofocus: true,
+          decoration: appDialogInputDecoration(errorText: _errorText),
+          textInputAction: TextInputAction.done,
+          onChanged: (_) {
+            if (_errorText != null) {
+              setState(() => _errorText = null);
+            }
+          },
+          onSubmitted: (_) => _submit(),
         ),
-        FilledButton(onPressed: _submit, child: const Text('创建')),
-      ],
+      ),
+      confirmLabel: '创建',
+      onConfirm: _submit,
     );
   }
 }
@@ -2003,56 +1993,50 @@ class _GroupAnchorMapPickerScreenState
     final result = await showDialog<LatLng>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('输入经纬度'),
+        return AppInputDialog(
+          title: '输入经纬度',
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: latitudeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
+              AppDialogField(
+                label: '纬度',
+                child: TextField(
+                  controller: latitudeController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                  decoration: appDialogInputDecoration(),
                 ),
-                decoration: const InputDecoration(labelText: '纬度'),
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: longitudeController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  signed: true,
-                  decimal: true,
+              const SizedBox(height: 14),
+              AppDialogField(
+                label: '经度',
+                child: TextField(
+                  controller: longitudeController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    signed: true,
+                    decimal: true,
+                  ),
+                  decoration: appDialogInputDecoration(),
                 ),
-                decoration: const InputDecoration(labelText: '经度'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final latitude = double.tryParse(
-                  latitudeController.text.trim(),
-                );
-                final longitude = double.tryParse(
-                  longitudeController.text.trim(),
-                );
-                if (latitude == null ||
-                    longitude == null ||
-                    latitude < -90 ||
-                    latitude > 90 ||
-                    longitude < -180 ||
-                    longitude > 180) {
-                  return;
-                }
-                Navigator.of(context).pop(LatLng(latitude, longitude));
-              },
-              child: const Text('确定'),
-            ),
-          ],
+          confirmLabel: '确定',
+          onConfirm: () {
+            final latitude = double.tryParse(latitudeController.text.trim());
+            final longitude = double.tryParse(longitudeController.text.trim());
+            if (latitude == null ||
+                longitude == null ||
+                latitude < -90 ||
+                latitude > 90 ||
+                longitude < -180 ||
+                longitude > 180) {
+              return;
+            }
+            Navigator.of(context).pop(LatLng(latitude, longitude));
+          },
         );
       },
     );

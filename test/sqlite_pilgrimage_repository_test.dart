@@ -2084,6 +2084,71 @@ void main() {
     expect(reloadedPlan.points[1].groupOrderIndex, 1);
   });
 
+  test(
+    'persists newly imported point group assignment across repository instances',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+
+      final repository = SqlitePilgrimageRepository(database: database);
+      final sourcePlan = await repository.loadActivePlan();
+      final targetPlan = await repository.createPlan(
+        name: 'Imported points',
+        area: 'Tokyo',
+      );
+      final importedPoints = sourcePlan.points
+          .take(2)
+          .map(
+            (point) => point.copyWith(
+              groupId: null,
+              groupOrderIndex: null,
+              source: PointSource.anitabi,
+            ),
+          )
+          .toList(growable: false);
+      final group = PilgrimagePlanGroup(
+        id: 'group-imported-points',
+        name: 'Imported area',
+        orderIndex: 0,
+        createdAt: DateTime(2026, 8, 10),
+      );
+
+      await repository.addPointsToPlan(
+        planId: targetPlan.id,
+        points: importedPoints,
+      );
+      await repository.createPlanGroup(planId: targetPlan.id, group: group);
+      await repository.movePointsToGroup(
+        planId: targetPlan.id,
+        pointIds: importedPoints.map((point) => point.id).toSet(),
+        groupId: group.id,
+      );
+
+      final reloadedRepository = SqlitePilgrimageRepository(database: database);
+      final reloadedPlan = (await reloadedRepository.loadPlans()).singleWhere(
+        (plan) => plan.id == targetPlan.id,
+      );
+      final reloadedPoints =
+          reloadedPlan.points
+              .where(
+                (point) => importedPoints.any((item) => item.id == point.id),
+              )
+              .toList(growable: false)
+            ..sort(
+              (a, b) =>
+                  (a.groupOrderIndex ?? -1).compareTo(b.groupOrderIndex ?? -1),
+            );
+
+      expect(reloadedPlan.groups.map((item) => item.id), contains(group.id));
+      expect(reloadedPoints, hasLength(2));
+      expect(
+        reloadedPoints.map((point) => point.groupId),
+        everyElement(group.id),
+      );
+      expect(reloadedPoints.map((point) => point.groupOrderIndex), [0, 1]);
+    },
+  );
+
   test('persists manual order inside a plan group', () async {
     final database = AppDatabase(NativeDatabase.memory());
     addTearDown(database.close);

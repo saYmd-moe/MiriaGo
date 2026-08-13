@@ -24,6 +24,7 @@ import 'package:miriago/plan/pilgrimage_plan_controller.dart';
 import 'package:miriago/records/records_screen.dart';
 import 'package:miriago/records/comparison_export_config.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
+import 'package:miriago/widgets/input_dialog.dart';
 import 'package:miriago/widgets/reference_image_placeholder.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
@@ -921,6 +922,41 @@ void main() {
     );
   });
 
+  testWidgets('record detail exposes actions and delete file choice', (
+    tester,
+  ) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('记录').last);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('record-card-sample-record-jr-uji-01')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('记录详情'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('删除记录'));
+    await tester.pumpAndSettle();
+    expect(find.text('同时删除照片文件'), findsOneWidget);
+    expect(find.byType(Checkbox), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('同时删除照片文件'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('自动调色'),
+      300,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('record-detail-scroll-view')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('自动调色'), findsOneWidget);
+    expect(find.text('导出对比图'), findsOneWidget);
+  });
+
   testWidgets('opens and edits plan memo from plan menu', (tester) async {
     await _pumpApp(tester);
 
@@ -1061,10 +1097,16 @@ void main() {
     final createEntry = find.byKey(
       const ValueKey('plan-point-group-create-entry'),
     );
-    await tester.dragUntilVisible(
-      createEntry,
-      find.byType(ListView).last,
-      const Offset(0, -240),
+    expect(createEntry, findsOneWidget);
+    expect(
+      tester.getBottomLeft(createEntry).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey('plan-point-group-options-list')),
+            )
+            .dy,
+      ),
     );
     await tester.tap(createEntry);
     await tester.pumpAndSettle();
@@ -1415,13 +1457,16 @@ void main() {
     expect(find.text('片区名不能为空'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(AlertDialog),
+        of: find.byType(AppInputDialog),
         matching: find.text('新建片区'),
       ),
       findsOneWidget,
     );
 
-    await tester.enterText(find.widgetWithText(TextField, '片区名称'), '新片区');
+    await tester.enterText(
+      find.byKey(const ValueKey('plan-group-name-field')),
+      '新片区',
+    );
     await tester.tap(find.text('创建'));
     await tester.pumpAndSettle();
 
@@ -1587,6 +1632,34 @@ void main() {
     expect(find.text('地图标记大小'), findsNothing);
     expect(find.text('片区范围半径'), findsNothing);
     expect(find.text('自动聚合密集点位'), findsNothing);
+  });
+
+  testWidgets('custom theme palette updates the hex color', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('外观设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自定义'));
+    await tester.pumpAndSettle();
+
+    final valueControl = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('custom-theme-color-value')),
+    );
+    valueControl.onTapDown!(TapDownDetails(localPosition: Offset.zero));
+    await tester.pump();
+
+    final palette = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('custom-theme-color-palette')),
+    );
+    palette.onTapDown!(TapDownDetails(localPosition: Offset.zero));
+    await tester.pump();
+
+    final hexField = tester.widget<TextField>(
+      find.byKey(const ValueKey('custom-theme-color-hex-field')),
+    );
+    expect(hexField.controller!.text, '#FF0000');
   });
 
   testWidgets('creates empty plan and shows add-points shell', (tester) async {
@@ -2963,7 +3036,121 @@ void main() {
 
     expect(find.text('没有找到这个 Anitabi 点位'), findsOneWidget);
   });
+
+  testWidgets('Anitabi bulk import creates a group and assigns points', (
+    tester,
+  ) async {
+    final repository = SamplePilgrimageRepository(plans: const []);
+    final plan = await repository.createPlan(name: '批量整理测试', area: '京都');
+    final anitabiClient = _FakeAnitabiClient(
+      pointsByBangumi: const {12345: _bulkImportPoints},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AnitabiMapImportScreen(
+          plan: plan,
+          repository: repository,
+          initialBangumiId: 12345,
+          anitabiClient: anitabiClient,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('添加所有点位'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加全部'));
+    await tester.pumpAndSettle();
+    expect(find.text('整理刚导入的点位'), findsOneWidget);
+
+    await tester.tap(find.text('分配到片区'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('plan-point-group-create-entry')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('anitabi-import-group-name-field')),
+      '新导入片区',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '创建'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新导入片区'));
+    await tester.pumpAndSettle();
+
+    final updatedPlan = await repository.loadActivePlan();
+    final group = updatedPlan.groups.singleWhere(
+      (group) => group.name == '新导入片区',
+    );
+    expect(updatedPlan.points, hasLength(2));
+    expect(
+      updatedPlan.points.every((point) => point.groupId == group.id),
+      true,
+    );
+  });
+
+  testWidgets(
+    'post-import organization failure does not report import failure',
+    (tester) async {
+      final repository = _FailingSettingsOnDemandRepository(plans: const []);
+      final plan = await repository.createPlan(name: '整理失败测试', area: '京都');
+      final anitabiClient = _FakeAnitabiClient(
+        pointsByBangumi: const {12345: _bulkImportPoints},
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AnitabiMapImportScreen(
+            plan: plan,
+            repository: repository,
+            initialBangumiId: 12345,
+            anitabiClient: anitabiClient,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      repository.failNextSettingsLoad = true;
+
+      await tester.tap(find.byTooltip('添加所有点位'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('添加全部'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('最近分配'));
+      await tester.pumpAndSettle();
+
+      final updatedPlan = await repository.loadActivePlan();
+      expect(updatedPlan.points, hasLength(2));
+      expect(find.textContaining('点位已导入，但整理流程打开失败'), findsOneWidget);
+      expect(find.textContaining('批量导入失败'), findsNothing);
+    },
+  );
 }
+
+const _bulkImportPoints = [
+  AnitabiPoint(
+    bangumiId: 12345,
+    id: 'bulk-1',
+    name: '批量点位 1',
+    subtitle: '场景 1',
+    position: LatLng(35, 135),
+    episodeLabel: 'EP 1',
+    referenceImageUrl: null,
+    origin: 'Anitabi',
+    originUrl: 'https://anitabi.cn/',
+  ),
+  AnitabiPoint(
+    bangumiId: 12345,
+    id: 'bulk-2',
+    name: '批量点位 2',
+    subtitle: '场景 2',
+    position: LatLng(35.001, 135.001),
+    episodeLabel: 'EP 2',
+    referenceImageUrl: null,
+    origin: 'Anitabi',
+    originUrl: 'https://anitabi.cn/',
+  ),
+];
 
 class _DelayedAddPointRepository extends SamplePilgrimageRepository {
   _DelayedAddPointRepository({super.plans});
@@ -2994,6 +3181,21 @@ class _FailingPlanOrderRepository extends SamplePilgrimageRepository {
   @override
   Future<void> reorderPlans({required List<String> orderedPlanIds}) {
     throw StateError('simulated persistence failure');
+  }
+}
+
+class _FailingSettingsOnDemandRepository extends SamplePilgrimageRepository {
+  _FailingSettingsOnDemandRepository({super.plans});
+
+  var failNextSettingsLoad = false;
+
+  @override
+  Future<AppSettings> loadAppSettings() {
+    if (failNextSettingsLoad) {
+      failNextSettingsLoad = false;
+      throw StateError('simulated settings failure');
+    }
+    return super.loadAppSettings();
   }
 }
 
