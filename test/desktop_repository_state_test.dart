@@ -10,6 +10,7 @@ void main() {
       const AppSettings(
         uiScale: 1.25,
         cameraCaptureAspectRatio: CameraPhotoAspectRatio.landscape16x9,
+        photoLocationStrategy: PhotoLocationStrategy.waitOnConfirmation,
         themePalette: AppThemePalette.miriaYellow,
         mapTileProvider: MapTileProvider.customMapLibreStyle,
         openFreeMapStyle: OpenFreeMapStyle.fiord,
@@ -71,6 +72,10 @@ void main() {
       decoded.settings.cameraCaptureAspectRatio,
       CameraPhotoAspectRatio.landscape16x9,
     );
+    expect(
+      decoded.settings.photoLocationStrategy,
+      PhotoLocationStrategy.waitOnConfirmation,
+    );
     expect(decoded.settings.themePalette, AppThemePalette.miriaYellow);
     expect(
       decoded.settings.mapTileProvider,
@@ -131,6 +136,10 @@ void main() {
     expect(
       decoded.plans.single.points.length,
       source.plans.single.points.length,
+    );
+    expect(
+      decoded.plans.single.points.map((point) => point.id),
+      sourcePlan.points.map((point) => point.id),
     );
     expect(
       decoded.visitRecords.map((record) => record.id),

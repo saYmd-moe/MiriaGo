@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:miriago/camera_reference/visit_record_confirmation_screen.dart';
+import 'package:miriago/camera_reference/photo_location.dart';
 import 'package:miriago/data/sample_pilgrimage_repository.dart';
 import 'package:miriago/plan/pilgrimage_models.dart';
 import 'package:miriago/plan/pilgrimage_plan_controller.dart';
@@ -54,6 +57,46 @@ void main() {
       expect(await route.popped, testCase.$2);
     });
   }
+
+  testWidgets('waits for location and writes it before enabling save', (
+    tester,
+  ) async {
+    final fixture = await _fixture();
+    addTearDown(fixture.controller.dispose);
+    final completer = Completer<PhotoLocationData>();
+    PhotoLocationData? writtenLocation;
+    await _pumpConfirmation(
+      tester,
+      fixture,
+      photoLocationStrategy: PhotoLocationStrategy.waitOnConfirmation,
+      resolvePhotoLocation: () => completer.future,
+      writePhotoLocation: (path, location) async {
+        writtenLocation = location;
+        return true;
+      },
+      settle: false,
+    );
+
+    expect(find.text('正在获取拍摄位置...'), findsOneWidget);
+    final saveButton = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(saveButton.onPressed, isNull);
+
+    final location = PhotoLocationData(
+      latitude: 35,
+      longitude: 139,
+      accuracy: 5,
+      timestamp: DateTime(2026, 8, 13),
+    );
+    completer.complete(location);
+    await tester.pumpAndSettle();
+
+    expect(writtenLocation, same(location));
+    expect(find.text('已写入照片定位信息'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+  });
 }
 
 class _Fixture {
@@ -75,8 +118,12 @@ Future<_Fixture> _fixture() async {
 
 Future<Route<dynamic>> _pumpConfirmation(
   WidgetTester tester,
-  _Fixture fixture,
-) async {
+  _Fixture fixture, {
+  PhotoLocationStrategy photoLocationStrategy = PhotoLocationStrategy.disabled,
+  Future<PhotoLocationData> Function()? resolvePhotoLocation,
+  PhotoLocationWriter? writePhotoLocation,
+  bool settle = true,
+}) async {
   tester.view.physicalSize = const Size(800, 2000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
@@ -95,11 +142,19 @@ Future<Route<dynamic>> _pumpConfirmation(
           photoPath: '/tmp/test-visit-photo.jpg',
           referenceMode: '叠影',
           settings: const AppSettings(),
+          photoLocationStrategy: photoLocationStrategy,
+          resolvePhotoLocation: resolvePhotoLocation,
+          writePhotoLocation: writePhotoLocation,
         ),
       },
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+    await tester.pump();
+  }
   return observer.confirmationRoute;
 }
 

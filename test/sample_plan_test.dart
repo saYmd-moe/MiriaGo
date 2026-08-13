@@ -145,6 +145,35 @@ void main() {
     );
   });
 
+  test('sample repository appends unique points in route order', () async {
+    final sourceRepository = SamplePilgrimageRepository();
+    final sourcePlan = await sourceRepository.loadActivePlan();
+    final repository = SamplePilgrimageRepository(plans: const []);
+    final plan = await repository.createPlan(name: '路线顺序', area: '东京');
+    final first = sourcePlan.points.first.copyWith(
+      id: 'sample-route-first',
+      groupId: null,
+      groupOrderIndex: null,
+    );
+    final second = sourcePlan.points[1].copyWith(
+      id: 'sample-route-second',
+      groupId: null,
+      groupOrderIndex: null,
+    );
+
+    final updated = await repository.addPointsToPlan(
+      planId: plan.id,
+      points: [
+        first,
+        first.copyWith(name: '重复点位'),
+        second,
+      ],
+    );
+
+    expect(updated.points.map((point) => point.id), [first.id, second.id]);
+    expect(updated.points.first.name, first.name);
+  });
+
   test('sample repository persists plan group progress setting', () async {
     final repository = SamplePilgrimageRepository();
 

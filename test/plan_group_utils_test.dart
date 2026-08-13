@@ -33,6 +33,54 @@ void main() {
     expect(groups.map((group) => group.id), ['late', 'early', 'middle']);
   });
 
+  test('ungrouped points keep their plan insertion order', () {
+    final fixture = _buildGroupedPlanFixture();
+    final routePoints = [
+      fixture.groupAFirst.copyWith(
+        id: 'route-first',
+        name: 'Z 路线第一站',
+        groupId: null,
+        groupOrderIndex: null,
+      ),
+      fixture.groupASecond.copyWith(
+        id: 'route-second',
+        name: 'A 路线第二站',
+        groupId: null,
+        groupOrderIndex: null,
+      ),
+      fixture.groupBFirst.copyWith(
+        id: 'route-third',
+        name: 'M 路线第三站',
+        groupId: null,
+        groupOrderIndex: null,
+      ),
+    ];
+    final plan = fixture.plan.copyWith(points: routePoints);
+
+    final ungrouped = planGroupBuckets(plan, const {}).last;
+
+    expect(ungrouped.points.map((point) => point.id), [
+      'route-first',
+      'route-second',
+      'route-third',
+    ]);
+  });
+
+  test('duplicate group order indexes keep their source order', () {
+    final fixture = _buildGroupedPlanFixture();
+    final points = [
+      fixture.groupAFirst.copyWith(id: 'same-order-first', name: 'Z'),
+      fixture.groupAFirst.copyWith(id: 'same-order-second', name: 'A'),
+    ];
+
+    final sorted = sortPointsByPlanOrder(points);
+
+    expect(sorted.map((point) => point.id), [
+      'same-order-first',
+      'same-order-second',
+    ]);
+  });
+
   test('next pending point stays in the same group first', () {
     final fixture = _buildGroupedPlanFixture();
     final nextPoint = nextPendingPointAfterCompletion(

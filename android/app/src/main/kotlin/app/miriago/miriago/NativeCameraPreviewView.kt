@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.location.Location
 import android.view.MotionEvent
 import android.view.View
 import androidx.camera.core.AspectRatio
@@ -92,7 +93,8 @@ class NativeCameraPreviewView(
             "setFlashMode" -> setFlashMode(call, result)
             "switchCamera" -> switchCamera(result)
             "switchLens" -> switchLens(result)
-            "takePicture" -> takePicture(result)
+            "takePicture" -> takePicture(call, result)
+            "writePhotoLocation" -> writePhotoLocation(call, result)
             "dispose" -> {
                 dispose()
                 result.success(null)
@@ -223,7 +225,7 @@ class NativeCameraPreviewView(
         }
     }
 
-    private fun takePicture(result: MethodChannel.Result) {
+    private fun takePicture(call: MethodCall, result: MethodChannel.Result) {
         val capture = imageCapture
         if (capture == null) {
             result.error("camera_not_ready", "Camera is not ready.", null)
@@ -236,14 +238,20 @@ class NativeCameraPreviewView(
         }
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
         val file = File(directory, "native_camera_$timestamp.jpg")
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(file).build()
+        val location = locationFromCall(call)
+        val metadata = ImageCapture.Metadata().apply {
+            this.location = location
+        }
+        val outputOptions = ImageCapture.OutputFileOptions.Builder(file)
+            .setMetadata(metadata)
+            .build()
         capture.takePicture(
             outputOptions,
             executor,
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                     try {
-                        normalizeAndCropImage(file)
+                        normalizeAndCropImage(file, location)
                         activity.runOnUiThread { result.success(file.absolutePath) }
                     } catch (error: Exception) {
                         activity.runOnUiThread {
@@ -259,6 +267,54 @@ class NativeCameraPreviewView(
                 }
             },
         )
+    }
+
+    private fun writePhotoLocation(call: MethodCall, result: MethodChannel.Result) {
+        val path = call.argument<String>("path")
+        val location = locationFromCall(call)
+        if (path.isNullOrBlank() || location == null) {
+            result.error("invalid_photo_location", "Photo path or location is invalid.", null)
+            return
+        }
+        executor.execute {
+            try {
+                val file = File(path)
+                if (!file.isFile) {
+                    throw IllegalArgumentException("Photo file does not exist.")
+                }
+                ExifInterface(file.absolutePath).apply {
+                    setGpsInfo(location)
+                    saveAttributes()
+                }
+                activity.runOnUiThread { result.success(true) }
+            } catch (error: Exception) {
+                activity.runOnUiThread {
+                    result.error("photo_location_write_failed", error.message, null)
+                }
+            }
+        }
+    }
+
+    private fun locationFromCall(call: MethodCall): Location? {
+        val latitude = (call.argument<Number>("latitude") ?: return null).toDouble()
+        val longitude = (call.argument<Number>("longitude") ?: return null).toDouble()
+        if (!latitude.isFinite() || !longitude.isFinite() ||
+            latitude !in -90.0..90.0 || longitude !in -180.0..180.0
+        ) {
+            return null
+        }
+        return Location("MiriaGo").apply {
+            this.latitude = latitude
+            this.longitude = longitude
+            (call.argument<Number>("accuracy")?.toFloat())?.let {
+                if (it.isFinite() && it >= 0f) accuracy = it
+            }
+            (call.argument<Number>("altitude")?.toDouble())?.let {
+                if (it.isFinite()) altitude = it
+            }
+            time = call.argument<Number>("locationTimestampMillis")?.toLong()
+                ?: System.currentTimeMillis()
+        }
     }
 
     private fun focusAt(x: Float, y: Float) {
@@ -359,7 +415,11 @@ class NativeCameraPreviewView(
         }
     }
 
-    private fun normalizeAndCropImage(file: File) {
+    private fun normalizeAndCropImage(file: File, location: Location?) {
+        val sourceExif = ExifInterface(file.absolutePath)
+        val preservedAttributes = preservedExifTags.mapNotNull { tag ->
+            sourceExif.getAttribute(tag)?.let { tag to it }
+        }
         val bitmap = BitmapFactory.decodeFile(file.absolutePath) ?: return
         val oriented = applyExifOrientation(bitmap, file)
         val output = if (cropCaptureToAspectRatio) {
@@ -371,6 +431,24 @@ class NativeCameraPreviewView(
         file.outputStream().use { stream ->
             output.compress(Bitmap.CompressFormat.JPEG, 95, stream)
         }
+        ExifInterface(file.absolutePath).apply {
+            for ((tag, value) in preservedAttributes) {
+                setAttribute(tag, value)
+            }
+            setAttribute(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL.toString(),
+            )
+            setAttribute(ExifInterface.TAG_IMAGE_WIDTH, output.width.toString())
+            setAttribute(ExifInterface.TAG_IMAGE_LENGTH, output.height.toString())
+            setAttribute(ExifInterface.TAG_PIXEL_X_DIMENSION, output.width.toString())
+            setAttribute(ExifInterface.TAG_PIXEL_Y_DIMENSION, output.height.toString())
+            setAttribute(ExifInterface.TAG_SOFTWARE, "MiriaGo")
+            if (location != null) {
+                setGpsInfo(location)
+            }
+            saveAttributes()
+        }
         if (output != oriented) {
             output.recycle()
         }
@@ -379,6 +457,33 @@ class NativeCameraPreviewView(
         }
         bitmap.recycle()
     }
+
+    private val preservedExifTags = listOf(
+        ExifInterface.TAG_DATETIME,
+        ExifInterface.TAG_DATETIME_ORIGINAL,
+        ExifInterface.TAG_DATETIME_DIGITIZED,
+        ExifInterface.TAG_SUBSEC_TIME,
+        ExifInterface.TAG_SUBSEC_TIME_ORIGINAL,
+        ExifInterface.TAG_SUBSEC_TIME_DIGITIZED,
+        ExifInterface.TAG_OFFSET_TIME,
+        ExifInterface.TAG_OFFSET_TIME_ORIGINAL,
+        ExifInterface.TAG_OFFSET_TIME_DIGITIZED,
+        ExifInterface.TAG_MAKE,
+        ExifInterface.TAG_MODEL,
+        ExifInterface.TAG_LENS_MODEL,
+        ExifInterface.TAG_FOCAL_LENGTH,
+        ExifInterface.TAG_F_NUMBER,
+        ExifInterface.TAG_APERTURE_VALUE,
+        ExifInterface.TAG_EXPOSURE_TIME,
+        ExifInterface.TAG_SHUTTER_SPEED_VALUE,
+        ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY,
+        ExifInterface.TAG_FLASH,
+        ExifInterface.TAG_WHITE_BALANCE,
+        ExifInterface.TAG_EXPOSURE_BIAS_VALUE,
+        ExifInterface.TAG_EXPOSURE_MODE,
+        ExifInterface.TAG_METERING_MODE,
+        ExifInterface.TAG_COLOR_SPACE,
+    )
 
     private fun applyExifOrientation(bitmap: Bitmap, file: File): Bitmap {
         val orientation = ExifInterface(file.absolutePath).getAttributeInt(

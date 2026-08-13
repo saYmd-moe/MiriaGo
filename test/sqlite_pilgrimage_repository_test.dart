@@ -461,6 +461,53 @@ void main() {
   });
 
   test(
+    'schema 37 to 38 adds photo location strategy without data loss',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      final repository = SqlitePilgrimageRepository(database: database);
+      final plan = await repository.createPlan(name: '照片定位迁移', area: '东京');
+      await repository.saveAppSettings(
+        const AppSettings(customXyzTileUrl: 'https://example.com/tiles'),
+      );
+      await database.customStatement(
+        'ALTER TABLE app_settings_entries DROP COLUMN photo_location_strategy',
+      );
+
+      await database.migration.onUpgrade(
+        database.createMigrator(),
+        37,
+        database.schemaVersion,
+      );
+
+      expect(
+        await _tableColumnNames(database, 'app_settings_entries'),
+        contains('photo_location_strategy'),
+      );
+      final migratedPlan = (await repository.loadPlans()).singleWhere(
+        (candidate) => candidate.id == plan.id,
+      );
+      final settings = await repository.loadAppSettings();
+      expect(migratedPlan.name, plan.name);
+      expect(settings.customXyzTileUrl, 'https://example.com/tiles');
+      expect(
+        settings.photoLocationStrategy,
+        PhotoLocationStrategy.askOnFirstCapture,
+      );
+
+      await repository.saveAppSettings(
+        settings.copyWith(
+          photoLocationStrategy: PhotoLocationStrategy.waitOnConfirmation,
+        ),
+      );
+      expect(
+        (await repository.loadAppSettings()).photoLocationStrategy,
+        PhotoLocationStrategy.waitOnConfirmation,
+      );
+    },
+  );
+
+  test(
     'pending-coordinate point is never promoted to current target',
     () async {
       final database = AppDatabase(NativeDatabase.memory());
@@ -560,6 +607,89 @@ void main() {
     expect(reloadedPlan.points.map((point) => point.id), reorderedIds);
     expect(reloadedPlan.currentPointId, plan.currentPointId);
   });
+
+  test('appends individually added points in route order', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+
+    final repository = SqlitePilgrimageRepository(database: database);
+    final sourcePlan = await repository.loadActivePlan();
+    final plan = await repository.createPlan(name: '路线顺序', area: '东京');
+    final first = sourcePlan.points.first.copyWith(
+      id: 'route-first',
+      name: 'Z 路线第一站',
+      groupId: null,
+      groupOrderIndex: null,
+    );
+    final second = sourcePlan.points[1].copyWith(
+      id: 'route-second',
+      name: 'A 路线第二站',
+      groupId: null,
+      groupOrderIndex: null,
+    );
+
+    await repository.addPointToPlan(planId: plan.id, point: first);
+    await database
+        .update(database.plans)
+        .write(
+          PlansCompanion(
+            updatedAt: Value(DateTime.fromMillisecondsSinceEpoch(0)),
+          ),
+        );
+    await repository.addPointToPlan(planId: plan.id, point: second);
+
+    final reloaded = (await repository.loadPlans()).singleWhere(
+      (candidate) => candidate.id == plan.id,
+    );
+    expect(reloaded.points.map((point) => point.id), [first.id, second.id]);
+  });
+
+  test(
+    'batch add preserves input order and ignores duplicate points',
+    () async {
+      final database = AppDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+
+      final repository = SqlitePilgrimageRepository(database: database);
+      final sourcePlan = await repository.loadActivePlan();
+      final plan = await repository.createPlan(name: '批量路线顺序', area: '东京');
+      final first = sourcePlan.points.first.copyWith(
+        id: 'batch-first',
+        name: '原始第一站',
+        groupId: null,
+        groupOrderIndex: null,
+      );
+      final second = sourcePlan.points[1].copyWith(
+        id: 'batch-second',
+        groupId: null,
+        groupOrderIndex: null,
+      );
+      final third = sourcePlan.points[2].copyWith(
+        id: 'batch-third',
+        groupId: null,
+        groupOrderIndex: null,
+      );
+
+      await repository.addPointToPlan(planId: plan.id, point: first);
+      final updated = await repository.addPointsToPlan(
+        planId: plan.id,
+        points: [
+          first.copyWith(name: '不应覆盖已有点位'),
+          second,
+          second.copyWith(name: '不应重复加入'),
+          third,
+        ],
+      );
+
+      expect(updated.points.map((point) => point.id), [
+        first.id,
+        second.id,
+        third.id,
+      ]);
+      expect(updated.points.first.name, '原始第一站');
+      expect(updated.points[1].name, second.name);
+    },
+  );
 
   test('persists reordered plan sequence and appends new plans', () async {
     final database = AppDatabase(NativeDatabase.memory());

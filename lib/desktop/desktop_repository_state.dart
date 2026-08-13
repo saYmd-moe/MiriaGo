@@ -74,6 +74,7 @@ Map<String, Object?> _settingsJson(AppSettings settings) {
     'cameraMinZoom': settings.cameraMinZoom,
     'cameraMaxZoom': settings.cameraMaxZoom,
     'referenceImageScale': settings.referenceImageScale,
+    'photoLocationStrategy': settings.photoLocationStrategy.name,
     'nearestAssignDistanceMeters': settings.nearestAssignDistanceMeters,
     'themePalette': settings.themePalette.name,
     'mapTileProvider': settings.mapTileProvider.name,
@@ -134,6 +135,12 @@ AppSettings _settingsFromJson(Map<String, Object?> json) {
     cameraMinZoom: _doubleValue(json['cameraMinZoom']) ?? 0.6,
     cameraMaxZoom: _doubleValue(json['cameraMaxZoom']) ?? 5,
     referenceImageScale: _doubleValue(json['referenceImageScale']) ?? 1,
+    photoLocationStrategy:
+        _enumByName(
+          PhotoLocationStrategy.values,
+          json['photoLocationStrategy'],
+        ) ??
+        PhotoLocationStrategy.askOnFirstCapture,
     nearestAssignDistanceMeters:
         _doubleValue(json['nearestAssignDistanceMeters']) ?? 350,
     themePalette:

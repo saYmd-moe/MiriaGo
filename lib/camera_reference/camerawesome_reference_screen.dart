@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../app_theme.dart';
 import '../data/anitabi_image_fetcher.dart';
 import '../data/anitabi_image_url.dart';
+import '../map/current_location_resolver.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
 import '../plan/reference_image_status.dart';
@@ -29,6 +30,7 @@ import 'auto_comparison_gallery_backup.dart';
 import 'camera_zoom_capabilities.dart';
 import 'gallery_capture_time_stub.dart'
     if (dart.library.io) 'gallery_capture_time_io.dart';
+import 'photo_location.dart';
 import 'reference_image_bytes_stub.dart'
     if (dart.library.io) 'reference_image_bytes_io.dart'
     as reference_image_bytes;
@@ -78,6 +80,8 @@ class _CamerawesomeReferenceScreenState
   double? _referenceAspectRatio;
   bool _referenceAspectRatioLoading = false;
   int _referenceAspectRatioRequest = 0;
+  late PhotoLocationStrategy _photoLocationStrategy;
+  Future<PhotoLocationStrategy?>? _photoLocationStrategyRequest;
 
   String? get _remoteReferenceImageUrl => hasRemoteReferenceImage(widget.point)
       ? anitabiFullResolutionImageUrl(widget.point.referenceImageUrl)
@@ -89,12 +93,18 @@ class _CamerawesomeReferenceScreenState
     _overlayOpacity = ValueNotifier<double>(0.46);
     _zoom = ValueNotifier<double>(0);
     _nativeCameraController = _NativeCameraController();
+    _photoLocationStrategy = widget.settings.photoLocationStrategy;
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
     _refreshReferenceAspectRatio();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_ensurePhotoLocationStrategy());
+      }
+    });
   }
 
   @override
@@ -198,6 +208,7 @@ class _CamerawesomeReferenceScreenState
       photoPath,
       capturedAtOverride: capturedAt,
       restoreLandscape: restoreLandscape,
+      applyPhotoLocation: false,
     );
     if (mounted) {
       setState(() => _galleryImage = null);
@@ -238,6 +249,7 @@ class _CamerawesomeReferenceScreenState
     String photoPath, {
     DateTime? capturedAtOverride,
     bool? restoreLandscape,
+    bool applyPhotoLocation = true,
   }) async {
     if (!mounted) {
       return null;
@@ -263,7 +275,13 @@ class _CamerawesomeReferenceScreenState
                   ? null
                   : _remoteReferenceImageUrl,
               capturedAtOverride: capturedAtOverride,
-              settings: widget.settings,
+              settings: widget.settings.copyWith(
+                photoLocationStrategy: _photoLocationStrategy,
+              ),
+              photoLocationStrategy: applyPhotoLocation
+                  ? _photoLocationStrategy
+                  : PhotoLocationStrategy.disabled,
+              writePhotoLocation: _nativeCameraController.writePhotoLocation,
               saveVisitPhotoToGallery: shouldAutoSaveVisitPhotoToGallery(
                 widget.settings,
               ),
@@ -286,6 +304,118 @@ class _CamerawesomeReferenceScreenState
     }
     await _restoreCameraOrientation(landscape: shouldRestoreLandscape);
     return result;
+  }
+
+  Future<PhotoLocationStrategy?> _ensurePhotoLocationStrategy() async {
+    final activeRequest = _photoLocationStrategyRequest;
+    if (activeRequest != null) {
+      return activeRequest;
+    }
+    final request = _resolvePhotoLocationStrategy();
+    _photoLocationStrategyRequest = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_photoLocationStrategyRequest, request)) {
+        _photoLocationStrategyRequest = null;
+      }
+    }
+  }
+
+  Future<PhotoLocationStrategy?> _resolvePhotoLocationStrategy() async {
+    if (_photoLocationStrategy == PhotoLocationStrategy.askOnFirstCapture) {
+      final persistedSettings = await widget.controller?.repository
+          ?.loadAppSettings();
+      final persistedStrategy = persistedSettings?.photoLocationStrategy;
+      if (persistedStrategy != null &&
+          persistedStrategy != PhotoLocationStrategy.askOnFirstCapture) {
+        _photoLocationStrategy = persistedStrategy;
+      }
+    }
+    if (_photoLocationStrategy != PhotoLocationStrategy.askOnFirstCapture) {
+      return _photoLocationStrategy;
+    }
+    if (!mounted) {
+      return null;
+    }
+
+    final selected = await showModalBottomSheet<PhotoLocationStrategy>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('是否在巡礼照片中记录定位？'),
+              subtitle: Text('以后可以在“拍摄设置”中修改。不会使用点位坐标代替实际定位。'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.history_toggle_off_outlined),
+              title: const Text('使用最近一次定位'),
+              subtitle: const Text('优先快速写入近期有效定位，没有时获取一次。'),
+              onTap: () => Navigator.of(
+                context,
+              ).pop(PhotoLocationStrategy.useRecentLocation),
+            ),
+            ListTile(
+              leading: const Icon(Icons.my_location_outlined),
+              title: const Text('确认记录时获取定位（推荐）'),
+              subtitle: const Text('拍摄后在确认页面等待新定位，适合需要更准确位置时。'),
+              onTap: () => Navigator.of(
+                context,
+              ).pop(PhotoLocationStrategy.waitOnConfirmation),
+            ),
+            ListTile(
+              leading: const Icon(Icons.location_off_outlined),
+              title: const Text('不记录定位'),
+              onTap: () =>
+                  Navigator.of(context).pop(PhotoLocationStrategy.disabled),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) {
+      return null;
+    }
+
+    setState(() => _photoLocationStrategy = selected);
+    final repository = widget.controller?.repository;
+    if (repository != null) {
+      await repository.saveAppSettings(
+        widget.settings.copyWith(photoLocationStrategy: selected),
+      );
+    }
+    return selected;
+  }
+
+  Future<PhotoLocationData?> _resolveRecentLocationForCapture(
+    PhotoLocationStrategy strategy,
+  ) async {
+    if (strategy != PhotoLocationStrategy.useRecentLocation) {
+      return null;
+    }
+    try {
+      return await resolveRecentPhotoLocation();
+    } on CurrentLocationException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${currentLocationFailureMessage(error)}本次照片不记录定位。'),
+          ),
+        );
+      }
+      return null;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('定位获取失败，本次照片不记录定位。')));
+      }
+      return null;
+    }
   }
 
   Future<void> _restoreCameraOrientation({required bool landscape}) {
@@ -379,7 +509,19 @@ class _CamerawesomeReferenceScreenState
                   );
                   return;
                 }
-                final path = await _nativeCameraController.takePicture();
+                final strategy = await _ensurePhotoLocationStrategy();
+                if (strategy == null || !mounted) {
+                  return;
+                }
+                final location = await _resolveRecentLocationForCapture(
+                  strategy,
+                );
+                if (!mounted) {
+                  return;
+                }
+                final path = await _nativeCameraController.takePicture(
+                  location: location,
+                );
                 if (path != null) {
                   await _openConfirmation(path);
                 }
@@ -761,7 +903,7 @@ class _NativeCameraController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> takePicture() async {
+  Future<String?> takePicture({PhotoLocationData? location}) async {
     final channel = _channel;
     if (channel == null || !_ready || _busy) {
       return null;
@@ -774,10 +916,31 @@ class _NativeCameraController extends ChangeNotifier {
     _busy = true;
     notifyListeners();
     try {
-      return await channel.invokeMethod<String>('takePicture');
+      return await channel.invokeMethod<String>('takePicture', {
+        if (location != null) ...location.toPlatformArguments(),
+      });
     } finally {
       _busy = false;
       notifyListeners();
+    }
+  }
+
+  Future<bool> writePhotoLocation(
+    String path,
+    PhotoLocationData location,
+  ) async {
+    final channel = _channel;
+    if (channel == null || !_ready) {
+      return false;
+    }
+    try {
+      return await channel.invokeMethod<bool>('writePhotoLocation', {
+            'path': path,
+            ...location.toPlatformArguments(),
+          }) ??
+          false;
+    } catch (_) {
+      return false;
     }
   }
 

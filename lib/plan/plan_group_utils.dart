@@ -136,17 +136,17 @@ List<PilgrimagePlanGroup> sortGroupsByPlanOrder(
 }
 
 List<PilgrimagePoint> sortPointsByPlanOrder(Iterable<PilgrimagePoint> points) {
-  final sorted = points.toList();
+  final sorted = points.toList().indexed.toList();
   sorted.sort((a, b) {
-    final orderA = a.groupOrderIndex ?? 1 << 30;
-    final orderB = b.groupOrderIndex ?? 1 << 30;
+    final orderA = a.$2.groupOrderIndex ?? 1 << 30;
+    final orderB = b.$2.groupOrderIndex ?? 1 << 30;
     final orderCompare = orderA.compareTo(orderB);
     if (orderCompare != 0) {
       return orderCompare;
     }
-    return a.name.compareTo(b.name);
+    return a.$1.compareTo(b.$1);
   });
-  return sorted;
+  return sorted.map((entry) => entry.$2).toList(growable: false);
 }
 
 PilgrimagePoint? nextPendingPointAfterCompletion({

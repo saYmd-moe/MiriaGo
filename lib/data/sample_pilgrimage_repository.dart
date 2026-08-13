@@ -211,9 +211,9 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
     for (final point in points) {
       works = _appendWorkIfMissing(works, point.work);
     }
-    final existingIds = plan.points.map((point) => point.id).toSet();
+    final seenIds = plan.points.map((point) => point.id).toSet();
     final newPoints = points
-        .where((point) => !existingIds.contains(point.id))
+        .where((point) => seenIds.add(point.id))
         .toList(growable: false);
     final updatedPoints = [...plan.points, ...newPoints];
     final updatedPlan = plan.copyWith(
@@ -816,6 +816,7 @@ class SamplePilgrimageRepository implements PilgrimageRepository {
       cameraMinZoom: settings.cameraMinZoom.clamp(0.1, 20.0),
       cameraMaxZoom: settings.cameraMaxZoom.clamp(1.0, 20.0),
       referenceImageScale: settings.referenceImageScale.clamp(0.8, 1.0),
+      photoLocationStrategy: settings.photoLocationStrategy,
       nearestAssignDistanceMeters: settings.nearestAssignDistanceMeters.clamp(
         50.0,
         5000.0,

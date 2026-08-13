@@ -115,6 +115,8 @@ class AppSettingsEntries extends Table {
   RealColumn get cameraMaxZoom => real().withDefault(const Constant(5.0))();
   RealColumn get referenceImageScale =>
       real().withDefault(const Constant(1.0))();
+  TextColumn get photoLocationStrategy =>
+      text().withDefault(const Constant('askOnFirstCapture'))();
   RealColumn get nearestAssignDistanceMeters =>
       real().withDefault(const Constant(350.0))();
   TextColumn get themePalette =>
@@ -190,7 +192,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 37;
+  int get schemaVersion => 38;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -614,6 +616,15 @@ class AppDatabase extends _$AppDatabase {
           UPDATE app_settings_entries
           SET comparison_export_config_migrated = 0
         ''');
+      }
+      if (from < 38) {
+        await _addColumnIfMissing(
+          migrator,
+          'app_settings_entries',
+          'photo_location_strategy',
+          appSettingsEntries,
+          appSettingsEntries.photoLocationStrategy,
+        );
       }
     },
   );

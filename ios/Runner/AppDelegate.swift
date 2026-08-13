@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import ImageIO
 import Photos
 import UIKit
 
@@ -338,7 +339,9 @@ private final class NativeCameraPreviewView: NSObject, FlutterPlatformView {
     case "switchCamera", "switchLens":
       switchCamera(result: result)
     case "takePicture":
-      takePicture(result: result)
+      takePicture(call: call, result: result)
+    case "writePhotoLocation":
+      writePhotoLocation(call: call, result: result)
     case "dispose":
       dispose()
       result(nil)
@@ -521,7 +524,7 @@ private final class NativeCameraPreviewView: NSObject, FlutterPlatformView {
     }
   }
 
-  private func takePicture(result: @escaping FlutterResult) {
+  private func takePicture(call: FlutterMethodCall, result: @escaping FlutterResult) {
     sessionQueue.async { [weak self] in
       guard let self else { return }
       self.updatePhotoOrientation()
@@ -533,7 +536,8 @@ private final class NativeCameraPreviewView: NSObject, FlutterPlatformView {
 
       let delegate = NativePhotoCaptureDelegate(
         targetAspectRatio: self.targetAspectRatio,
-        cropCaptureToAspectRatio: self.cropCaptureToAspectRatio
+        cropCaptureToAspectRatio: self.cropCaptureToAspectRatio,
+        location: photoLocation(from: call)
       ) { [weak self] path, error in
         guard let self else { return }
         self.captureDelegate = nil
@@ -553,6 +557,40 @@ private final class NativeCameraPreviewView: NSObject, FlutterPlatformView {
       }
       self.captureDelegate = delegate
       self.photoOutput.capturePhoto(with: settings, delegate: delegate)
+    }
+  }
+
+  private func writePhotoLocation(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let path = arguments["path"] as? String,
+      let location = photoLocation(from: call)
+    else {
+      result(
+        FlutterError(
+          code: "invalid_photo_location",
+          message: "Photo path or location is invalid.",
+          details: nil
+        )
+      )
+      return
+    }
+
+    sessionQueue.async {
+      do {
+        try writePhotoLocationMetadata(at: URL(fileURLWithPath: path), location: location)
+        DispatchQueue.main.async { result(true) }
+      } catch {
+        DispatchQueue.main.async {
+          result(
+            FlutterError(
+              code: "photo_location_write_failed",
+              message: error.localizedDescription,
+              details: nil
+            )
+          )
+        }
+      }
     }
   }
 
@@ -665,10 +703,129 @@ private final class NativeCameraPreviewView: NSObject, FlutterPlatformView {
     return nil
   }
 
+  private func photoLocation(from call: FlutterMethodCall) -> PhotoGPSLocation? {
+    guard
+      let latitude = doubleArgument(call, "latitude"),
+      let longitude = doubleArgument(call, "longitude"),
+      latitude.isFinite,
+      longitude.isFinite,
+      (-90...90).contains(latitude),
+      (-180...180).contains(longitude)
+    else { return nil }
+
+    let arguments = call.arguments as? [String: Any]
+    let timestampMillis = (arguments?["locationTimestampMillis"] as? NSNumber)?.doubleValue
+    return PhotoGPSLocation(
+      latitude: latitude,
+      longitude: longitude,
+      altitude: doubleArgument(call, "altitude"),
+      accuracy: doubleArgument(call, "accuracy"),
+      timestamp: timestampMillis.map { Date(timeIntervalSince1970: $0 / 1000) } ?? Date()
+    )
+  }
+
   private func stringArgument(_ call: FlutterMethodCall, _ key: String) -> String? {
     guard let arguments = call.arguments as? [String: Any] else { return nil }
     return arguments[key] as? String
   }
+}
+
+private struct PhotoGPSLocation {
+  let latitude: Double
+  let longitude: Double
+  let altitude: Double?
+  let accuracy: Double?
+  let timestamp: Date
+}
+
+private func jpegData(
+  for image: UIImage,
+  preserving sourceMetadata: [String: Any],
+  location: PhotoGPSLocation?
+) -> Data? {
+  guard let cgImage = image.cgImage else { return nil }
+  var metadata = sourceMetadata
+  metadata[kCGImagePropertyOrientation as String] = 1
+  metadata[kCGImagePropertyPixelWidth as String] = cgImage.width
+  metadata[kCGImagePropertyPixelHeight as String] = cgImage.height
+
+  var exif = metadata[kCGImagePropertyExifDictionary as String] as? [String: Any] ?? [:]
+  exif[kCGImagePropertyExifPixelXDimension as String] = cgImage.width
+  exif[kCGImagePropertyExifPixelYDimension as String] = cgImage.height
+  metadata[kCGImagePropertyExifDictionary as String] = exif
+
+  var tiff = metadata[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
+  tiff[kCGImagePropertyTIFFSoftware as String] = "MiriaGo"
+  metadata[kCGImagePropertyTIFFDictionary as String] = tiff
+  if let location {
+    metadata[kCGImagePropertyGPSDictionary as String] = gpsMetadata(location)
+  }
+  metadata[kCGImageDestinationLossyCompressionQuality as String] = 0.95
+
+  let output = NSMutableData()
+  guard
+    let destination = CGImageDestinationCreateWithData(
+      output,
+      "public.jpeg" as CFString,
+      1,
+      nil
+    )
+  else { return nil }
+  CGImageDestinationAddImage(destination, cgImage, metadata as CFDictionary)
+  guard CGImageDestinationFinalize(destination) else { return nil }
+  return output as Data
+}
+
+private func gpsMetadata(_ location: PhotoGPSLocation) -> [String: Any] {
+  let formatter = DateFormatter()
+  formatter.locale = Locale(identifier: "en_US_POSIX")
+  formatter.timeZone = TimeZone(secondsFromGMT: 0)
+  formatter.dateFormat = "HH:mm:ss.SSSSSS"
+  let dateFormatter = DateFormatter()
+  dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+  dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+  dateFormatter.dateFormat = "yyyy:MM:dd"
+
+  var gps: [String: Any] = [
+    kCGImagePropertyGPSLatitude as String: abs(location.latitude),
+    kCGImagePropertyGPSLatitudeRef as String: location.latitude < 0 ? "S" : "N",
+    kCGImagePropertyGPSLongitude as String: abs(location.longitude),
+    kCGImagePropertyGPSLongitudeRef as String: location.longitude < 0 ? "W" : "E",
+    kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
+    kCGImagePropertyGPSDateStamp as String: dateFormatter.string(from: location.timestamp),
+  ]
+  if let altitude = location.altitude, altitude.isFinite {
+    gps[kCGImagePropertyGPSAltitude as String] = abs(altitude)
+    gps[kCGImagePropertyGPSAltitudeRef as String] = altitude < 0 ? 1 : 0
+  }
+  if let accuracy = location.accuracy, accuracy.isFinite, accuracy >= 0 {
+    gps[kCGImagePropertyGPSHPositioningError as String] = accuracy
+  }
+  return gps
+}
+
+private func writePhotoLocationMetadata(
+  at file: URL,
+  location: PhotoGPSLocation
+) throws {
+  guard
+    let source = CGImageSourceCreateWithURL(file as CFURL, nil),
+    let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+  else {
+    throw NativeCameraError.message("Photo data is invalid.")
+  }
+  let sourceMetadata =
+    CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
+  guard
+    let data = jpegData(
+      for: UIImage(cgImage: image),
+      preserving: sourceMetadata,
+      location: location
+    )
+  else {
+    throw NativeCameraError.message("Failed to update photo metadata.")
+  }
+  try data.write(to: file, options: .atomic)
 }
 
 private final class NativeCameraPreviewUIView: UIView {
@@ -684,15 +841,18 @@ private final class NativeCameraPreviewUIView: UIView {
 private final class NativePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
   private let targetAspectRatio: Double
   private let cropCaptureToAspectRatio: Bool
+  private let location: PhotoGPSLocation?
   private let completion: (String?, String?) -> Void
 
   init(
     targetAspectRatio: Double,
     cropCaptureToAspectRatio: Bool,
+    location: PhotoGPSLocation?,
     completion: @escaping (String?, String?) -> Void
   ) {
     self.targetAspectRatio = targetAspectRatio
     self.cropCaptureToAspectRatio = cropCaptureToAspectRatio
+    self.location = location
     self.completion = completion
   }
 
@@ -720,7 +880,13 @@ private final class NativePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureD
       ? normalized.cropped(toAspectRatio: targetAspectRatio)
       : normalized
 
-    guard let jpegData = outputImage.jpegData(compressionQuality: 0.95) else {
+    guard
+      let jpegData = jpegData(
+        for: outputImage,
+        preserving: photo.metadata,
+        location: location
+      )
+    else {
       completion(nil, "Failed to encode captured image.")
       return
     }

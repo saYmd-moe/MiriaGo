@@ -3,6 +3,7 @@ package app.miriago.miriago
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.net.Uri
@@ -35,6 +36,10 @@ class MainActivity : FlutterActivity() {
         val cameraCapabilitiesChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "seichi/camera_capabilities"
+        )
+        val mapNavigationChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "miriago/map_navigation"
         )
         planFileChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -75,6 +80,40 @@ class MainActivity : FlutterActivity() {
             } else {
                 result.notImplemented()
             }
+        }
+
+        mapNavigationChannel.setMethodCallHandler { call, result ->
+            if (call.method != "openGoogleMapsWalking") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val latitude = call.argument<Number>("latitude")?.toDouble()
+            val longitude = call.argument<Number>("longitude")?.toDouble()
+            if (latitude == null || longitude == null) {
+                result.error("INVALID_ARGUMENT", "latitude and longitude are required", null)
+                return@setMethodCallHandler
+            }
+            result.success(openGoogleMapsWalking(latitude, longitude))
+        }
+    }
+
+    private fun openGoogleMapsWalking(latitude: Double, longitude: Double): Boolean {
+        val navigationUri = Uri.parse(
+            "google.navigation:q=$latitude,$longitude&mode=w"
+        )
+        val mapIntent = Intent(Intent.ACTION_VIEW, navigationUri).apply {
+            setPackage("com.google.android.apps.maps")
+        }
+        if (mapIntent.resolveActivity(packageManager) == null) {
+            return false
+        }
+        return try {
+            startActivity(mapIntent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: SecurityException) {
+            false
         }
     }
 

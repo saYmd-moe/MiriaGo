@@ -979,6 +979,40 @@ class _CameraSettingsPageState extends State<_CameraSettingsPage> {
         if (_shouldShowMobileGallerySettings) ...[
           const SizedBox(height: 12),
           _SettingsSection(
+            title: '照片定位信息',
+            children: [
+              DropdownButtonFormField<PhotoLocationStrategy>(
+                initialValue: settings.photoLocationStrategy,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                  labelText: '定位写入策略',
+                ),
+                items: PhotoLocationStrategy.values
+                    .map(
+                      (strategy) => DropdownMenuItem(
+                        value: strategy,
+                        child: Text(strategy.label),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (strategy) {
+                  if (strategy != null) {
+                    _update(settings.copyWith(photoLocationStrategy: strategy));
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _photoLocationStrategyDescription(
+                  settings.photoLocationStrategy,
+                ),
+                style: _secondaryTextStyle,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _SettingsSection(
             title: '照片备份',
             children: [
               SwitchListTile(
@@ -1003,6 +1037,16 @@ class _CameraSettingsPageState extends State<_CameraSettingsPage> {
       ],
     );
   }
+}
+
+String _photoLocationStrategyDescription(PhotoLocationStrategy strategy) {
+  return switch (strategy) {
+    PhotoLocationStrategy.askOnFirstCapture => '第一次按下快门时选择。定位仅写入照片，不使用点位坐标。',
+    PhotoLocationStrategy.disabled => '不申请照片定位权限，也不向照片写入 GPS 信息。',
+    PhotoLocationStrategy.useRecentLocation =>
+      '拍摄时优先使用设备最近的有效定位；没有可用定位时尝试获取一次。',
+    PhotoLocationStrategy.waitOnConfirmation => '拍摄后在确认记录页面获取新定位，完成或失败后再允许保存。',
+  };
 }
 
 class _AnitabiServiceSettingsPage extends StatefulWidget {

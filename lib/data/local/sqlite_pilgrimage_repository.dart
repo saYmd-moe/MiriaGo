@@ -73,6 +73,9 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
       cameraMinZoom: row.cameraMinZoom.clamp(0.1, 20.0),
       cameraMaxZoom: row.cameraMaxZoom.clamp(1.0, 20.0),
       referenceImageScale: row.referenceImageScale.clamp(0.8, 1.0),
+      photoLocationStrategy: _photoLocationStrategyFromName(
+        row.photoLocationStrategy,
+      ),
       nearestAssignDistanceMeters: row.nearestAssignDistanceMeters.clamp(
         50.0,
         5000.0,
@@ -348,22 +351,60 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
     required List<PilgrimagePoint> points,
   }) async {
     await _database.transaction(() async {
-      final plan = await _planRowById(planId);
+      await _planRowById(planId);
+      final uniquePoints = <PilgrimagePoint>[];
+      final incomingStorageIds = <String>{};
+      for (final point in points) {
+        final storageId = _storageId(planId, point.id);
+        if (incomingStorageIds.add(storageId)) {
+          uniquePoints.add(point);
+        }
+      }
+      if (uniquePoints.isEmpty) {
+        return;
+      }
+
+      final existingPointIds =
+          await (_database.selectOnly(_database.points)
+                ..addColumns([_database.points.id])
+                ..where(
+                  _database.points.planId.equals(planId) &
+                      _database.points.id.isIn(incomingStorageIds),
+                ))
+              .map((row) => row.read(_database.points.id)!)
+              .get();
+      final existingPointIdSet = existingPointIds.toSet();
+      final newPoints = uniquePoints
+          .where(
+            (point) =>
+                !existingPointIdSet.contains(_storageId(planId, point.id)),
+          )
+          .toList(growable: false);
+      if (newPoints.isEmpty) {
+        return;
+      }
+
+      final lastPoint =
+          await (_database.select(_database.points)
+                ..where((table) => table.planId.equals(planId))
+                ..orderBy([(table) => OrderingTerm.desc(table.sortOrder)])
+                ..limit(1))
+              .getSingleOrNull();
+      var nextSortOrder = (lastPoint?.sortOrder ?? -1) + 1;
       final hadCurrentPoint = await _hasCurrentPoint(planId);
-      for (var index = 0; index < points.length; index += 1) {
-        final point = points[index];
+      for (final point in newPoints) {
         await _upsertWork(planId: planId, work: point.work);
         await _database
             .into(_database.points)
-            .insertOnConflictUpdate(
+            .insert(
               _pointCompanion(
                 planId: planId,
                 point: point,
-                sortOrder: plan.updatedAt.microsecondsSinceEpoch + index,
+                sortOrder: nextSortOrder++,
               ),
             );
       }
-      if (!hadCurrentPoint && points.isNotEmpty) {
+      if (!hadCurrentPoint) {
         await _setFirstPendingPointCurrent(planId);
       }
       await _touchPlan(planId);
@@ -1072,6 +1113,7 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
             referenceImageScale: Value(
               settings.referenceImageScale.clamp(0.8, 1.0),
             ),
+            photoLocationStrategy: Value(settings.photoLocationStrategy.name),
             nearestAssignDistanceMeters: Value(
               settings.nearestAssignDistanceMeters.clamp(50.0, 5000.0),
             ),
@@ -1804,6 +1846,13 @@ class SqlitePilgrimageRepository implements PilgrimageRepository {
             ratio == CameraPhotoAspectRatio.landscape16x9
         ? CameraPhotoAspectRatio.native
         : ratio;
+  }
+
+  PhotoLocationStrategy _photoLocationStrategyFromName(String name) {
+    return PhotoLocationStrategy.values.firstWhere(
+      (strategy) => strategy.name == name,
+      orElse: () => PhotoLocationStrategy.askOnFirstCapture,
+    );
   }
 
   AppThemePalette _themePaletteFromName(String name) {

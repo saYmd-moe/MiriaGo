@@ -144,6 +144,20 @@ enum NavigationApp {
   }
 }
 
+enum PhotoLocationStrategy {
+  askOnFirstCapture,
+  disabled,
+  useRecentLocation,
+  waitOnConfirmation;
+
+  String get label => switch (this) {
+    PhotoLocationStrategy.askOnFirstCapture => '首次拍摄时询问',
+    PhotoLocationStrategy.disabled => '不记录定位',
+    PhotoLocationStrategy.useRecentLocation => '使用最近一次定位',
+    PhotoLocationStrategy.waitOnConfirmation => '确认记录时获取定位（推荐）',
+  };
+}
+
 class AppSettings {
   const AppSettings({
     this.uiScale = 1,
@@ -154,6 +168,7 @@ class AppSettings {
     this.cameraMinZoom = 0.6,
     this.cameraMaxZoom = 5,
     this.referenceImageScale = 1,
+    this.photoLocationStrategy = PhotoLocationStrategy.askOnFirstCapture,
     this.nearestAssignDistanceMeters = 350,
     this.themePalette = AppThemePalette.classicGreen,
     this.mapTileProvider = MapTileProvider.openFreeMap,
@@ -197,6 +212,7 @@ class AppSettings {
   final double cameraMinZoom;
   final double cameraMaxZoom;
   final double referenceImageScale;
+  final PhotoLocationStrategy photoLocationStrategy;
   final double nearestAssignDistanceMeters;
   final AppThemePalette themePalette;
   final MapTileProvider mapTileProvider;
@@ -240,6 +256,7 @@ class AppSettings {
     double? cameraMinZoom,
     double? cameraMaxZoom,
     double? referenceImageScale,
+    PhotoLocationStrategy? photoLocationStrategy,
     double? nearestAssignDistanceMeters,
     AppThemePalette? themePalette,
     MapTileProvider? mapTileProvider,
@@ -285,6 +302,8 @@ class AppSettings {
       cameraMinZoom: cameraMinZoom ?? this.cameraMinZoom,
       cameraMaxZoom: cameraMaxZoom ?? this.cameraMaxZoom,
       referenceImageScale: referenceImageScale ?? this.referenceImageScale,
+      photoLocationStrategy:
+          photoLocationStrategy ?? this.photoLocationStrategy,
       nearestAssignDistanceMeters:
           nearestAssignDistanceMeters ?? this.nearestAssignDistanceMeters,
       themePalette: themePalette ?? this.themePalette,

@@ -21,6 +21,8 @@ import 'auto_comparison_gallery_backup.dart';
 import 'camera_storage_stub.dart'
     if (dart.library.io) 'camera_storage_io.dart'
     as camera_storage;
+import 'photo_location.dart';
+import '../map/current_location_resolver.dart';
 
 enum VisitRecordConfirmationResult { saved, completed }
 
@@ -37,6 +39,9 @@ class VisitRecordConfirmationScreen extends StatefulWidget {
     this.settings = const AppSettings(),
     this.saveVisitPhotoToGallery = false,
     this.autoSaveComparisonToGallery = false,
+    this.photoLocationStrategy = PhotoLocationStrategy.disabled,
+    this.writePhotoLocation,
+    this.resolvePhotoLocation,
     super.key,
   });
 
@@ -51,6 +56,9 @@ class VisitRecordConfirmationScreen extends StatefulWidget {
   final AppSettings settings;
   final bool saveVisitPhotoToGallery;
   final bool autoSaveComparisonToGallery;
+  final PhotoLocationStrategy photoLocationStrategy;
+  final PhotoLocationWriter? writePhotoLocation;
+  final Future<PhotoLocationData> Function()? resolvePhotoLocation;
 
   @override
   State<VisitRecordConfirmationScreen> createState() =>
@@ -61,10 +69,68 @@ class _VisitRecordConfirmationScreenState
     extends State<VisitRecordConfirmationScreen> {
   bool _saving = false;
   String? _savingStage;
+  bool _locating = false;
+  String? _locationStatus;
+  int _locationRequest = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.photoLocationStrategy ==
+        PhotoLocationStrategy.waitOnConfirmation) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _resolveAndWritePhotoLocation();
+      });
+    }
+  }
+
+  Future<void> _resolveAndWritePhotoLocation() async {
+    if (_locating || !mounted) {
+      return;
+    }
+    final request = ++_locationRequest;
+    setState(() {
+      _locating = true;
+      _locationStatus = '正在获取拍摄位置...';
+    });
+    try {
+      final location =
+          await (widget.resolvePhotoLocation ?? resolveFreshPhotoLocation)();
+      if (!mounted || request != _locationRequest) {
+        return;
+      }
+      final written =
+          await widget.writePhotoLocation?.call(widget.photoPath, location) ??
+          false;
+      if (!mounted || request != _locationRequest) {
+        return;
+      }
+      setState(() {
+        _locating = false;
+        _locationStatus = written ? '已写入照片定位信息' : '照片定位信息写入失败';
+      });
+    } on CurrentLocationException catch (error) {
+      if (!mounted || request != _locationRequest) {
+        return;
+      }
+      setState(() {
+        _locating = false;
+        _locationStatus = currentLocationFailureMessage(error);
+      });
+    } catch (_) {
+      if (!mounted || request != _locationRequest) {
+        return;
+      }
+      setState(() {
+        _locating = false;
+        _locationStatus = '定位获取失败，本次照片不会写入位置。';
+      });
+    }
+  }
 
   Future<void> _save({required bool completePoint}) async {
     final controller = widget.controller;
-    if (controller == null || _saving) {
+    if (controller == null || _saving || _locating) {
       Navigator.of(context).pop();
       return;
     }
@@ -198,13 +264,31 @@ class _VisitRecordConfirmationScreenState
             ),
             const SizedBox(height: 16),
             _InfoPanel(referenceMode: widget.referenceMode),
+            if (_locationStatus != null) ...[
+              const SizedBox(height: 12),
+              _PhotoLocationStatusPanel(
+                label: _locationStatus!,
+                loading: _locating,
+                onSkip: _locating
+                    ? () {
+                        setState(() {
+                          _locationRequest += 1;
+                          _locating = false;
+                          _locationStatus = '已跳过定位，本次照片不会写入位置。';
+                        });
+                      }
+                    : null,
+              ),
+            ],
             if (_savingStage != null) ...[
               const SizedBox(height: 12),
               _SavingProgressPanel(label: _savingStage!),
             ],
             const SizedBox(height: 18),
             FilledButton.icon(
-              onPressed: _saving ? null : () => _save(completePoint: false),
+              onPressed: _saving || _locating
+                  ? null
+                  : () => _save(completePoint: false),
               icon: _saving
                   ? const SizedBox(
                       width: 18,
@@ -216,7 +300,9 @@ class _VisitRecordConfirmationScreenState
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: _saving ? null : () => _save(completePoint: true),
+              onPressed: _saving || _locating
+                  ? null
+                  : () => _save(completePoint: true),
               icon: const Icon(Icons.check_circle_outline, size: 18),
               label: const Text('保存并标记完成'),
             ),
@@ -529,6 +615,60 @@ class _SavingProgressPanel extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoLocationStatusPanel extends StatelessWidget {
+  const _PhotoLocationStatusPanel({
+    required this.label,
+    required this.loading,
+    this.onSkip,
+  });
+
+  final String label;
+  final bool loading;
+  final VoidCallback? onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          if (loading)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            const Icon(
+              Icons.location_on_outlined,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          if (onSkip != null)
+            TextButton(onPressed: onSkip, child: const Text('跳过')),
         ],
       ),
     );
