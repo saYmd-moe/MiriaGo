@@ -4,6 +4,7 @@ import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
 import '../plan_transfer/import_export_screen.dart';
 import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/copyable_text.dart';
 import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_models.dart';
@@ -128,10 +129,10 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
     final confirmed = await showConfirmActionDialog(
       context,
       title: '删除计划',
-      message: '将删除「${plan.name}」及其中的点位、片区、作品和巡礼记录。此操作无法撤销。',
+      message: '将删除「${plan.name}」及其中的点位、片区、作品和巡礼记录。',
       confirmLabel: '删除',
-      icon: Icons.delete_outline,
       destructive: true,
+      emphasizedValues: [plan.name],
     );
     if (!confirmed || !mounted) {
       return;
@@ -146,46 +147,44 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
     final areaController = TextEditingController(text: plan.area);
     final result = await showDialog<_PlanInfoFormResult>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('编辑计划信息'),
+      builder: (context) => AppInputDialog(
+        title: '编辑计划信息',
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: '计划名称'),
-              textInputAction: TextInputAction.next,
+            AppDialogField(
+              label: '计划名称',
+              child: TextField(
+                controller: nameController,
+                autofocus: true,
+                decoration: appDialogInputDecoration(),
+                textInputAction: TextInputAction.next,
+              ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: areaController,
-              decoration: const InputDecoration(labelText: '地区 / 区域'),
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => Navigator.of(context).pop(
-                _PlanInfoFormResult(
-                  name: nameController.text.trim(),
-                  area: areaController.text.trim(),
+            const SizedBox(height: 14),
+            AppDialogField(
+              label: '地区 / 区域',
+              child: TextField(
+                controller: areaController,
+                decoration: appDialogInputDecoration(),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => Navigator.of(context).pop(
+                  _PlanInfoFormResult(
+                    name: nameController.text.trim(),
+                    area: areaController.text.trim(),
+                  ),
                 ),
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
+        confirmLabel: '保存',
+        onConfirm: () => Navigator.of(context).pop(
+          _PlanInfoFormResult(
+            name: nameController.text.trim(),
+            area: areaController.text.trim(),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(
-              _PlanInfoFormResult(
-                name: nameController.text.trim(),
-                area: areaController.text.trim(),
-              ),
-            ),
-            child: const Text('保存'),
-          ),
-        ],
+        ),
       ),
     );
     nameController.dispose();

@@ -4,6 +4,7 @@ import '../app_theme.dart';
 import '../data/bangumi_api_client.dart';
 import '../data/pilgrimage_repository.dart';
 import '../widgets/copyable_text.dart';
+import '../widgets/confirm_action_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import '../widgets/app_scaled_route.dart';
 import 'add_points_screen.dart';
@@ -119,29 +120,17 @@ class _WorkManagerScreenState extends State<WorkManagerScreen> {
     final pointCount = _plan.points
         .where((point) => point.work.id == work.id)
         .length;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除作品'),
-        content: Text(
-          pointCount == 0
-              ? '确定删除「${work.title}」吗？'
-              : '确定删除「${work.title}」吗？这会同时移除 $pointCount 个相关点位和对应记录。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton.icon(
-            onPressed: () => Navigator.of(context).pop(true),
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('删除'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '删除作品',
+      message: pointCount == 0
+          ? '将删除「${work.title}」。'
+          : '将删除「${work.title}」，并同时移除 $pointCount 个相关点位和对应记录。',
+      confirmLabel: '删除',
+      destructive: true,
+      emphasizedValues: [work.title],
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
 

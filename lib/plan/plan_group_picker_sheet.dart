@@ -365,66 +365,82 @@ Future<String?> showPlanGroupSelectionSheet({
 
           return SafeArea(
             top: false,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.82 > 520
-                    ? 520
-                    : MediaQuery.sizeOf(context).height * 0.82,
-              ),
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.82 > 520
+                  ? 520
+                  : MediaQuery.sizeOf(context).height * 0.82,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 12),
-                  for (final option in pickerOptions)
-                    _PlanGroupSelectionTile(
-                      option: option,
-                      selected: option.id == selectedOptionId,
-                      onTap: () => Navigator.of(context).pop(option.id),
+                  Expanded(
+                    child: ListView(
+                      key: const ValueKey('plan-point-group-options-list'),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        for (final option in pickerOptions)
+                          _PlanGroupSelectionTile(
+                            option: option,
+                            selected: option.id == selectedOptionId,
+                            onTap: () => Navigator.of(context).pop(option.id),
+                          ),
+                      ],
                     ),
+                  ),
                   if (onCreateOption != null) ...[
-                    const Divider(height: 17, color: AppColors.border),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        key: const ValueKey('plan-point-group-create-entry'),
-                        borderRadius: BorderRadius.circular(8),
-                        onTap: createOption,
-                        child: SizedBox(
-                          height: 46,
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 8),
-                              Icon(Icons.add, color: AppColors.accent),
-                              const SizedBox(width: 12),
-                              Text(
-                                '新建片区',
-                                style: TextStyle(
-                                  color: AppColors.accentDark,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0,
+                    const Divider(height: 1, color: AppColors.border),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          key: const ValueKey('plan-point-group-create-entry'),
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: createOption,
+                          child: SizedBox(
+                            height: 46,
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 8),
+                                Icon(Icons.add, color: AppColors.accent),
+                                const SizedBox(width: 12),
+                                Text(
+                                  '新建片区',
+                                  style: TextStyle(
+                                    color: AppColors.accentDark,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),

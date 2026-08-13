@@ -6,6 +6,7 @@ import '../data/pilgrimage_repository.dart';
 import '../platform/platform_flags_stub.dart'
     if (dart.library.io) '../platform/platform_flags_io.dart';
 import '../plan/pilgrimage_models.dart';
+import '../widgets/confirm_action_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import 'my_maps_csv_export.dart';
 import 'plan_export_delivery.dart';
@@ -325,24 +326,14 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
               message.contains('调色照片'),
         )
         .toList(growable: false);
-    final shouldExport = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('部分本地资源缺失'),
-        content: Text([...messages, '这些资源不会进入数据包，导入后对应图片可能无法显示。'].join('\n')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('继续导出'),
-          ),
-        ],
-      ),
+    final shouldExport = await showConfirmActionDialog(
+      context,
+      title: '部分本地资源缺失',
+      message: messages.join('\n'),
+      confirmLabel: '继续导出',
+      notice: '缺失资源不会进入数据包，导入后对应图片可能无法显示',
     );
-    return shouldExport == true;
+    return shouldExport;
   }
 
   Future<void> _refreshSizeEstimate() async {

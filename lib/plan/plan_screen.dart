@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
 import '../data/pilgrimage_repository.dart';
+import '../widgets/confirm_action_dialog.dart';
+import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import '../camera_reference/camerawesome_reference_screen.dart';
 import '../point_detail/point_detail_sheet.dart';
@@ -580,24 +582,15 @@ class _PlanScreenState extends State<PlanScreen> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('缓存完整参考图'),
-        content: Text('将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('开始缓存'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '缓存完整参考图',
+      message: '将缓存当前计划中 ${points.length} 张完整参考图，可能需要较长时间和网络流量。',
+      confirmLabel: '开始缓存',
+      notice: '建议在 Wi-Fi 环境下进行缓存',
+      emphasizedValues: ['${points.length} 张'],
     );
-    if (confirmed != true || !mounted) {
+    if (!confirmed || !mounted) {
       return;
     }
     await _cacheFullReferenceImages();
@@ -677,26 +670,21 @@ class _PlanPointCreateGroupDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('新建片区'),
-      content: TextField(
-        key: const ValueKey('plan-point-group-name-field'),
-        controller: _nameController,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: '片区名称'),
-        textInputAction: TextInputAction.done,
-        onSubmitted: (value) => Navigator.of(context).pop(value),
+    return AppInputDialog(
+      title: '新建片区',
+      content: AppDialogField(
+        label: '片区名称',
+        child: TextField(
+          key: const ValueKey('plan-point-group-name-field'),
+          controller: _nameController,
+          autofocus: true,
+          decoration: appDialogInputDecoration(),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_nameController.text),
-          child: const Text('创建'),
-        ),
-      ],
+      confirmLabel: '创建',
+      onConfirm: () => Navigator.of(context).pop(_nameController.text),
     );
   }
 }

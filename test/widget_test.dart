@@ -24,6 +24,7 @@ import 'package:miriago/plan/pilgrimage_plan_controller.dart';
 import 'package:miriago/records/records_screen.dart';
 import 'package:miriago/records/comparison_export_config.dart';
 import 'package:miriago/widgets/constrained_menu_anchor.dart';
+import 'package:miriago/widgets/input_dialog.dart';
 import 'package:miriago/widgets/reference_image_placeholder.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
@@ -1061,10 +1062,16 @@ void main() {
     final createEntry = find.byKey(
       const ValueKey('plan-point-group-create-entry'),
     );
-    await tester.dragUntilVisible(
-      createEntry,
-      find.byType(ListView).last,
-      const Offset(0, -240),
+    expect(createEntry, findsOneWidget);
+    expect(
+      tester.getBottomLeft(createEntry).dy,
+      greaterThan(
+        tester
+            .getBottomLeft(
+              find.byKey(const ValueKey('plan-point-group-options-list')),
+            )
+            .dy,
+      ),
     );
     await tester.tap(createEntry);
     await tester.pumpAndSettle();
@@ -1415,13 +1422,16 @@ void main() {
     expect(find.text('片区名不能为空'), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(AlertDialog),
+        of: find.byType(AppInputDialog),
         matching: find.text('新建片区'),
       ),
       findsOneWidget,
     );
 
-    await tester.enterText(find.widgetWithText(TextField, '片区名称'), '新片区');
+    await tester.enterText(
+      find.byKey(const ValueKey('plan-group-name-field')),
+      '新片区',
+    );
     await tester.tap(find.text('创建'));
     await tester.pumpAndSettle();
 
@@ -1587,6 +1597,34 @@ void main() {
     expect(find.text('地图标记大小'), findsNothing);
     expect(find.text('片区范围半径'), findsNothing);
     expect(find.text('自动聚合密集点位'), findsNothing);
+  });
+
+  testWidgets('custom theme palette updates the hex color', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('设置').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('外观设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('自定义'));
+    await tester.pumpAndSettle();
+
+    final valueControl = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('custom-theme-color-value')),
+    );
+    valueControl.onTapDown!(TapDownDetails(localPosition: Offset.zero));
+    await tester.pump();
+
+    final palette = tester.widget<GestureDetector>(
+      find.byKey(const ValueKey('custom-theme-color-palette')),
+    );
+    palette.onTapDown!(TapDownDetails(localPosition: Offset.zero));
+    await tester.pump();
+
+    final hexField = tester.widget<TextField>(
+      find.byKey(const ValueKey('custom-theme-color-hex-field')),
+    );
+    expect(hexField.controller!.text, '#FF0000');
   });
 
   testWidgets('creates empty plan and shows add-points shell', (tester) async {
