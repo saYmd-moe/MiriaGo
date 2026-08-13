@@ -675,6 +675,7 @@ class _PlanPointCreateGroupDialogState
       content: AppDialogField(
         label: '片区名称',
         child: TextField(
+          onTapOutside: dismissKeyboardOnTapOutside,
           key: const ValueKey('plan-point-group-name-field'),
           controller: _nameController,
           autofocus: true,

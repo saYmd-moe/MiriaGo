@@ -1179,6 +1179,7 @@ class _BoxAssignCreateGroupDialogState
       content: AppDialogField(
         label: '片区名称',
         child: TextField(
+          onTapOutside: dismissKeyboardOnTapOutside,
           key: const ValueKey('box-assign-group-name-field'),
           controller: _controller,
           autofocus: true,

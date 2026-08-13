@@ -251,6 +251,7 @@ class _GroupAnchorPickerScreenState extends State<GroupAnchorPickerScreen> {
               AppDialogField(
                 label: '纬度',
                 child: TextField(
+                  onTapOutside: dismissKeyboardOnTapOutside,
                   controller: latitudeController,
                   keyboardType: const TextInputType.numberWithOptions(
                     signed: true,
@@ -263,6 +264,7 @@ class _GroupAnchorPickerScreenState extends State<GroupAnchorPickerScreen> {
               AppDialogField(
                 label: '经度',
                 child: TextField(
+                  onTapOutside: dismissKeyboardOnTapOutside,
                   controller: longitudeController,
                   keyboardType: const TextInputType.numberWithOptions(
                     signed: true,

@@ -155,6 +155,7 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
             AppDialogField(
               label: '计划名称',
               child: TextField(
+                onTapOutside: dismissKeyboardOnTapOutside,
                 controller: nameController,
                 autofocus: true,
                 decoration: appDialogInputDecoration(),
@@ -165,6 +166,7 @@ class _PlanManagerScreenState extends State<PlanManagerScreen> {
             AppDialogField(
               label: '地区 / 区域',
               child: TextField(
+                onTapOutside: dismissKeyboardOnTapOutside,
                 controller: areaController,
                 decoration: appDialogInputDecoration(),
                 textInputAction: TextInputAction.done,

@@ -1148,6 +1148,7 @@ class _PointManagerCreateGroupDialogState
       content: AppDialogField(
         label: '片区名称',
         child: TextField(
+          onTapOutside: dismissKeyboardOnTapOutside,
           key: const ValueKey('point-manager-group-name-field'),
           controller: _controller,
           autofocus: true,
@@ -2001,6 +2002,7 @@ class _GroupAnchorMapPickerScreenState
               AppDialogField(
                 label: '纬度',
                 child: TextField(
+                  onTapOutside: dismissKeyboardOnTapOutside,
                   controller: latitudeController,
                   keyboardType: const TextInputType.numberWithOptions(
                     signed: true,
@@ -2013,6 +2015,7 @@ class _GroupAnchorMapPickerScreenState
               AppDialogField(
                 label: '经度',
                 child: TextField(
+                  onTapOutside: dismissKeyboardOnTapOutside,
                   controller: longitudeController,
                   keyboardType: const TextInputType.numberWithOptions(
                     signed: true,

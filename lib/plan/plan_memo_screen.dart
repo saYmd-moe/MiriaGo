@@ -413,28 +413,31 @@ class _PlanMemoScreenState extends State<PlanMemoScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             child: _isEditing
-                ? Column(
-                    children: [
-                      _MarkdownToolbar(onAction: _applyMarkdownAction),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _memoController,
-                          autofocus: true,
-                          expands: true,
-                          maxLines: null,
-                          minLines: null,
-                          keyboardType: TextInputType.multiline,
-                          textAlignVertical: TextAlignVertical.top,
-                          decoration: const InputDecoration(
-                            labelText: '备忘录内容',
-                            alignLabelWithHint: true,
-                            hintText: '可以记录交通、预约、补拍事项、同行安排等。',
-                            border: OutlineInputBorder(),
+                ? TextFieldTapRegion(
+                    child: Column(
+                      children: [
+                        _MarkdownToolbar(onAction: _applyMarkdownAction),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: TextField(
+                            onTapOutside: dismissKeyboardOnTapOutside,
+                            controller: _memoController,
+                            autofocus: true,
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            keyboardType: TextInputType.multiline,
+                            textAlignVertical: TextAlignVertical.top,
+                            decoration: const InputDecoration(
+                              labelText: '备忘录内容',
+                              alignLabelWithHint: true,
+                              hintText: '可以记录交通、预约、补拍事项、同行安排等。',
+                              border: OutlineInputBorder(),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   )
                 : memo.isEmpty
                 ? _EmptyPlanMemo(onStart: _startEditing)

@@ -562,6 +562,7 @@ class BangumiWorkSearchScreenState extends State<BangumiWorkSearchScreen> {
                   label: '作品名称',
                   prominent: true,
                   child: TextField(
+                    onTapOutside: dismissKeyboardOnTapOutside,
                     controller: _queryController,
                     decoration:
                         _boxedFormDecoration(
@@ -1018,6 +1019,7 @@ class _AnitabiLinkImportScreenState extends State<_AnitabiLinkImportScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
+                    onTapOutside: dismissKeyboardOnTapOutside,
                     controller: _linkController,
                     decoration: InputDecoration(
                       hintText: '粘贴 Anitabi 作品或点位链接',
@@ -1512,6 +1514,7 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
                     label: '作品名称',
                     required: true,
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       controller: _titleController,
                       decoration: _boxedFormDecoration(hintText: '请输入作品的中文名称'),
                       textInputAction: TextInputAction.next,
@@ -1522,6 +1525,7 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
                   _ManualWorkLabeledField(
                     label: '作品原名',
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       controller: _subtitleController,
                       decoration: _boxedFormDecoration(
                         hintText: '请输入作品的原名（如日文/英文）',
@@ -1605,6 +1609,7 @@ class ManualWorkFormScreenState extends State<ManualWorkFormScreen> {
                   _ManualWorkLabeledField(
                     label: '主要地区',
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       controller: _cityController,
                       decoration: _boxedFormDecoration(
                         hintText: '输入作品主要发生或取景的地区',
@@ -2395,6 +2400,7 @@ class _QuickManualPointFormScreenState
                   required: true,
                   prominent: true,
                   child: TextFormField(
+                    onTapOutside: dismissKeyboardOnTapOutside,
                     key: const ValueKey('quick-point-name'),
                     controller: _nameController,
                     decoration: _boxedFormDecoration(hintText: '例如：东京国际会展中心'),
@@ -2440,6 +2446,7 @@ class _QuickManualPointFormScreenState
                         required: false,
                         focusNode: _latitudeFocusNode,
                         child: TextFormField(
+                          onTapOutside: dismissKeyboardOnTapOutside,
                           key: const ValueKey('quick-point-latitude'),
                           controller: _latitudeController,
                           focusNode: _latitudeFocusNode,
@@ -2467,6 +2474,7 @@ class _QuickManualPointFormScreenState
                         required: false,
                         focusNode: _longitudeFocusNode,
                         child: TextFormField(
+                          onTapOutside: dismissKeyboardOnTapOutside,
                           key: const ValueKey('quick-point-longitude'),
                           controller: _longitudeController,
                           focusNode: _longitudeFocusNode,
@@ -2983,6 +2991,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
             child: AppDialogField(
               label: '坐标文本',
               child: TextFormField(
+                onTapOutside: dismissKeyboardOnTapOutside,
                 controller: controller,
                 autofocus: true,
                 minLines: 2,
@@ -3170,6 +3179,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                       required: true,
                       prominent: true,
                       child: TextFormField(
+                        onTapOutside: dismissKeyboardOnTapOutside,
                         controller: _fallbackWorkTitleController,
                         decoration: _boxedFormDecoration(
                           hintText: '请输入作品的中文名称',
@@ -3183,6 +3193,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                       label: '作品原名',
                       prominent: true,
                       child: TextFormField(
+                        onTapOutside: dismissKeyboardOnTapOutside,
                         controller: _fallbackWorkSubtitleController,
                         decoration: _boxedFormDecoration(
                           hintText: '请输入作品的原名（如日文/英文）',
@@ -3195,6 +3206,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                       label: '主要地区',
                       prominent: true,
                       child: TextFormField(
+                        onTapOutside: dismissKeyboardOnTapOutside,
                         controller: _fallbackWorkCityController,
                         decoration: _boxedFormDecoration(
                           hintText: '输入作品主要发生或取景的地区',
@@ -3213,6 +3225,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     required: true,
                     prominent: true,
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       key: const ValueKey('point-form-name'),
                       controller: _nameController,
                       decoration: _boxedFormDecoration(hintText: '例如：东京国际会展中心'),
@@ -3226,6 +3239,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     required: true,
                     prominent: true,
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       controller: _subtitleController,
                       decoration: _boxedFormDecoration(hintText: '例如：東京ビッグサイト'),
                       textInputAction: TextInputAction.next,
@@ -3238,6 +3252,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     required: true,
                     prominent: true,
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       controller: _episodeController,
                       decoration: _boxedFormDecoration(
                         hintText: '例如：EP 1 / 12:32',
@@ -3252,6 +3267,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     required: true,
                     prominent: true,
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       controller: _referenceController,
                       decoration: _boxedFormDecoration(
                         hintText: '例如：小红书@BilyHurington / Bilibili@麦块晓天',
@@ -3265,6 +3281,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                     label: '备注',
                     prominent: true,
                     child: TextFormField(
+                      onTapOutside: dismissKeyboardOnTapOutside,
                       key: const ValueKey('point-form-note'),
                       controller: _noteController,
                       decoration: _boxedFormDecoration(
@@ -3303,6 +3320,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                           focusNode: _latitudeFocusNode,
                           required: !_canKeepCoordinatePending,
                           child: TextFormField(
+                            onTapOutside: dismissKeyboardOnTapOutside,
                             key: const ValueKey('point-form-latitude'),
                             controller: _latitudeController,
                             focusNode: _latitudeFocusNode,
@@ -3331,6 +3349,7 @@ class _ManualPointFormScreenState extends State<_ManualPointFormScreen> {
                           focusNode: _longitudeFocusNode,
                           required: !_canKeepCoordinatePending,
                           child: TextFormField(
+                            onTapOutside: dismissKeyboardOnTapOutside,
                             key: const ValueKey('point-form-longitude'),
                             controller: _longitudeController,
                             focusNode: _longitudeFocusNode,

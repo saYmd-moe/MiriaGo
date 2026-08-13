@@ -1271,6 +1271,7 @@ class _ExpandedRecordFiltersState extends State<_ExpandedRecordFilters> {
         border: Border.all(color: AppColors.border),
       ),
       child: TextField(
+        onTapOutside: dismissKeyboardOnTapOutside,
         key: const ValueKey('records-search-field'),
         controller: _searchController,
         decoration: InputDecoration(

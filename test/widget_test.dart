@@ -719,6 +719,12 @@ void main() {
           ?.text,
       '大吉山',
     );
+    expect(tester.testTextInput.isVisible, isTrue);
+    await tester.tap(
+      find.descendant(of: find.byType(AppBar), matching: find.text('记录')),
+    );
+    await tester.pump();
+    expect(tester.testTextInput.isVisible, isFalse);
   });
 
   testWidgets('records can filter by work and plan group', (tester) async {
@@ -989,9 +995,11 @@ void main() {
     await tester.tap(find.byTooltip('编辑'));
     await tester.pumpAndSettle();
 
+    expect(tester.testTextInput.isVisible, isTrue);
     await tester.tap(find.byTooltip('标题'));
     await tester.pumpAndSettle();
     expect(find.text('## 标题'), findsOneWidget);
+    expect(tester.testTextInput.isVisible, isTrue);
 
     await tester.enterText(find.byType(TextField), '');
     await tester.tap(find.byTooltip('待办'));

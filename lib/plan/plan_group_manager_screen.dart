@@ -180,6 +180,7 @@ class _PlanGroupManagerScreenState extends State<PlanGroupManagerScreen> {
         content: AppDialogField(
           label: '片区名称',
           child: TextField(
+            onTapOutside: dismissKeyboardOnTapOutside,
             controller: controller,
             autofocus: true,
             decoration: appDialogInputDecoration(),
@@ -425,6 +426,7 @@ class _CreatePlanGroupDialogState extends State<_CreatePlanGroupDialog> {
       content: AppDialogField(
         label: '片区名称',
         child: TextField(
+          onTapOutside: dismissKeyboardOnTapOutside,
           key: const ValueKey('plan-group-name-field'),
           controller: _controller,
           autofocus: true,

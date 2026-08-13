@@ -400,6 +400,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: AppDialogField(
               label: 'URL 地址',
               child: TextFormField(
+                onTapOutside: dismissKeyboardOnTapOutside,
                 controller: controller,
                 autofocus: true,
                 decoration: appDialogInputDecoration(helperText: helperText),
@@ -2857,6 +2858,7 @@ class _CustomAspectRatioDialogState extends State<_CustomAspectRatioDialog> {
             child: AppDialogField(
               label: '\u5bbd',
               child: TextField(
+                onTapOutside: dismissKeyboardOnTapOutside,
                 controller: _widthController,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -2876,6 +2878,7 @@ class _CustomAspectRatioDialogState extends State<_CustomAspectRatioDialog> {
             child: AppDialogField(
               label: '\u9ad8',
               child: TextField(
+                onTapOutside: dismissKeyboardOnTapOutside,
                 controller: _heightController,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
@@ -3275,6 +3278,7 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
           AppDialogField(
             label: '\u540d\u79f0',
             child: TextField(
+              onTapOutside: dismissKeyboardOnTapOutside,
               controller: _nameController,
               decoration: appDialogInputDecoration(),
             ),
@@ -3283,6 +3287,7 @@ class _CustomThemeColorDialogState extends State<_CustomThemeColorDialog> {
           AppDialogField(
             label: '\u8272\u53f7',
             child: TextField(
+              onTapOutside: dismissKeyboardOnTapOutside,
               key: const ValueKey('custom-theme-color-hex-field'),
               controller: _hexController,
               decoration: appDialogInputDecoration(hintText: '#0F8B8D'),

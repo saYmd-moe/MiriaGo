@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+export 'widgets/keyboard_dismiss_on_tap.dart' show dismissKeyboardOnTapOutside;
+
 import 'plan/pilgrimage_models.dart';
 
 class AppColors {

@@ -478,6 +478,7 @@ class ComparisonMetadataSection extends StatelessWidget {
           duration: const Duration(milliseconds: 160),
           opacity: config.showPilgrimName ? 1 : 0.45,
           child: TextFormField(
+            onTapOutside: dismissKeyboardOnTapOutside,
             key: const ValueKey('comparison-pilgrim-name'),
             controller: pilgrimNameController,
             enabled: config.showPilgrimName,

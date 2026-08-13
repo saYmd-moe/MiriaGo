@@ -1974,6 +1974,7 @@ class _ImportedPointsCreateGroupDialogState
       content: AppDialogField(
         label: '片区名称',
         child: TextField(
+          onTapOutside: dismissKeyboardOnTapOutside,
           key: const ValueKey('anitabi-import-group-name-field'),
           controller: _controller,
           autofocus: true,
