@@ -71,6 +71,7 @@ class _VisitRecordDetailScreenState extends State<VisitRecordDetailScreen> {
         ],
       ),
       body: ListView(
+        key: const ValueKey('record-detail-scroll-view'),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           _RecordComparisonPanel(

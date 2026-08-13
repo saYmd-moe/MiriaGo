@@ -892,6 +892,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       );
     });
 
+    var shouldShowOrganizeGuide = false;
     try {
       final messenger = ScaffoldMessenger.of(context);
       messenger.showReplacingSnackBar(
@@ -1023,9 +1024,7 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
           ),
         ),
       );
-      if (pilgrimagePoints.length > 1) {
-        await _showOrganizeImportedPointsGuide(pilgrimagePoints);
-      }
+      shouldShowOrganizeGuide = pilgrimagePoints.length > 1;
     } catch (error, stackTrace) {
       debugPrint('Failed to import Anitabi points: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -1036,12 +1035,28 @@ class _AnitabiMapImportScreenState extends State<AnitabiMapImportScreen> {
       ScaffoldMessenger.of(
         context,
       ).showReplacingSnackBar(SnackBar(content: Text(failureMessage)));
+      return;
     } finally {
       if (mounted) {
         setState(() {
           _isImporting = false;
           _importProgress = null;
         });
+      }
+    }
+
+    if (!mounted || !shouldShowOrganizeGuide) {
+      return;
+    }
+    try {
+      await _showOrganizeImportedPointsGuide(pilgrimagePoints);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to organize imported Anitabi points: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showReplacingSnackBar(
+          const SnackBar(content: Text('点位已导入，但整理流程打开失败，可以稍后在计划中调整片区。')),
+        );
       }
     }
   }

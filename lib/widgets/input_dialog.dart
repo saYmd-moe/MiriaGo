@@ -20,7 +20,12 @@ class AppInputDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.sizeOf(context).height - 48;
+    final mediaQuery = MediaQuery.of(context);
+    final maxHeight =
+        (mediaQuery.size.height - mediaQuery.viewInsets.bottom - 48).clamp(
+          0.0,
+          double.infinity,
+        );
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       backgroundColor: AppColors.surface,
@@ -45,8 +50,11 @@ class AppInputDialog extends StatelessWidget {
               const SizedBox(height: 18),
               Flexible(child: SingleChildScrollView(child: content)),
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              OverflowBar(
+                spacing: 6,
+                overflowSpacing: 8,
+                alignment: MainAxisAlignment.end,
+                overflowAlignment: OverflowBarAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -55,7 +63,6 @@ class AppInputDialog extends StatelessWidget {
                     ),
                     child: Text(cancelLabel),
                   ),
-                  const SizedBox(width: 6),
                   FilledButton(
                     onPressed: onConfirm,
                     style: FilledButton.styleFrom(
