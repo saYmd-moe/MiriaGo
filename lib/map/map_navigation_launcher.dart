@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../desktop/external_url_launcher.dart';
 import '../plan/pilgrimage_models.dart';
 
 typedef AndroidGoogleMapsLauncher =
@@ -52,7 +52,7 @@ class MapNavigationLauncher {
     if (externalLauncher != null) {
       return externalLauncher(uri);
     }
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
+    return launchExternalUrl(uri);
   }
 
   bool get _shouldUseAndroidIntent =>

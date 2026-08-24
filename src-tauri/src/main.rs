@@ -1,4 +1,7 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
 
 mod commands;
 mod desktop_db;
@@ -22,7 +25,8 @@ fn main() {
             commands::restore_import_assets,
             commands::write_asset,
             commands::read_asset,
-            commands::fetch_anitabi_static_json
+            commands::fetch_anitabi_static_json,
+            commands::open_external_url
         ])
         .run(tauri::generate_context!())
         .expect("failed to run MiriaGo desktop launcher");

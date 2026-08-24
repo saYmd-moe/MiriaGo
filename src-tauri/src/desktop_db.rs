@@ -850,7 +850,7 @@ fn replace_relational_state(tx: &Transaction<'_>, state: &Value) -> Result<(), S
 
     insert_settings(tx, state.get("settings"))?;
     let active_plan_id = state.get("activePlanId").and_then(Value::as_str);
-    for (order_index, plan) in array_value(state.get("plans")).into_iter().enumerate() {
+    for (order_index, plan) in array_value(state.get("plans")).iter().enumerate() {
         insert_plan(tx, plan, active_plan_id, Some(order_index as i64))?;
     }
     for record in array_value(state.get("visitRecords")) {

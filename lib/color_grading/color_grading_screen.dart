@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,6 +11,8 @@ import '../records/visit_record_photo_stub.dart'
     if (dart.library.io) '../records/visit_record_photo_io.dart';
 import '../widgets/snackbar_helper.dart';
 import 'color_adjustment.dart';
+import 'color_grading_image_loader_stub.dart'
+    if (dart.library.io) 'color_grading_image_loader_io.dart';
 import 'color_grading_params.dart';
 import 'graded_photo_storage_stub.dart'
     if (dart.library.io) 'graded_photo_storage_io.dart';
@@ -101,10 +102,12 @@ class _ColorGradingScreenState extends State<ColorGradingScreen> {
   Future<void> _loadImages() async {
     try {
       final sourcePhotoPath = resolveVisitRecordSourcePhotoPath(_record);
-      if (sourcePhotoPath == null) {
-        throw const FileSystemException('Visit record photo is unavailable');
+      final capturedBytes = sourcePhotoPath == null
+          ? null
+          : await loadColorGradingImageBytes(sourcePhotoPath);
+      if (capturedBytes == null) {
+        throw StateError('Visit record photo is unavailable');
       }
-      final capturedBytes = await File(sourcePhotoPath).readAsBytes();
       final referenceBytes = await _loadReferenceBytes();
       if (!mounted) {
         return;
@@ -132,9 +135,9 @@ class _ColorGradingScreenState extends State<ColorGradingScreen> {
       _record.referenceImagePath,
       widget.fallbackReferenceImagePath,
     ].whereType<String>()) {
-      final file = File(path);
-      if (file.existsSync()) {
-        return file.readAsBytes();
+      final bytes = await loadColorGradingImageBytes(path);
+      if (bytes != null) {
+        return bytes;
       }
     }
 

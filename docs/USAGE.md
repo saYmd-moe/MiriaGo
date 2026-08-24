@@ -253,7 +253,7 @@ MiriaGo 支持两类导出：
 
 导入时会先进入预览页面，用户可以选择导入计划结构、巡礼记录、图片和资源文件。移动端和桌面端会尽量恢复包内本地资源；普通 Web 预览环境可能只能预览数据结构，不能完整恢复本地资源。
 
-桌面端导出数据包和 CSV 时会弹出保存位置选择窗口。macOS 版本会把应用数据、数据库和资源保存在系统应用数据目录；Windows zip 版本会保存在随包的 `MiriaGoData` 文件夹内，便于整体备份或迁移。
+桌面端导出数据包和 CSV 时会弹出保存位置选择窗口。macOS 版本会把应用数据、数据库和资源保存在系统应用数据目录；Windows zip 版本会保存在随包的 `MiriaGoData` 文件夹内，便于整体备份或迁移；Linux 版本使用 `$XDG_DATA_HOME/MiriaGo`，未设置 `XDG_DATA_HOME` 时使用 `~/.local/share/MiriaGo`。
 
 <p align="center">
   <img src="sample_images/v1.1-计划导入导出.png" alt="计划导入导出" width="260">
@@ -278,12 +278,15 @@ CSV 中的图片会以链接形式写入。Google My Maps 是否显示图片预�
 
 ## 16. 桌面端数据和保存位置
 
-macOS / Windows zip 版本以独立应用形式分发。macOS 会使用系统应用数据目录，避免下载应用被 macOS 隔离运行时产生不一致的数据路径；Windows 会在应用旁边使用 `MiriaGoData` 文件夹保存数据库、资源文件和本地缓存。
+macOS / Windows / Linux 桌面版均由 Tauri 2 承载同一 Flutter Web 前端。macOS 使用系统应用数据目录，避免下载应用被 macOS 隔离运行时产生不一致的数据路径；Windows 会在应用旁边使用 `MiriaGoData` 文件夹保存数据库、资源文件和本地缓存；Linux 直接使用 XDG 系统数据目录，不会默认尝试写入可执行文件或 AppImage 挂载位置旁边。
+
+Linux Release 提供 x86_64 AppImage 和 deb。AppImage 首次运行前需要添加可执行权限；deb 安装后会注册 MiriaGo 图标和桌面菜单项。
 
 建议：
 
-- macOS 迁移或备份时优先导出 `.sjhplan` 数据包。
+- macOS 和 Linux 迁移或备份时优先导出 `.sjhplan` 数据包。
 - Windows 不要只移动应用本体，迁移时一起移动 `MiriaGoData`。
+- Linux 备份时包含 `$XDG_DATA_HOME/MiriaGo`（默认 `~/.local/share/MiriaGo`）。
 - 导出 `.sjhplan` 数据包作为长期备份。
 - 导出 CSV 或数据包时优先选择自己容易找到的保存位置。
 

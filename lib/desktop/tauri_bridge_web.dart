@@ -236,6 +236,12 @@ Future<String> fetchDesktopAnitabiStaticJson({
   return body;
 }
 
+Future<bool> openDesktopExternalUrl({required String url}) {
+  return _invokeBoolean('open_external_url', {
+    'request': {'url': url},
+  });
+}
+
 Future<DesktopAssetResult> writeDesktopAsset({
   required String path,
   required String dataBase64,
@@ -273,6 +279,25 @@ Future<JSObject?> _invokeObject(
   String command,
   Map<String, Object?> arguments,
 ) async {
+  final result = await _invoke(command, arguments);
+  if (result == null || result.isUndefinedOrNull) {
+    return null;
+  }
+  return result as JSObject;
+}
+
+Future<bool> _invokeBoolean(
+  String command,
+  Map<String, Object?> arguments,
+) async {
+  final result = await _invoke(command, arguments);
+  if (result == null || result.isUndefinedOrNull) {
+    return false;
+  }
+  return (result as JSBoolean).toDart;
+}
+
+Future<JSAny?> _invoke(String command, Map<String, Object?> arguments) async {
   final core = _tauriCore();
   if (core == null) {
     return null;
@@ -282,11 +307,7 @@ Future<JSObject?> _invokeObject(
     command.toJS,
     _jsObjectFromMap(arguments),
   );
-  final result = await promise.toDart;
-  if (result == null || result.isUndefinedOrNull) {
-    return null;
-  }
-  return result as JSObject;
+  return promise.toDart;
 }
 
 JSObject _jsObjectFromMap(Map<String, Object?> map) {

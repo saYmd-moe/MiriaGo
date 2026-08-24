@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_maplibre/flutter_map_maplibre.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../desktop/external_url_launcher.dart';
 import '../plan/pilgrimage_models.dart';
 
 const openFreeMapStyleUrl = 'https://tiles.openfreemap.org/styles/liberty';
@@ -164,10 +164,7 @@ RichAttributionWidget configuredMapAttribution(AppSettings settings) {
         TextSourceAttribution(
           'OpenFreeMap / OpenMapTiles contributors',
           onTap: () {
-            launchUrl(
-              Uri.parse('https://openfreemap.org/'),
-              mode: LaunchMode.externalApplication,
-            );
+            launchExternalUrl(Uri.parse('https://openfreemap.org/'));
           },
         ),
       ],
@@ -178,9 +175,8 @@ RichAttributionWidget configuredMapAttribution(AppSettings settings) {
       TextSourceAttribution(
         'OpenStreetMap contributors',
         onTap: () {
-          launchUrl(
+          launchExternalUrl(
             Uri.parse('https://www.openstreetmap.org/copyright'),
-            mode: LaunchMode.externalApplication,
           );
         },
       ),

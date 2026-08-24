@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../app_theme.dart';
+import '../desktop/external_url_launcher.dart';
 import '../widgets/confirm_action_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 import 'pilgrimage_plan_controller.dart';
@@ -353,7 +353,7 @@ class _PlanMemoScreenState extends State<PlanMemoScreen> {
       ).showReplacingSnackBar(const SnackBar(content: Text('链接格式不正确')));
       return;
     }
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await launchExternalUrl(uri);
     if (!mounted || opened) {
       return;
     }

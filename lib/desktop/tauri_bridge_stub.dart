@@ -150,3 +150,7 @@ Future<String> fetchDesktopAnitabiStaticJson({
 }) async {
   throw UnsupportedError('Tauri desktop launcher is not available.');
 }
+
+Future<bool> openDesktopExternalUrl({required String url}) async {
+  return false;
+}

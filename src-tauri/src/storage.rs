@@ -1,5 +1,11 @@
 use std::{env, fs, path::PathBuf};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DataDirectoryPolicy {
+    PortableWithSystemFallback,
+    System,
+}
+
 #[derive(Debug)]
 pub struct DataDirs {
     pub portable: bool,
@@ -12,18 +18,29 @@ pub struct DataDirs {
 }
 
 pub fn ensure_data_dirs() -> Result<DataDirs, String> {
-    if cfg!(target_os = "macos") {
-        let data_dir = system_data_dir()?;
-        return create_data_dirs(data_dir, false, false);
-    }
-
-    let portable_dir = portable_data_dir();
-    match create_data_dirs(portable_dir.clone(), true, false) {
-        Ok(dirs) => Ok(dirs),
-        Err(_) => {
-            let fallback_dir = system_data_dir()?;
-            create_data_dirs(fallback_dir, false, true)
+    match data_directory_policy_for(env::consts::OS) {
+        DataDirectoryPolicy::PortableWithSystemFallback => {
+            let portable_dir = portable_data_dir();
+            match create_data_dirs(portable_dir, true, false) {
+                Ok(dirs) => Ok(dirs),
+                Err(_) => {
+                    let fallback_dir = system_data_dir()?;
+                    create_data_dirs(fallback_dir, false, true)
+                }
+            }
         }
+        DataDirectoryPolicy::System => {
+            let data_dir = system_data_dir()?;
+            create_data_dirs(data_dir, false, false)
+        }
+    }
+}
+
+fn data_directory_policy_for(target_os: &str) -> DataDirectoryPolicy {
+    match target_os {
+        "windows" => DataDirectoryPolicy::PortableWithSystemFallback,
+        "linux" | "macos" => DataDirectoryPolicy::System,
+        _ => DataDirectoryPolicy::System,
     }
 }
 
@@ -75,10 +92,30 @@ fn system_data_dir() -> Result<PathBuf, String> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::portable_data_dir_for_exe;
+    use super::{data_directory_policy_for, portable_data_dir_for_exe, DataDirectoryPolicy};
 
     #[test]
-    fn non_macos_portable_data_dir_uses_miriago_data_next_to_exe() {
+    fn windows_uses_portable_data_with_system_fallback() {
+        assert_eq!(
+            data_directory_policy_for("windows"),
+            DataDirectoryPolicy::PortableWithSystemFallback
+        );
+    }
+
+    #[test]
+    fn linux_and_macos_use_system_data_directly() {
+        assert_eq!(
+            data_directory_policy_for("linux"),
+            DataDirectoryPolicy::System
+        );
+        assert_eq!(
+            data_directory_policy_for("macos"),
+            DataDirectoryPolicy::System
+        );
+    }
+
+    #[test]
+    fn windows_portable_data_dir_is_next_to_executable() {
         let exe = PathBuf::from("/opt/MiriaGo/MiriaGo.exe");
 
         assert_eq!(

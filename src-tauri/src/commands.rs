@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, fs, net::IpAddr, path::PathBuf, process::Command};
 
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -107,6 +107,12 @@ pub struct FetchAnitabiStaticJsonRequest {
     pub file_name: String,
     pub version: Option<String>,
     pub base_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenExternalUrlRequest {
+    pub url: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -411,6 +417,13 @@ pub fn fetch_anitabi_static_json(
     Ok(AnitabiStaticJsonResult { body })
 }
 
+#[tauri::command]
+pub fn open_external_url(request: OpenExternalUrlRequest) -> Result<bool, String> {
+    let url = safe_public_external_url(&request.url)?;
+    open_url_with_system(&url)?;
+    Ok(true)
+}
+
 fn safe_public_https_base_url(value: &str) -> Result<String, String> {
     let parsed = reqwest::Url::parse(value.trim()).map_err(|_| "invalid HTTPS base URL")?;
     if parsed.scheme() != "https"
@@ -429,28 +442,60 @@ fn safe_public_https_base_url(value: &str) -> Result<String, String> {
     Ok(value.trim().trim_end_matches('/').to_string())
 }
 
-fn is_local_or_private_host(host: &str) -> bool {
-    if host == "localhost"
-        || host.ends_with(".localhost")
-        || host.ends_with(".local")
-        || host == "::1"
+fn safe_public_external_url(value: &str) -> Result<String, String> {
+    let parsed = reqwest::Url::parse(value.trim()).map_err(|_| "invalid external URL")?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
     {
+        return Err("invalid external URL".to_string());
+    }
+    let host = parsed.host_str().unwrap_or_default().to_ascii_lowercase();
+    if is_local_or_private_host(&host) {
+        return Err("local or private hosts are not allowed".to_string());
+    }
+    Ok(parsed.to_string())
+}
+
+fn is_local_or_private_host(host: &str) -> bool {
+    let host = host.trim_matches(['[', ']']);
+    if host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local") {
         return true;
     }
-    let octets = host
-        .split('.')
-        .map(str::parse::<u8>)
-        .collect::<Result<Vec<_>, _>>();
-    let Ok(octets) = octets else {
-        return false;
-    };
-    if octets.len() != 4 {
-        return false;
+    match host.parse::<IpAddr>() {
+        Ok(IpAddr::V4(address)) => {
+            address.is_unspecified()
+                || address.is_loopback()
+                || address.is_private()
+                || address.is_link_local()
+        }
+        Ok(IpAddr::V6(address)) => {
+            address.is_unspecified()
+                || address.is_loopback()
+                || address.is_unique_local()
+                || address.is_unicast_link_local()
+        }
+        Err(_) => false,
     }
-    matches!(
-        (octets[0], octets[1]),
-        (0, _) | (10, _) | (127, _) | (169, 254) | (172, 16..=31) | (192, 168)
-    )
+}
+
+fn open_url_with_system(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let mut command = Command::new("explorer.exe");
+    #[cfg(target_os = "macos")]
+    let mut command = Command::new("open");
+    #[cfg(target_os = "linux")]
+    let mut command = Command::new("xdg-open");
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    return Err("external URLs are unsupported on this platform".to_string());
+
+    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    command
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("failed to open external URL: {error}"))
 }
 
 fn normalize_extension(extension: &str) -> String {
@@ -592,7 +637,10 @@ fn safe_directory_name(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{safe_asset_path, safe_local_asset_path, safe_public_https_base_url};
+    use super::{
+        safe_asset_path, safe_local_asset_path, safe_public_external_url,
+        safe_public_https_base_url,
+    };
 
     #[test]
     fn anitabi_static_base_url_rejects_unsafe_hosts() {
@@ -604,6 +652,19 @@ mod tests {
         assert!(safe_public_https_base_url("https://localhost:8080/d").is_err());
         assert!(safe_public_https_base_url("https://192.168.1.2/d").is_err());
         assert!(safe_public_https_base_url("https://example.com/d?token=x").is_err());
+    }
+
+    #[test]
+    fn external_urls_allow_public_http_and_https_only() {
+        assert_eq!(
+            safe_public_external_url("https://www.google.com/maps?q=35,139").unwrap(),
+            "https://www.google.com/maps?q=35,139"
+        );
+        assert!(safe_public_external_url("file:///tmp/example").is_err());
+        assert!(safe_public_external_url("javascript:alert(1)").is_err());
+        assert!(safe_public_external_url("https://localhost/test").is_err());
+        assert!(safe_public_external_url("http://10.0.0.1/test").is_err());
+        assert!(safe_public_external_url("https://[fc00::1]/test").is_err());
     }
 
     #[test]
