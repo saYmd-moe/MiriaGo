@@ -49,6 +49,11 @@ Future<DesktopLauncherInfo?> loadDesktopLauncherInfo() async {
     exportsDir: _stringProperty(object, 'exportsDir') ?? '',
     logsDir: _stringProperty(object, 'logsDir') ?? '',
     tempDir: _stringProperty(object, 'tempDir') ?? '',
+    desktopEnvironment: _stringProperty(object, 'desktopEnvironment'),
+    sessionType: _stringProperty(object, 'sessionType'),
+    portalUsed: _stringProperty(object, 'portalUsed') == null
+        ? null
+        : (_boolProperty(object, 'portalUsed') ?? false),
   );
 }
 

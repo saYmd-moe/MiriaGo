@@ -9,6 +9,9 @@ class DesktopLauncherInfo {
     required this.exportsDir,
     required this.logsDir,
     required this.tempDir,
+    this.desktopEnvironment,
+    this.sessionType,
+    this.portalUsed,
   });
 
   final String appVersion;
@@ -20,6 +23,13 @@ class DesktopLauncherInfo {
   final String exportsDir;
   final String logsDir;
   final String tempDir;
+
+  /// Present on Linux desktop; e.g. `KDE`.
+  final String? desktopEnvironment;
+  /// Present on Linux desktop; e.g. `wayland`, `x11`.
+  final String? sessionType;
+  /// Whether GTK dialogs are routed through the XDG Desktop Portal.
+  final bool? portalUsed;
 }
 
 class DesktopExportDestination {

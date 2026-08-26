@@ -17,6 +17,13 @@ pub struct LauncherInfo {
     pub exports_dir: String,
     pub logs_dir: String,
     pub temp_dir: String,
+    /// Present on Linux; identifies the running desktop environment (e.g. `KDE`).
+    pub desktop_environment: Option<String>,
+    /// Present on Linux; the display protocol (e.g. `wayland`, `x11`).
+    pub session_type: Option<String>,
+    /// Configured GTK file-chooser backend routed through the XDG Desktop Portal.
+    /// `Some(true)` means `GTK_USE_PORTAL=1`; `None` means the value was not set.
+    pub portal_used: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -160,15 +167,61 @@ impl From<storage::DataDirs> for LauncherInfo {
             exports_dir: value.exports_dir.display().to_string(),
             logs_dir: value.logs_dir.display().to_string(),
             temp_dir: value.temp_dir.display().to_string(),
+            desktop_environment: desktop_environment(),
+            session_type: session_type(),
+            portal_used: portal_used(),
         }
     }
 }
 
-/// Read-only runtime diagnostics snapshot (M0). Backing data for the future
-/// About/diagnostics entry; never mutates state.
+/// Read-only runtime diagnostics snapshot. The M5 diagnostics UI consumes this
+/// single model for display and redacted copy/export; this command never mutates state.
 #[tauri::command]
 pub fn runtime_diagnostics() -> Result<diagnostics::RuntimeDiagnostics, String> {
     diagnostics::collect()
+}
+
+#[cfg(target_os = "linux")]
+fn environment_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn environment_value(_name: &str) -> Option<String> {
+    None
+}
+
+fn desktop_environment() -> Option<String> {
+    first_environment_component(environment_value("XDG_CURRENT_DESKTOP"))
+}
+
+fn session_type() -> Option<String> {
+    normalise_session_type(environment_value("XDG_SESSION_TYPE"))
+}
+
+fn portal_used() -> Option<bool> {
+    portal_setting(environment_value("GTK_USE_PORTAL"))
+}
+
+fn normalise_session_type(value: Option<String>) -> Option<String> {
+    value.map(|value| value.trim().to_ascii_lowercase())
+}
+
+fn portal_setting(value: Option<String>) -> Option<bool> {
+    match value.as_deref().map(str::trim) {
+        Some("") | None => None,
+        Some("1") => Some(true),
+        Some(_) => Some(false),
+    }
+}
+
+fn first_environment_component(value: Option<String>) -> Option<String> {
+    value?.split(':').find_map(|part| {
+        let part = part.trim();
+        (!part.is_empty()).then(|| part.to_string())
+    })
 }
 
 #[tauri::command]
@@ -645,6 +698,7 @@ fn safe_directory_name(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
+        ensure_extension, first_environment_component, normalise_session_type, portal_setting,
         safe_asset_path, safe_local_asset_path, safe_public_external_url,
         safe_public_https_base_url,
     };
@@ -672,6 +726,40 @@ mod tests {
         assert!(safe_public_external_url("https://localhost/test").is_err());
         assert!(safe_public_external_url("http://10.0.0.1/test").is_err());
         assert!(safe_public_external_url("https://[fc00::1]/test").is_err());
+    }
+
+    #[test]
+    fn environment_component_is_trimmed_and_split() {
+        assert_eq!(
+            first_environment_component(Some("KDE:GNOME".to_string())),
+            Some("KDE".to_string())
+        );
+        assert_eq!(
+            first_environment_component(Some("  unity ".to_string())),
+            Some("unity".to_string())
+        );
+        assert_eq!(first_environment_component(None), None);
+        assert_eq!(first_environment_component(Some("  ".to_string())), None);
+    }
+
+    #[test]
+    fn session_and_portal_values_are_normalised_without_env_mutation() {
+        assert_eq!(
+            normalise_session_type(Some(" Wayland ".to_string())),
+            Some("wayland".to_string())
+        );
+        assert_eq!(portal_setting(Some("1".to_string())), Some(true));
+        assert_eq!(portal_setting(Some("0".to_string())), Some(false));
+        assert_eq!(portal_setting(Some(" ".to_string())), None);
+        assert_eq!(portal_setting(None), None);
+    }
+
+    #[test]
+    fn export_extension_preserves_unicode_path_names() {
+        assert_eq!(
+            ensure_extension(std::path::PathBuf::from("/tmp/计划 数据"), "sjhplan"),
+            std::path::PathBuf::from("/tmp/计划 数据.sjhplan")
+        );
     }
 
     #[test]
