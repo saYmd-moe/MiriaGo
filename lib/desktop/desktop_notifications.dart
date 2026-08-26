@@ -6,8 +6,11 @@ Future<void> notifyDesktopTaskIfBackground({
   required String title,
   required String body,
 }) async {
+  final lifecycleState = WidgetsBinding.instance.lifecycleState;
   if (!isTauriLauncherAvailable ||
-      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      lifecycleState == null ||
+      lifecycleState == AppLifecycleState.resumed ||
+      lifecycleState == AppLifecycleState.inactive) {
     return;
   }
   try {
