@@ -1,4 +1,14 @@
-use std::{collections::HashMap, fs, net::IpAddr, path::PathBuf, process::Command};
+use std::{
+    collections::HashMap,
+    fs,
+    net::IpAddr,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Mutex,
+};
+
+use tauri::State;
+use tauri_plugin_notification::NotificationExt;
 
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -115,6 +125,38 @@ pub struct OpenExternalUrlRequest {
     pub url: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopNotificationRequest {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Default)]
+pub struct PendingPlanFiles(pub Mutex<Vec<String>>);
+
+impl PendingPlanFiles {
+    pub fn from_args<I>(args: I) -> Self
+    where
+        I: IntoIterator<Item = String>,
+    {
+        Self(Mutex::new(
+            args.into_iter()
+                .filter(|path| is_plan_file_path(path))
+                .collect(),
+        ))
+    }
+
+    pub fn add_args<I>(&self, args: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        if let Ok(mut pending) = self.0.lock() {
+            pending.extend(args.into_iter().filter(|path| is_plan_file_path(path)));
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadAssetResult {
@@ -146,6 +188,12 @@ pub struct ExportDestinationResult {
 #[serde(rename_all = "camelCase")]
 pub struct AnitabiStaticJsonResult {
     pub body: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopDiagnostics {
+    pub text: String,
 }
 
 impl From<storage::DataDirs> for LauncherInfo {
@@ -424,6 +472,86 @@ pub fn open_external_url(request: OpenExternalUrlRequest) -> Result<bool, String
     Ok(true)
 }
 
+#[tauri::command]
+pub fn take_pending_plan_files(state: State<'_, PendingPlanFiles>) -> Vec<String> {
+    state
+        .0
+        .lock()
+        .map(|mut pending| pending.drain(..).collect())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn desktop_diagnostics() -> Result<DesktopDiagnostics, String> {
+    let dirs = storage::ensure_data_dirs()?;
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from));
+    let data_dir = redact_path(&dirs.data_dir, home.as_deref());
+    let logs_dir = redact_path(&dirs.logs_dir, home.as_deref());
+    let text = format!(
+        "MiriaGo diagnostics\napp_version={}\nos={}\ndesktop={}\nsession_type={}\nscale={}\nportal={}\ndata_dir={}\nlogs_dir={}\nrecent_errors=not-collected",
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        env_value("XDG_CURRENT_DESKTOP"),
+        env_value("XDG_SESSION_TYPE"),
+        first_env_value(["GDK_SCALE", "GDK_DPI_SCALE", "QT_SCALE_FACTOR"]),
+        env_value("GTK_USE_PORTAL"),
+        data_dir,
+        logs_dir,
+    );
+    Ok(DesktopDiagnostics { text })
+}
+
+#[tauri::command]
+pub fn notify_desktop_task(app: tauri::AppHandle, request: DesktopNotificationRequest) -> bool {
+    let title = truncate_notification_text(&request.title);
+    let body = truncate_notification_text(&request.body);
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .is_ok()
+}
+
+fn is_plan_file_path(value: &str) -> bool {
+    let path = Path::new(value.trim());
+    path.is_file()
+        && path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("sjhplan"))
+}
+
+fn redact_path(path: &Path, home: Option<&Path>) -> String {
+    let path = path.to_string_lossy();
+    if let Some(home) = home.and_then(|value| value.to_str()) {
+        if let Some(relative) = path
+            .strip_prefix(home)
+            .and_then(|value| value.strip_prefix('/'))
+        {
+            return format!("~/{relative}");
+        }
+    }
+    "<user-data>".to_string()
+}
+
+fn env_value(name: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn first_env_value<const N: usize>(names: [&str; N]) -> String {
+    names
+        .into_iter()
+        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn truncate_notification_text(value: &str) -> String {
+    value.chars().take(160).collect()
+}
+
 fn safe_public_https_base_url(value: &str) -> Result<String, String> {
     let parsed = reqwest::Url::parse(value.trim()).map_err(|_| "invalid HTTPS base URL")?;
     if parsed.scheme() != "https"
@@ -638,8 +766,8 @@ fn safe_directory_name(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        safe_asset_path, safe_local_asset_path, safe_public_external_url,
-        safe_public_https_base_url,
+        is_plan_file_path, safe_asset_path, safe_local_asset_path, safe_public_external_url,
+        safe_public_https_base_url, truncate_notification_text, PendingPlanFiles,
     };
 
     #[test]
@@ -665,6 +793,31 @@ mod tests {
         assert!(safe_public_external_url("https://localhost/test").is_err());
         assert!(safe_public_external_url("http://10.0.0.1/test").is_err());
         assert!(safe_public_external_url("https://[fc00::1]/test").is_err());
+    }
+
+    #[test]
+    fn pending_files_accept_only_existing_sjhplan_paths() {
+        let temporary = std::env::temp_dir().join("MiriaGo test 空格.sjhplan");
+        std::fs::write(&temporary, b"test").unwrap();
+        assert!(is_plan_file_path(temporary.to_str().unwrap()));
+        assert!(!is_plan_file_path("/does/not/exist.sjhplan"));
+        assert!(!is_plan_file_path(
+            temporary.with_extension("txt").to_str().unwrap()
+        ));
+        std::fs::remove_file(temporary).unwrap();
+    }
+
+    #[test]
+    fn pending_files_are_filtered_and_notification_text_is_bounded() {
+        let pending = PendingPlanFiles::from_args([
+            "/does/not/exist.sjhplan".to_string(),
+            "notes.txt".to_string(),
+        ]);
+        assert!(pending.0.lock().unwrap().is_empty());
+        assert_eq!(
+            truncate_notification_text(&"x".repeat(200)).chars().count(),
+            160
+        );
     }
 
     #[test]

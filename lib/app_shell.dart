@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -15,6 +17,7 @@ import 'plan/plan_screen.dart';
 import 'plan/point_manager_screen.dart';
 import 'plan_transfer/import_export_screen.dart';
 import 'plan_transfer/incoming_plan_file.dart';
+import 'desktop/tauri_bridge.dart';
 import 'plan_transfer/plan_import_file_stub.dart'
     if (dart.library.io) 'plan_transfer/plan_import_file_io.dart';
 import 'plan_transfer/plan_import_preview_screen.dart';
@@ -39,16 +42,19 @@ class _AppShellState extends State<AppShell> {
   Object? _loadError;
   int _selectedIndex = 0;
   final _incomingPlanFiles = const IncomingPlanFileChannel();
+  DesktopPlanFileSubscription? _desktopPlanFileSubscription;
+  final Set<String> _activePlanFileImports = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _incomingPlanFiles.listen(_importPlanFromPath);
+    _incomingPlanFiles.listen(_queueImportPlanFromPath);
     _initializeApp();
   }
 
   @override
   void dispose() {
+    unawaited(_desktopPlanFileSubscription?.dispose());
     _planController?.dispose();
     super.dispose();
   }
@@ -93,6 +99,11 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _initializeApp() async {
     await _loadActivePlan();
+    if (isTauriLauncherAvailable) {
+      _desktopPlanFileSubscription = await listenForDesktopPlanFiles((path) {
+        unawaited(_queueImportPlanFromPath(path));
+      });
+    }
     await _loadInitialIncomingPlanFile();
   }
 
@@ -181,11 +192,29 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _loadInitialIncomingPlanFile() async {
-    final path = await _incomingPlanFiles.getInitialPath();
-    if (path == null || path.isEmpty) {
+    final pending = await takePendingDesktopPlanFiles();
+    if (pending.isNotEmpty) {
+      for (final path in pending) {
+        await _queueImportPlanFromPath(path);
+      }
       return;
     }
-    await _importPlanFromPath(path);
+
+    final path = await _incomingPlanFiles.getInitialPath();
+    if (path != null && path.isNotEmpty) {
+      await _queueImportPlanFromPath(path);
+    }
+  }
+
+  Future<void> _queueImportPlanFromPath(String path) async {
+    if (!_activePlanFileImports.add(path)) {
+      return;
+    }
+    try {
+      await _importPlanFromPath(path);
+    } finally {
+      _activePlanFileImports.remove(path);
+    }
   }
 
   Future<void> _importPlanFromPath(String path) async {

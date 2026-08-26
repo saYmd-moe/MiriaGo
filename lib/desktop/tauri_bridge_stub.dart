@@ -48,6 +48,16 @@ class DesktopRestoreImportAssetsResult {
   final Map<String, String> restoredPaths;
 }
 
+abstract class DesktopPlanFileSubscription {
+  Future<void> dispose();
+}
+
+class DesktopDiagnostics {
+  const DesktopDiagnostics({required this.text});
+
+  final String text;
+}
+
 class DesktopAssetResult {
   const DesktopAssetResult({required this.dataBase64, required this.mimeType});
 
@@ -152,5 +162,26 @@ Future<String> fetchDesktopAnitabiStaticJson({
 }
 
 Future<bool> openDesktopExternalUrl({required String url}) async {
+  return false;
+}
+
+Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
+  void Function(String path) onPath,
+) async {
+  return null;
+}
+
+Future<List<String>> takePendingDesktopPlanFiles() async {
+  return const <String>[];
+}
+
+Future<DesktopDiagnostics?> loadDesktopDiagnostics() async {
+  return null;
+}
+
+Future<bool> notifyDesktopTask({
+  required String title,
+  required String body,
+}) async {
   return false;
 }

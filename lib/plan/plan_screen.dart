@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
+import '../desktop/desktop_notifications.dart';
 import '../data/pilgrimage_repository.dart';
 import '../widgets/confirm_action_dialog.dart';
 import '../widgets/input_dialog.dart';
@@ -634,6 +635,12 @@ class _PlanScreenState extends State<PlanScreen> {
           messenger.showReplacingSnackBar(
             SnackBar(content: Text(progress.label)),
           );
+          if (progress.done) {
+            await notifyDesktopTaskIfBackground(
+              title: 'MiriaGo 参考图缓存完成',
+              body: progress.label,
+            );
+          }
         }
       }
     }
