@@ -5,6 +5,7 @@
 
 mod commands;
 mod desktop_db;
+mod diagnostics;
 mod storage;
 
 #[cfg(target_os = "linux")]
@@ -38,6 +39,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::launcher_info,
             commands::ensure_data_dirs,
+            commands::runtime_diagnostics,
             commands::prepare_export_destination,
             commands::write_export_file,
             commands::load_desktop_state,
