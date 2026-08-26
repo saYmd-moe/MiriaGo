@@ -19,7 +19,7 @@
 | `display` | `DISPLAY`（X11）|
 | `waylandDisplay` | `WAYLAND_DISPLAY`（Wayland）|
 | `gtkUsePortal` | `GTK_USE_PORTAL` 配置 |
-| `portalBackend` | 由配置推导的 portal 后端提示：`kde` / `gtk` / `unknown` |
+| `portalBackend` | 由配置推导的 portal 后端提示：`kde` / `gtk` / `unknown`（仅 `GTK_USE_PORTAL=1` 视为启用） |
 | `dataDir` / `logsDir` | 数据目录与日志目录 |
 
 特性：

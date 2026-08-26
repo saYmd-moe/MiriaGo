@@ -94,8 +94,9 @@ fn webkitgtk_version() -> Option<String> {
 }
 
 /// Derives a portal backend hint from configuration only: KDE sessions prefer
-/// the KDE portal backend, an explicit `GTK_USE_PORTAL` selects the GTK portal,
-/// and anything else is reported as unknown rather than guessed.
+/// the KDE portal backend, and only an explicitly enabled (`1`) GTK_USE_PORTAL
+/// selects the GTK portal. Anything else is reported as unknown rather than
+/// guessed.
 fn portal_backend_hint(
     current_desktop: Option<&str>,
     gtk_use_portal: Option<&str>,
@@ -107,7 +108,7 @@ fn portal_backend_hint(
     });
     if is_kde {
         Some("kde".to_string())
-    } else if gtk_use_portal.is_some() {
+    } else if gtk_use_portal.is_some_and(|value| value.trim() == "1") {
         Some("gtk".to_string())
     } else {
         Some("unknown".to_string())
@@ -253,6 +254,22 @@ mod tests {
             Some("unknown".to_string())
         );
         assert_eq!(portal_backend_hint(None, None), Some("unknown".to_string()));
+    }
+
+    #[test]
+    fn portal_backend_requires_explicit_gtk_enablement() {
+        assert_eq!(
+            portal_backend_hint(Some("GNOME"), Some("0")),
+            Some("unknown".to_string())
+        );
+        assert_eq!(
+            portal_backend_hint(Some("GNOME"), Some("")),
+            Some("unknown".to_string())
+        );
+        assert_eq!(
+            portal_backend_hint(Some("GNOME"), Some(" 0 ")),
+            Some("unknown".to_string())
+        );
     }
 
     #[test]
