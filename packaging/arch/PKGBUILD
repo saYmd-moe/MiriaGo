@@ -1,0 +1,35 @@
+# Maintainer: MiriaGo contributors
+# Internal payload recipe: use ../../scripts/build-arch-package.sh from the
+# repository root; that script creates and checksums the local source archive.
+pkgname=miriago
+pkgver=1.1.6
+pkgrel=1
+pkgdesc='Anime pilgrimage planning and recording application'
+arch=('x86_64' 'aarch64')
+url='https://github.com/BilyHurington/MiriaGo'
+license=('MIT')
+depends=('gtk3' 'webkit2gtk-4.1' 'xdg-desktop-portal-gtk' 'xdg-utils')
+optdepends=(
+  'xdg-desktop-portal-kde: native KDE file chooser integration instead of the GTK fallback'
+  'gst-plugins-good: additional WebKit media format support'
+)
+options=('!debug')
+source=("MiriaGo-${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  install -Dm755 "${srcdir}/miriago-desktop" \
+    "${pkgdir}/usr/lib/miriago/miriago-desktop"
+  install -Dm755 "${srcdir}/miriago" \
+    "${pkgdir}/usr/bin/miriago"
+  install -Dm644 "${srcdir}/app.miriago.desktop.desktop" \
+    "${pkgdir}/usr/share/applications/app.miriago.desktop.desktop"
+  install -Dm644 "${srcdir}/LICENSE" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+
+  local size
+  for size in 32 128 256 1024; do
+    install -Dm644 "${srcdir}/icon-${size}.png" \
+      "${pkgdir}/usr/share/icons/hicolor/${size}x${size}/apps/app.miriago.desktop.png"
+  done
+}

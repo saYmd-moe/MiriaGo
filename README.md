@@ -122,11 +122,17 @@ sudo apt-get install -y build-essential curl file \
   libwebkit2gtk-4.1-dev libxdo-dev patchelf wget xdg-utils
 ```
 
-Arch Linux 可安装仓库中的对应包：
+Arch Linux 可安装仓库中的对应构建依赖：
 
 ```bash
 sudo pacman -S --needed base-devel curl file libayatana-appindicator \
   librsvg openssl patchelf webkit2gtk-4.1 wget xdotool xdg-utils
+```
+
+KDE Plasma 用户建议同时安装 Portal 后端。MiriaGo 会在 KDE 会话中优先让 GTK 文件选择器通过 XDG Desktop Portal 使用原生 KDE 对话框，外部链接则由 `xdg-open` 分派给 KDE KIO 和系统默认应用：
+
+```bash
+sudo pacman -S --needed xdg-desktop-portal xdg-desktop-portal-kde
 ```
 
 初始化依赖：
@@ -181,6 +187,15 @@ npm run desktop:build -- --bundles appimage,deb
 ```
 
 Linux 输出位于 `src-tauri/target/release/bundle/appimage/` 和 `src-tauri/target/release/bundle/deb/`。默认的 `desktop:build` 遵循 Tauri 的 `targets: "all"` 配置，也可能在当前工具链支持时生成 rpm。
+
+在 Arch Linux 上可生成由 pacman 管理的原生包：
+
+```bash
+./scripts/build-arch-package.sh
+sudo pacman -U dist/arch/miriago-*.pkg.tar.zst
+```
+
+脚本默认执行干净的 npm 安装、Flutter Web release 构建和 Tauri/Rust release 编译，然后用 `makepkg` 生成包。如果刚完成同一源码的 release 编译，可设置 `MIRIAGO_SKIP_BUILD=1` 仅重新打包。生成的包安装稳定启动命令 `/usr/bin/miriago`、FreeDesktop 菜单项和多尺寸 hicolor 图标，并声明 WebKitGTK、GTK Portal 回退后端与 `xdg-utils` 运行时依赖。
 
 ## Release 构建
 

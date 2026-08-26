@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=MiriaGo
+GenericName=Anime Pilgrimage Planner
+GenericName[zh_CN]=动漫巡礼规划工具
+Comment=Plan and record anime pilgrimage trips
+Comment[zh_CN]=规划并记录动漫巡礼旅程
+Exec=miriago
+Icon=app.miriago.desktop
+Terminal=false
+Categories=Utility;
+Keywords=anime;pilgrimage;travel;map;
+Keywords[zh_CN]=动漫;巡礼;旅行;地图;
+StartupNotify=true
+StartupWMClass=app.miriago.desktop

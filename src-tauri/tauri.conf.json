@@ -11,6 +11,7 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "enableGTKAppId": true,
     "windows": [
       {
         "title": "MiriaGo",
@@ -40,7 +41,11 @@
     ],
     "linux": {
       "deb": {
-        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "xdg-utils"]
+        "depends": ["xdg-desktop-portal-gtk", "xdg-utils"],
+        "desktopTemplate": "../packaging/linux/tauri.desktop.in"
+      },
+      "rpm": {
+        "desktopTemplate": "../packaging/linux/tauri.desktop.in"
       }
     }
   }

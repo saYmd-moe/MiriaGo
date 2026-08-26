@@ -280,7 +280,9 @@ CSV 中的图片会以链接形式写入。Google My Maps 是否显示图片预�
 
 macOS / Windows / Linux 桌面版均由 Tauri 2 承载同一 Flutter Web 前端。macOS 使用系统应用数据目录，避免下载应用被 macOS 隔离运行时产生不一致的数据路径；Windows 会在应用旁边使用 `MiriaGoData` 文件夹保存数据库、资源文件和本地缓存；Linux 直接使用 XDG 系统数据目录，不会默认尝试写入可执行文件或 AppImage 挂载位置旁边。
 
-Linux Release 提供 x86_64 AppImage 和 deb。AppImage 首次运行前需要添加可执行权限；deb 安装后会注册 MiriaGo 图标和桌面菜单项。
+Linux Release 提供 x86_64 AppImage 和 deb。AppImage 首次运行前需要添加可执行权限；deb 安装后会注册 MiriaGo 图标和桌面菜单项。Arch Linux 源码工作树还可以运行 `./scripts/build-arch-package.sh` 生成 `dist/arch/miriago-*.pkg.tar.zst`，再用 `sudo pacman -U` 安装或升级。
+
+在 KDE Plasma 会话中，MiriaGo 会保留 Tauri/WebKitGTK 架构，同时使用 GTK application ID 改善 KWin 任务栏与桌面菜单匹配；未显式设置 `GTK_USE_PORTAL` 时，文件选择器会优先请求 XDG Desktop Portal；安装 KDE Portal 后端后会显示 KDE 对话框。外部地图和文档链接通过 `xdg-open` 交给 KDE KIO 与系统默认应用。pacman 包会安装 GTK Portal 回退后端；KDE 用户建议同时安装 `xdg-desktop-portal-kde`。如需排查 WebKitGTK/HTML 文件选择器，可用 `GTK_USE_PORTAL=0 miriago` 临时关闭这一类选择器的 Portal 路径；该变量不改变 Tauri/Rust 保存对话框使用的 XDG Portal 后端。
 
 建议：
 
