@@ -54,6 +54,8 @@ mkdir -p "$payload_dir" "$repo_root/dist/arch"
 
 install -Dm755 "$binary" "$payload_dir/miriago-desktop"
 install -Dm755 packaging/linux/miriago "$payload_dir/miriago"
+install -Dm755 packaging/linux/miriago-legacy-drivers \
+  "$payload_dir/miriago-legacy-drivers"
 install -Dm644 packaging/linux/app.miriago.desktop.desktop \
   "$payload_dir/app.miriago.desktop.desktop"
 install -Dm644 LICENSE "$payload_dir/LICENSE"

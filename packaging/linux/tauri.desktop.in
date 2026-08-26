@@ -4,6 +4,7 @@ Categories={{categories}}
 Comment={{comment}}
 {{/if}}
 Exec={{exec}}
+StartupNotify=true
 StartupWMClass=app.miriago.desktop
 Icon={{icon}}
 Name={{name}}

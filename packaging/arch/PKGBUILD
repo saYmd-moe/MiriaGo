@@ -22,6 +22,8 @@ package() {
     "${pkgdir}/usr/lib/miriago/miriago-desktop"
   install -Dm755 "${srcdir}/miriago" \
     "${pkgdir}/usr/bin/miriago"
+  install -Dm755 "${srcdir}/miriago-legacy-drivers" \
+    "${pkgdir}/usr/bin/miriago-legacy-drivers"
   install -Dm644 "${srcdir}/app.miriago.desktop.desktop" \
     "${pkgdir}/usr/share/applications/app.miriago.desktop.desktop"
   install -Dm644 "${srcdir}/LICENSE" \

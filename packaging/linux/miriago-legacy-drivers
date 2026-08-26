@@ -1,0 +1,32 @@
+#!/bin/sh
+# Opt-in WebKitGTK driver workaround launcher for MiriaGo.
+#
+# Do NOT use this by default. The default `miriago` launcher and the desktop
+# entry intentionally do not set WEBKIT_DISABLE_DMABUF_RENDERER, because the
+# DMABUF renderer is required for correct fractional-scaling and multi-monitor
+# rendering on KDE Plasma Wayland.
+#
+# Only invoke this wrapper when you have confirmed a specific graphics-driver /
+# WebKitGTK DMABUF bug (for example: black/corrupt map canvas, flickering, or
+# a crash in the dmabuf renderer) on your hardware. The env var is scoped to
+# this process only and does not affect other applications or sessions.
+#
+# Usage:
+#   miriago-legacy-drivers            # uses the installed binary at /usr/lib/miriago
+#   MIRIAGO_LEGACY_BIN=/path/to/bin miriago-legacy-drivers   # override binary path
+set -eu
+
+binary="${MIRIAGO_LEGACY_BIN:-/usr/lib/miriago/miriago-desktop}"
+if [ ! -x "$binary" ]; then
+  echo "error: MiriaGo binary not found at $binary (override with MIRIAGO_LEGACY_BIN)" >&2
+  exit 1
+fi
+
+if [ "${WEBKIT_DISABLE_DMABUF_RENDERER:-}" = "1" ]; then
+  echo "note: WEBKIT_DISABLE_DMABUF_RENDERER already set; launching as-is." >&2
+else
+  echo "note: forcing WEBKIT_DISABLE_DMABUF_RENDERER=1 (driver workaround)." >&2
+  export WEBKIT_DISABLE_DMABUF_RENDERER=1
+fi
+
+exec "$binary" "$@"
