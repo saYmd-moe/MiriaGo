@@ -29,16 +29,19 @@ import 'map_tile_config.dart';
 import 'current_location_resolver.dart';
 import '../widgets/reference_thumbnail_stub.dart'
     if (dart.library.io) '../widgets/reference_thumbnail_io.dart';
+import '../desktop/desktop_input.dart';
 
 class PilgrimageMapScreen extends StatefulWidget {
   const PilgrimageMapScreen({
     required this.controller,
     required this.settings,
+    this.shortcutTarget,
     super.key,
   });
 
   final PilgrimagePlanController controller;
   final AppSettings settings;
+  final ShortcutTarget? shortcutTarget;
 
   @override
   State<PilgrimageMapScreen> createState() => _PilgrimageMapScreenState();
@@ -86,10 +89,50 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    widget.shortcutTarget?.onAction = _handleShortcut;
+  }
+
+  @override
   void dispose() {
+    widget.shortcutTarget?.onAction = null;
     _thumbnailBoundsDebounce?.cancel();
     _visibleBoundsNotifier.dispose();
     super.dispose();
+  }
+
+  bool _handleShortcut(DesktopAction action) {
+    switch (action) {
+      case DesktopAction.dismiss:
+        if (_overlapPointBrowser == null) return false;
+        setState(() {
+          _overlapPointBrowser = null;
+        });
+      case DesktopAction.moveDown:
+        _moveSelection(1);
+      case DesktopAction.moveUp:
+        _moveSelection(-1);
+      default:
+        return false;
+    }
+    return true;
+  }
+
+  void _moveSelection(int offset) {
+    final points = _controller.points
+        .where((point) => point.hasCoordinate)
+        .toList(growable: false);
+    if (points.isEmpty) {
+      return;
+    }
+    final currentId = _controller.selectedPoint?.id;
+    final currentIndex = points.indexWhere((point) => point.id == currentId);
+    final base = currentIndex < 0 ? -1 : currentIndex;
+    final next = (base + offset).clamp(0, points.length - 1);
+    final point = points[next];
+    _selectPoint(point);
+    _centerPoint(point);
   }
 
   Future<void> _locateUser() async {
@@ -520,6 +563,7 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
             ? _fallbackCenter
             : groupMapCenter(selectedGroup));
     final selectedGroupId = selectedGroup?.id ?? '';
+    final isThreeColumn = MediaQuery.sizeOf(context).width >= 1440;
     final mapPoints = selectedItemsLast<PilgrimagePoint>(
       positionedPoints,
       isSelected: (point) => point.id == selectedPoint?.id,
@@ -783,44 +827,103 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
               ),
             ),
           ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: selectedPoint == null
-                ? const _EmptyMapCard()
-                : _PointCard(
-                    controller: _controller,
-                    point: selectedPoint,
-                    status: _controller.statusFor(selectedPoint),
-                    recordCount: _controller
-                        .recordsForPoint(selectedPoint.id)
-                        .length,
-                    onSetCurrent: selectedPoint.hasCoordinate
-                        ? () => _setCurrentPoint(selectedPoint)
-                        : null,
-                    onOpenDetail: () => _showPointDetail(selectedPoint),
-                    onOpenNavigation: selectedPoint.hasCoordinate
-                        ? () => _openNavigation(selectedPoint)
-                        : null,
-                    onOpenCamera: () => _openCamera(selectedPoint),
-                    onComplete: () =>
-                        _controller.statusFor(selectedPoint) ==
-                            VisitStatus.completed
-                        ? _controller.reopenPoint(selectedPoint)
-                        : _controller.completePoint(selectedPoint),
-                    overlapPointIndex: hasActiveOverlapBrowser
-                        ? overlapPointIndex
-                        : null,
-                    overlapPointCount: hasActiveOverlapBrowser
-                        ? overlapPoints.length
-                        : null,
-                    onPreviousOverlapPoint: hasActiveOverlapBrowser
-                        ? () => _moveOverlapPoint(-1)
-                        : null,
-                    onNextOverlapPoint: hasActiveOverlapBrowser
-                        ? () => _moveOverlapPoint(1)
-                        : null,
-                  ),
-          ),
+          if (isThreeColumn)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 280,
+              child: _MapPointSidebar(
+                points: positionedPoints,
+                selectedPointId: selectedPoint?.id,
+                controller: _controller,
+                onSelect: (point) {
+                  _selectPoint(point);
+                  _centerPoint(point);
+                },
+              ),
+            ),
+          if (isThreeColumn)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: 360,
+              child: selectedPoint == null
+                  ? const _EmptyMapCard()
+                  : _PointCard(
+                      controller: _controller,
+                      point: selectedPoint,
+                      status: _controller.statusFor(selectedPoint),
+                      recordCount: _controller
+                          .recordsForPoint(selectedPoint.id)
+                          .length,
+                      onSetCurrent: selectedPoint.hasCoordinate
+                          ? () => _setCurrentPoint(selectedPoint)
+                          : null,
+                      onOpenDetail: () => _showPointDetail(selectedPoint),
+                      onOpenNavigation: selectedPoint.hasCoordinate
+                          ? () => _openNavigation(selectedPoint)
+                          : null,
+                      onOpenCamera: () => _openCamera(selectedPoint),
+                      onComplete: () =>
+                          _controller.statusFor(selectedPoint) ==
+                              VisitStatus.completed
+                          ? _controller.reopenPoint(selectedPoint)
+                          : _controller.completePoint(selectedPoint),
+                      overlapPointIndex: hasActiveOverlapBrowser
+                          ? overlapPointIndex
+                          : null,
+                      overlapPointCount: hasActiveOverlapBrowser
+                          ? overlapPoints.length
+                          : null,
+                      onPreviousOverlapPoint: hasActiveOverlapBrowser
+                          ? () => _moveOverlapPoint(-1)
+                          : null,
+                      onNextOverlapPoint: hasActiveOverlapBrowser
+                          ? () => _moveOverlapPoint(1)
+                          : null,
+                    ),
+            ),
+          if (!isThreeColumn)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: selectedPoint == null
+                  ? const _EmptyMapCard()
+                  : _PointCard(
+                      controller: _controller,
+                      point: selectedPoint,
+                      status: _controller.statusFor(selectedPoint),
+                      recordCount: _controller
+                          .recordsForPoint(selectedPoint.id)
+                          .length,
+                      onSetCurrent: selectedPoint.hasCoordinate
+                          ? () => _setCurrentPoint(selectedPoint)
+                          : null,
+                      onOpenDetail: () => _showPointDetail(selectedPoint),
+                      onOpenNavigation: selectedPoint.hasCoordinate
+                          ? () => _openNavigation(selectedPoint)
+                          : null,
+                      onOpenCamera: () => _openCamera(selectedPoint),
+                      onComplete: () =>
+                          _controller.statusFor(selectedPoint) ==
+                              VisitStatus.completed
+                          ? _controller.reopenPoint(selectedPoint)
+                          : _controller.completePoint(selectedPoint),
+                      overlapPointIndex: hasActiveOverlapBrowser
+                          ? overlapPointIndex
+                          : null,
+                      overlapPointCount: hasActiveOverlapBrowser
+                          ? overlapPoints.length
+                          : null,
+                      onPreviousOverlapPoint: hasActiveOverlapBrowser
+                          ? () => _moveOverlapPoint(-1)
+                          : null,
+                      onNextOverlapPoint: hasActiveOverlapBrowser
+                          ? () => _moveOverlapPoint(1)
+                          : null,
+                    ),
+            ),
         ],
       ),
     );
@@ -847,6 +950,84 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
           _selectGroup(index, groups);
         }
       },
+    );
+  }
+}
+
+class _MapPointSidebar extends StatelessWidget {
+  const _MapPointSidebar({
+    required this.points,
+    required this.selectedPointId,
+    required this.controller,
+    required this.onSelect,
+  });
+
+  final List<PilgrimagePoint> points;
+  final String? selectedPointId;
+  final PilgrimagePlanController controller;
+  final ValueChanged<PilgrimagePoint> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: const ValueKey('map-point-sidebar'),
+      color: AppColors.surface.withValues(alpha: 0.96),
+      elevation: 2,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(12, 88, 12, 180),
+        itemCount: points.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 4),
+        itemBuilder: (context, index) {
+          final point = points[index];
+          final selected = point.id == selectedPointId;
+          return Material(
+            color: selected
+                ? AppColors.accent.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: () => onSelect(point),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      selected ? Icons.place : Icons.place_outlined,
+                      size: 19,
+                      color: selected
+                          ? AppColors.accentDark
+                          : AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        point.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: selected
+                              ? FontWeight.w800
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (controller.statusFor(point) == VisitStatus.completed)
+                      const Icon(
+                        Icons.check,
+                        size: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

@@ -22,6 +22,7 @@ import 'records/records_screen.dart';
 import 'records/comparison_export_config_migration.dart';
 import 'settings/settings_screen.dart';
 import 'widgets/app_scaled_route.dart';
+import 'desktop/desktop_input.dart';
 
 class AppShell extends StatefulWidget {
   AppShell({PilgrimageRepository? repository, super.key})
@@ -39,6 +40,10 @@ class _AppShellState extends State<AppShell> {
   Object? _loadError;
   int _selectedIndex = 0;
   final _incomingPlanFiles = const IncomingPlanFileChannel();
+  final List<ShortcutTarget?> _shortcutTargets = List.generate(
+    4,
+    (_) => ShortcutTarget(),
+  );
 
   @override
   void initState() {
@@ -147,6 +152,18 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  void _handleGlobalShortcut(DesktopAction action) {
+    switch (action) {
+      case DesktopAction.openSettings:
+        setState(() => _selectedIndex = 3);
+      case DesktopAction.openImport:
+      case DesktopAction.openExport:
+        _openImportExport();
+      default:
+        break;
+    }
+  }
+
   Future<void> _openImportExport() async {
     final plan = _planController?.plan;
     if (plan == null) {
@@ -248,7 +265,11 @@ class _AppShellState extends State<AppShell> {
                   palette: _settings.themePalette,
                   customAccentValue: _settings.customThemeColorValue,
                 ),
-                child: Scaffold(
+                child: AppShortcutHost(
+                  targets: _shortcutTargets,
+                  selectedIndex: _selectedIndex,
+                  onGlobalAction: _handleGlobalShortcut,
+                  child: Scaffold(
                   body: IndexedStack(
                     index: _selectedIndex,
                     children: [
@@ -256,6 +277,7 @@ class _AppShellState extends State<AppShell> {
                         controller: controller,
                         settings: _settings,
                         repository: widget.repository,
+                        shortcutTarget: _shortcutTargets[0],
                         onOpenMap: _openMap,
                         onOpenPlanManager: _openPlanManager,
                         onOpenAddPoints: _openAddPoints,
@@ -265,15 +287,18 @@ class _AppShellState extends State<AppShell> {
                       PilgrimageMapScreen(
                         controller: controller,
                         settings: _settings,
+                        shortcutTarget: _shortcutTargets[1],
                       ),
                       RecordsScreen(
                         controller: controller,
                         settings: _settings,
+                        shortcutTarget: _shortcutTargets[2],
                       ),
                       SettingsScreen(
                         settings: _settings,
                         repository: widget.repository,
                         onChanged: _saveSettings,
+                        shortcutTarget: _shortcutTargets[3],
                       ),
                     ],
                   ),
@@ -342,6 +367,7 @@ class _AppShellState extends State<AppShell> {
                         ),
                       ],
                     ),
+                  ),
                   ),
                 ),
               ),

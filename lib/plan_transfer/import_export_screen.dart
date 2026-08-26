@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_selector/file_selector.dart' as file_selector;
 
 import '../app_theme.dart';
+import '../desktop/desktop_input.dart';
 import '../data/pilgrimage_repository.dart';
 import '../platform/platform_flags_stub.dart'
     if (dart.library.io) '../platform/platform_flags_io.dart';
@@ -66,7 +67,20 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
         }
         _handleBack();
       },
-      child: Scaffold(
+      child: DesktopShortcutHandler(
+        actions: (action) {
+          switch (action) {
+            case DesktopAction.dismiss:
+              _handleBack();
+            case DesktopAction.openImport:
+              _importFromFile();
+            case DesktopAction.openExport:
+              _exportV2();
+            default:
+              break;
+          }
+        },
+        child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
             tooltip: '返回',
@@ -86,6 +100,14 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
               subtitle: _usesExternalIosImport
                   ? '从文件、聊天、浏览器或网盘等位置用 MiriaGo 打开 .sjhplan。'
                   : '选择 .sjhplan 文件，先预览内容再导入。',
+            ),
+            const SizedBox(height: 10),
+            _ImportDropZone(
+              enabled: !_exporting && !_importing && !_usesExternalIosImport,
+              onDrop: _importDroppedFile,
+              onTap: _usesExternalIosImport
+                  ? _showExternalIosImportHelp
+                  : _importFromFile,
             ),
             const SizedBox(height: 10),
             _ActionTile(
@@ -148,6 +170,7 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
@@ -192,24 +215,7 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
       if (file == null) {
         return;
       }
-      final importPackage = readPlanImportPackageFromBytes(
-        await file.readAsBytes(),
-        sourceName: file.name,
-      );
-      if (!mounted) {
-        return;
-      }
-      final imported = await Navigator.of(context).push<bool>(
-        MaterialPageRoute<bool>(
-          builder: (_) => PlanImportPreviewScreen(
-            importPackage: importPackage,
-            repository: widget.repository,
-          ),
-        ),
-      );
-      if (imported == true && mounted) {
-        Navigator.of(context).pop(true);
-      }
+      await _previewImport(file);
     } catch (_) {
       if (!mounted) {
         return;
@@ -221,6 +227,39 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
       if (mounted) {
         setState(() => _importing = false);
       }
+    }
+  }
+
+  Future<void> _previewImport(file_selector.XFile file) async {
+    final importPackage = readPlanImportPackageFromBytes(
+      await file.readAsBytes(),
+      sourceName: file.name,
+    );
+    if (!mounted) return;
+    final imported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => PlanImportPreviewScreen(
+          importPackage: importPackage,
+          repository: widget.repository,
+        ),
+      ),
+    );
+    if (imported == true && mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _importDroppedFile(file_selector.XFile file) async {
+    if (_exporting || _importing) return;
+    setState(() => _importing = true);
+    try {
+      await _previewImport(file);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showReplacingSnackBar(
+          const SnackBar(content: Text('拖放文件读取失败')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
     }
   }
 
@@ -729,6 +768,67 @@ class _ExportSizeEstimateRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ImportDropZone extends StatelessWidget {
+  const _ImportDropZone({
+    required this.enabled,
+    required this.onDrop,
+    required this.onTap,
+  });
+
+  final bool enabled;
+  final ValueChanged<file_selector.XFile> onDrop;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return DragTarget<file_selector.XFile>(
+      onWillAcceptWithDetails: (_) => enabled,
+      onAcceptWithDetails: (details) => onDrop(details.data),
+      builder: (context, candidates, _) {
+        final hovering = candidates.isNotEmpty;
+        return Semantics(
+          label: '导入文件拖放区域',
+          button: true,
+          child: Material(
+            color: hovering
+                ? AppColors.accent.withValues(alpha: 0.12)
+                : AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              onTap: enabled ? onTap : null,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: hovering ? AppColors.accent : AppColors.border,
+                    width: hovering ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.file_upload_outlined, color: AppColors.accentDark),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        '将 .sjhplan 文件拖放到此处，或点击选择文件',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
