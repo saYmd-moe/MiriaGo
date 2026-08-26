@@ -37,6 +37,6 @@ CI artifact 和 tag Release 附件包含：
 
 ## 当前限制
 
-Arch 容器使用可维护的 `base-devel` tag，而不是本次未验证的 registry digest；因此 Arch 仓库与镜像内容仍会随时间滚动。每次 CI 保存的 `arch-package-baseline.txt` 是构建证据。若项目需要位级可复现构建，应由维护者在受控环境验证并提交镜像 digest，或引入 Arch Linux Archive 快照后再更新工作流。
+Arch CI 使用官方日期标签 `archlinux/archlinux:base-devel-20260824.0.579059` 作为固定的干净构建基线，避免使用 rolling `base-devel` 标签；每次 CI 仍保存 `arch-package-baseline.txt` 作为实际工具链和仓库包版本证据。本次仅固定日期标签，不声称已验证 registry digest。若项目需要位级可复现构建，应由维护者另行验证并提交镜像 digest，或引入 Arch Linux Archive 快照。
 
 真实图形 WebKitGTK 启动、KDE/Wayland、Portal、升级/卸载后用户数据保留仍需 CI 之外的环境验证。CI 不安装 pacman 包到 runner，也不测试真实用户数据目录。

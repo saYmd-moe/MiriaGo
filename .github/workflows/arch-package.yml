@@ -18,10 +18,9 @@ jobs:
     name: Build & verify Arch pacman package
     runs-on: ubuntu-latest
     container:
-      # Clean Arch base-devel baseline. This is a rolling image tag rather
-      # than an unverified digest; the package/tool versions are recorded in
-      # the log and should be pinned deliberately when a digest is verified.
-      image: archlinux/archlinux:base-devel
+      # Fixed clean Arch base-devel baseline pinned to the dated official tag.
+      # This intentionally does not claim a registry digest was verified.
+      image: archlinux/archlinux:base-devel-20260824.0.579059
       options: --user root
     steps:
       - name: Checkout
