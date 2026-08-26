@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../app_theme.dart';
 import '../app_version.dart';
 import '../camera_reference/camera_zoom_capabilities.dart';
+import '../data/cache_management.dart';
 import '../data/pilgrimage_repository.dart';
 import '../data/anitabi_service_config.dart';
 import '../desktop/tauri_bridge.dart';
@@ -22,7 +23,8 @@ import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 
 bool get _showFutureThemeModeSettings => false;
-bool get _showFutureCacheCleanupSettings => false;
+// Reference-image cache capacity display + safe cleanup is implemented (M3).
+bool get _showFutureCacheCleanupSettings => true;
 bool get _shouldShowMobileGallerySettings {
   if (kIsWeb) {
     return false;
@@ -283,9 +285,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.cleaning_services_outlined,
                 title: '清除缓存',
                 subtitle: '完整参考图缓存',
-                onTap: () => _pushDetail(
-                  _CacheCleanupSettingsPage(repository: widget.repository),
-                ),
+                onTap: () => _pushDetail(const _CacheCleanupSettingsPage()),
               ),
             ),
           ],
@@ -1856,9 +1856,7 @@ class _MapDisplaySettingsPageState extends State<_MapDisplaySettingsPage> {
 }
 
 class _CacheCleanupSettingsPage extends StatefulWidget {
-  const _CacheCleanupSettingsPage({required this.repository});
-
-  final PilgrimageRepository repository;
+  const _CacheCleanupSettingsPage();
 
   @override
   State<_CacheCleanupSettingsPage> createState() =>
@@ -1866,13 +1864,64 @@ class _CacheCleanupSettingsPage extends StatefulWidget {
 }
 
 class _CacheCleanupSettingsPageState extends State<_CacheCleanupSettingsPage> {
-  final Set<String> _selectedPlanIds = <String>{};
-  Future<List<PilgrimagePlan>>? _plansFuture;
+  Future<ReferenceCacheStats>? _statsFuture;
+  bool _includeThumbnails = false;
+  bool _clearing = false;
 
   @override
   void initState() {
     super.initState();
-    _plansFuture = widget.repository.loadPlans();
+    _statsFuture = loadReferenceCacheStats();
+  }
+
+  void _refreshStats() {
+    setState(() {
+      _statsFuture = loadReferenceCacheStats();
+    });
+  }
+
+  Future<void> _clearCache() async {
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '清除参考图缓存',
+      message: _includeThumbnails
+          ? '将删除全部完整参考图缓存和缩略图缓存。它们均可在联网后重新下载。'
+          : '将删除全部完整参考图缓存。缩略图缓存会保留以维持列表和地图加载速度。',
+      confirmLabel: '清除',
+      notice: '不会删除照片、巡礼记录、导入的资料或数据库。',
+      emphasizedValues: const ['完整参考图缓存'],
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setState(() {
+      _clearing = true;
+    });
+    try {
+      final result = await clearReferenceCache(
+        includeThumbnails: _includeThumbnails,
+      );
+      if (!mounted) {
+        return;
+      }
+      final freedBytes = result.fullFreedBytes + result.thumbnailFreedBytes;
+      final message = switch (result.outcome) {
+        CacheClearOutcome.cleared =>
+          '已释放缓存 ${_formatCacheBytes(freedBytes)}（${result.fullFreedCount + result.thumbnailFreedCount} 个文件）',
+        CacheClearOutcome.unavailable => result.message ?? '当前环境不支持清除参考图缓存',
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showReplacingSnackBar(SnackBar(content: Text(message)));
+      _refreshStats();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearing = false;
+        });
+      }
+    }
   }
 
   @override
@@ -1880,13 +1929,12 @@ class _CacheCleanupSettingsPageState extends State<_CacheCleanupSettingsPage> {
     return _DetailScaffold(
       title: '清除缓存',
       children: [
-        FutureBuilder<List<PilgrimagePlan>>(
-          future: _plansFuture,
+        FutureBuilder<ReferenceCacheStats>(
+          future: _statsFuture,
           builder: (context, snapshot) {
-            final plans = snapshot.data;
             if (snapshot.connectionState != ConnectionState.done) {
               return const _SettingsSection(
-                title: '计划',
+                title: '缓存容量',
                 children: [
                   Center(
                     child: SizedBox(
@@ -1898,118 +1946,146 @@ class _CacheCleanupSettingsPageState extends State<_CacheCleanupSettingsPage> {
                 ],
               );
             }
-            if (snapshot.hasError || plans == null) {
-              return _SettingsSection(
-                title: '计划',
-                children: [
-                  const _InfoRow(icon: Icons.error_outline, text: '计划列表读取失败'),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _plansFuture = widget.repository.loadPlans();
-                      });
-                    },
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('重试'),
+            final stats = snapshot.data;
+            final available = isReferenceCacheManagementAvailable;
+            return _SettingsSection(
+              title: '缓存容量',
+              children: [
+                if (stats == null) ...[
+                  const _InfoRow(icon: Icons.error_outline, text: '缓存容量读取失败'),
+                ] else ...[
+                  _CacheSizeRow(
+                    icon: Icons.photo_library_outlined,
+                    label: '完整参考图缓存',
+                    bytes: stats.fullBytes,
+                    count: stats.fullCount,
+                  ),
+                  const SizedBox(height: 8),
+                  _CacheSizeRow(
+                    icon: Icons.photo_outlined,
+                    label: '缩略图缓存',
+                    bytes: stats.thumbnailBytes,
+                    count: stats.thumbnailCount,
                   ),
                 ],
-              );
-            }
-
-            _selectedPlanIds.removeWhere(
-              (id) => plans.every((plan) => plan.id != id),
-            );
-
-            return Column(
-              children: [
-                _SettingsSection(
-                  title: '选择计划',
+                if (!available) ...[
+                  const SizedBox(height: 12),
+                  const _InfoRow(
+                    icon: Icons.info_outline,
+                    text: '当前环境没有可管理的本地缓存目录。',
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '已选择 ${_selectedPlanIds.length} / ${plans.length} 个计划',
-                            style: _secondaryTextStyle,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: '全选',
-                          onPressed: () {
-                            setState(() {
-                              _selectedPlanIds
-                                ..clear()
-                                ..addAll(plans.map((plan) => plan.id));
-                            });
-                          },
-                          icon: const Icon(Icons.select_all_outlined),
-                        ),
-                        IconButton(
-                          tooltip: '清空',
-                          onPressed: _selectedPlanIds.isEmpty
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _selectedPlanIds.clear();
-                                  });
-                                },
-                          icon: const Icon(Icons.deselect_outlined),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ...plans.map(
-                      (plan) => CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(plan.name, style: _titleTextStyle),
-                        subtitle: Text(
-                          '${plan.area} / ${plan.points.length} 个点位',
-                          style: _secondaryTextStyle,
-                        ),
-                        value: _selectedPlanIds.contains(plan.id),
-                        onChanged: (value) {
-                          setState(() {
-                            if (value == true) {
-                              _selectedPlanIds.add(plan.id);
-                            } else {
-                              _selectedPlanIds.remove(plan.id);
-                            }
-                          });
-                        },
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: _refreshStats,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('刷新'),
                     ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                const _FullReferenceCacheSection(),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _selectedPlanIds.isEmpty
-                        ? null
-                        : _showCachePlaceholder,
-                    icon: const Icon(Icons.cleaning_services_outlined),
-                    label: const Text(
-                      '\u6e05\u9664\u5b8c\u6574\u53c2\u8003\u56fe\u7f13\u5b58',
-                    ),
-                  ),
                 ),
               ],
             );
           },
         ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '范围说明',
+          children: [
+            const _InfoRow(
+              icon: Icons.download_done_outlined,
+              text: '完整参考图缓存和缩略图缓存都是联网后自动下载的图片，可安全重新下载。',
+            ),
+            const SizedBox(height: 8),
+            const _InfoRow(
+              icon: Icons.lock_outline,
+              text: '照片、巡礼记录、导入的资料和数据库不会被删除。',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('同时清除缩略图缓存', style: _titleTextStyle),
+          subtitle: Text(
+            '清除后可释放更多空间，但列表和地图缩略图会重新加载。',
+            style: _secondaryTextStyle,
+          ),
+          value: _includeThumbnails,
+          onChanged: (value) {
+            setState(() {
+              _includeThumbnails = value ?? false;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _clearing || !isReferenceCacheManagementAvailable
+                ? null
+                : _clearCache,
+            icon: _clearing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cleaning_services_outlined),
+            label: const Text('清除参考图缓存'),
+          ),
+        ),
       ],
     );
   }
+}
 
-  void _showCachePlaceholder() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('清除缓存功能尚未接入，仅展示界面。')));
+class _CacheSizeRow extends StatelessWidget {
+  const _CacheSizeRow({
+    required this.icon,
+    required this.label,
+    required this.bytes,
+    required this.count,
+  });
+
+  final IconData icon;
+  final String label;
+  final int bytes;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeText = count == 0
+        ? '无缓存'
+        : '${_formatCacheBytes(bytes)} · $count 个文件';
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.accent),
+        const SizedBox(width: 10),
+        Expanded(child: Text(label, style: _titleTextStyle)),
+        Text(sizeText, style: _secondaryTextStyle),
+      ],
+    );
   }
+}
+
+String _formatCacheBytes(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes B';
+  }
+  final kb = bytes / 1024;
+  if (kb < 1024) {
+    return '${kb.toStringAsFixed(1)} KB';
+  }
+  final mb = kb / 1024;
+  if (mb < 1024) {
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+  final gb = mb / 1024;
+  return '${gb.toStringAsFixed(1)} GB';
 }
 
 class _DesktopSettingsPage extends StatelessWidget {
@@ -2680,74 +2756,6 @@ class _AspectRatioGrid extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FullReferenceCacheSection extends StatelessWidget {
-  const _FullReferenceCacheSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SettingsSection(
-      title: '\u7f13\u5b58\u5185\u5bb9',
-      children: [
-        _CacheTargetCard(
-          icon: Icons.photo_library_outlined,
-          title: '\u5b8c\u6574\u53c2\u8003\u56fe\u7f13\u5b58',
-          subtitle:
-              '\u6e05\u9664\u76f8\u673a\u53c2\u8003\u548c\u5927\u56fe\u67e5\u770b\u4f7f\u7528\u7684\u5b8c\u6574\u53c2\u8003\u56fe\u3002\u7f29\u7565\u56fe\u7f13\u5b58\u4f1a\u4fdd\u7559\uff0c\u4ee5\u4fdd\u6301\u5217\u8868\u548c\u5730\u56fe\u52a0\u8f7d\u901f\u5ea6\u3002',
-        ),
-      ],
-    );
-  }
-}
-
-class _CacheTargetCard extends StatelessWidget {
-  const _CacheTargetCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: AppColors.accent, size: 21),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: _titleTextStyle),
-                const SizedBox(height: 4),
-                Text(subtitle, style: _secondaryParagraphTextStyle),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
