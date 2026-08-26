@@ -150,31 +150,66 @@ export HOME="$smoke_home"
 unset XDG_DATA_DIRS 2>/dev/null || true
 mkdir -p "$data_home"
 
-# --eval smoke uses the real launcher path resolution but runs in a sandboxed
-# data dir; pass no positional args so the app performs startup and exits. A
-# long-running GUI app cannot run headless here, so we treat a clean spawn of
-# the binary (its main() reaching setup) as the pass signal where possible.
-# We additionally verify the XDG data directory layout is created on demand.
-smoke_status=0
-if command -v xvfb-run >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then
-  set +e
-  timeout --signal=TERM 20s xvfb-run --auto-servernum \
-    --server-args='-screen 0 1280x1024x24' "$binary" >/dev/null 2>&1
-  smoke_status=$?
-  set -e
-elif command -v timeout >/dev/null 2>&1; then
-  set +e
-  timeout --signal=TERM 20s "$binary" >/dev/null 2>&1
-  smoke_status=$?
-  set -e
-else
-  "$binary" >/dev/null 2>&1 || smoke_status=$?
+# Start the real GUI binary inside a manually managed Xvfb server. A timeout
+# alone is not a smoke test: success requires a visible MiriaGo window, a live
+# process, and all expected XDG directories. Once observed, terminate both
+# processes explicitly so this verifier never leaves a GUI process behind.
+for command in Xvfb xdotool; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    fail "GUI smoke requires $command"
+  fi
+done
+smoke_ok=0
+xvfb_pid=""
+app_pid=""
+display_num=$((100 + (BASHPID % 80)))
+if command -v Xvfb >/dev/null 2>&1 && command -v xdotool >/dev/null 2>&1; then
+  Xvfb ":$display_num" -screen 0 1280x1024x24 -nolisten tcp \
+    >"$smoke_home/xvfb.log" 2>&1 &
+  xvfb_pid=$!
+  sleep 1
+  if kill -0 "$xvfb_pid" 2>/dev/null; then
+    export DISPLAY=":$display_num"
+    "$binary" >"$smoke_home/app.log" 2>&1 &
+    app_pid=$!
+    for _ in $(seq 1 20); do
+      window_id="$(xdotool search --onlyvisible --name '^MiriaGo$' 2>/dev/null | head -n1 || true)"
+      dirs_ready=1
+      for data_subdir in MiriaGo MiriaGo/assets MiriaGo/exports MiriaGo/logs MiriaGo/temp; do
+        [[ -d "$data_home/$data_subdir" ]] || dirs_ready=0
+      done
+      if [[ -n "$window_id" ]] && kill -0 "$app_pid" 2>/dev/null && [[ "$dirs_ready" == 1 ]]; then
+        smoke_ok=1
+        pass "smoke: visible MiriaGo window, live process, and XDG directories observed"
+        break
+      fi
+      sleep 1
+    done
+  else
+    fail "Xvfb failed to start on display :$display_num"
+  fi
 fi
-case "$smoke_status" in
-  0) pass "smoke: binary executed and exited 0" ;;
-  124|137) pass "smoke: binary started and remained alive for the timeout window" ;;
-  *) fail "smoke: binary exited with status $smoke_status" ;;
-esac
+
+# Actively terminate the application after observation, then the virtual
+# display server. Do not use timeout exit status as evidence of success.
+set +e
+if [[ -n "$app_pid" ]] && kill -0 "$app_pid" 2>/dev/null; then
+  kill -TERM "$app_pid"
+  for _ in $(seq 1 10); do
+    kill -0 "$app_pid" 2>/dev/null || break
+    sleep 1
+  done
+  kill -KILL "$app_pid" 2>/dev/null || true
+  wait "$app_pid" 2>/dev/null || true
+fi
+if [[ -n "$xvfb_pid" ]] && kill -0 "$xvfb_pid" 2>/dev/null; then
+  kill -TERM "$xvfb_pid"
+  wait "$xvfb_pid" 2>/dev/null || true
+fi
+set -e
+if [[ "$smoke_ok" != 1 ]]; then
+  fail "smoke: no visible MiriaGo window with live process and XDG directories"
+fi
 
 echo "==> 6/7 XDG data directory check"
 # The app resolves its data dir via the dirs crate: $XDG_DATA_HOME/MiriaGo, or

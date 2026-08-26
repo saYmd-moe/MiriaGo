@@ -7,7 +7,7 @@
 ./scripts/verify-arch-package.sh dist/arch/miriago-*.pkg.tar.zst
 ```
 
-构建脚本会清理 `dist/arch`，生成唯一的 `.pkg.tar.zst` 和 `SHA256SUMS`。缺失、空产物、版本漂移或验证失败都会使 job 失败。验证包括 `pacman -Qip`、`pacman -Qlp`、ELF `ldd` 缺库检查、desktop entry、提取后启动烟测、XDG 数据目录和包结构检查。CI 使用 Xvfb；本地验证不安装包、不执行 `pacman -U`。
+构建脚本会清理 `dist/arch`，生成唯一的 `.pkg.tar.zst` 和 `SHA256SUMS`。当前 PKGBUILD 与 CI 仅声明并构建 `x86_64`；在取得真实 aarch64 构建证据前不会宣称支持 aarch64。缺失、空产物、版本漂移或验证失败都会使 job 失败。验证包括 `pacman -Qip`、`pacman -Qlp`、ELF `ldd` 缺库检查、desktop entry、提取后启动烟测、XDG 数据目录和包结构检查。CI 使用 Xvfb；本地验证不安装包、不执行 `pacman -U`。
 
 本地只读/静态检查：
 

@@ -18,6 +18,11 @@ pubspec_ver="$(awk '/^version:/ { sub(/^version:[[:space:]]*/, ""); sub(/\+.*/, 
 tauri_ver="$(awk -F '"' '/^[[:space:]]*"version"[[:space:]]*:/ { print $4; exit }' src-tauri/tauri.conf.json)"
 [[ "$cargo_ver" == "$pkg_ver" && "$cargo_ver" == "$pubspec_ver" && "$cargo_ver" == "$tauri_ver" ]] \
   || { echo "version drift: Cargo=$cargo_ver PKGBUILD=$pkg_ver pubspec=$pubspec_ver Tauri=$tauri_ver" >&2; exit 1; }
+grep -q "^arch=('x86_64')$" packaging/arch/PKGBUILD \
+  || { echo "PKGBUILD must remain explicitly x86_64-only until aarch64 evidence exists" >&2; exit 1; }
+grep -q 'flutter analyze --no-pub' .github/workflows/arch-package.yml
+grep -q 'cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings' .github/workflows/arch-package.yml
+grep -q "xdotool search --onlyvisible --name '\\^MiriaGo\\$'" scripts/verify-arch-package.sh
 
 # Missing and empty inputs must fail; no package installation is performed.
 if scripts/verify-arch-package.sh "$repo_root/scripts/does-not-exist.pkg.tar.zst" >/dev/null 2>&1; then

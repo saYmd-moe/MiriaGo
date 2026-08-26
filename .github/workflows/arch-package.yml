@@ -67,6 +67,16 @@ jobs:
           fi
           echo "APP_VERSION=$cargo_ver" >> "$GITHUB_ENV"
 
+      - name: Run Flutter and Rust gates before packaging
+        shell: bash
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          cargo test --manifest-path src-tauri/Cargo.toml --locked
+          cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
+
       - name: Build Arch package (reuse scripts/build-arch-package.sh)
         id: build
         shell: bash

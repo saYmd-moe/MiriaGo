@@ -66,9 +66,8 @@ fi
 
 case "$(uname -m)" in
   x86_64) carch=x86_64 ;;
-  aarch64) carch=aarch64 ;;
   *)
-    echo "error: unsupported Arch package architecture: $(uname -m)" >&2
+    echo "error: this Arch package currently supports x86_64 only (host: $(uname -m))" >&2
     exit 1
     ;;
 esac
