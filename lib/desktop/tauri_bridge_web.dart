@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
@@ -10,7 +11,9 @@ import 'tauri_bridge_stub.dart'
         DesktopReferenceCacheStats,
         DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
-        DesktopStateResult;
+        DesktopStateResult,
+        DesktopDiagnostics,
+        DesktopPlanFileSubscription;
 export 'tauri_bridge_stub.dart'
     show
         DesktopExportDestination,
@@ -20,7 +23,20 @@ export 'tauri_bridge_stub.dart'
         DesktopReferenceCacheStats,
         DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
-        DesktopStateResult;
+        DesktopStateResult,
+        DesktopDiagnostics,
+        DesktopPlanFileSubscription;
+
+class _DesktopPlanFileSubscription implements DesktopPlanFileSubscription {
+  _DesktopPlanFileSubscription(this._unlisten);
+
+  final JSFunction _unlisten;
+
+  @override
+  Future<void> dispose() async {
+    _unlisten.callAsFunction();
+  }
+}
 
 @JS('window')
 external JSObject get _window;
@@ -251,6 +267,67 @@ Future<bool> openDesktopExternalUrl({required String url}) {
   });
 }
 
+Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
+  Future<void> Function() onQueueChanged,
+) async {
+  final tauri = _tauriGlobal();
+  if (tauri == null) {
+    return null;
+  }
+  final event = tauri.getProperty<JSAny?>('event'.toJS);
+  if (event == null || event.isUndefinedOrNull) {
+    return null;
+  }
+  final promise = (event as JSObject).callMethod<JSPromise<JSAny?>>(
+    'listen'.toJS,
+    'miriago://open-plan-file'.toJS,
+    ((JSAny? rawEvent) {
+      if (rawEvent == null || rawEvent.isUndefinedOrNull) {
+        return;
+      }
+      unawaited(onQueueChanged());
+    }).toJS,
+  );
+  final unlisten = await promise.toDart;
+  if (unlisten == null || unlisten.isUndefinedOrNull) {
+    return null;
+  }
+  return _DesktopPlanFileSubscription(unlisten as JSFunction);
+}
+
+Future<List<String>> takePendingDesktopPlanFiles() async {
+  final result = await _invoke('take_pending_plan_files', const {});
+  if (result == null || result.isUndefinedOrNull) {
+    return const <String>[];
+  }
+  final values = (result as JSArray<JSAny?>).toDart;
+  return values
+      .whereType<JSString>()
+      .map((value) => value.toDart)
+      .toList(growable: false);
+}
+
+Future<DesktopDiagnostics?> loadDesktopDiagnostics() async {
+  final result = await _invokeObject('desktop_diagnostics', const {});
+  if (result == null) {
+    return null;
+  }
+  return DesktopDiagnostics(text: _stringProperty(result, 'text') ?? '');
+}
+
+Future<bool> notifyDesktopTask({
+  required String title,
+  required String body,
+}) async {
+  try {
+    return await _invokeBoolean('notify_desktop_task', {
+      'request': {'title': title, 'body': body},
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<DesktopAssetResult> writeDesktopAsset({
   required String path,
   required String dataBase64,
@@ -382,12 +459,20 @@ JSAny? _jsValue(Object? value) {
   };
 }
 
-JSObject? _tauriCore() {
+JSObject? _tauriGlobal() {
   final tauri = _window.getProperty<JSAny?>('__TAURI__'.toJS);
   if (tauri == null || tauri.isUndefinedOrNull) {
     return null;
   }
-  final core = (tauri as JSObject).getProperty<JSAny?>('core'.toJS);
+  return tauri as JSObject;
+}
+
+JSObject? _tauriCore() {
+  final tauri = _tauriGlobal();
+  if (tauri == null || tauri.isUndefinedOrNull) {
+    return null;
+  }
+  final core = tauri.getProperty<JSAny?>('core'.toJS);
   if (core == null || core.isUndefinedOrNull) {
     return null;
   }

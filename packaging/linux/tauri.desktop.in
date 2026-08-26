@@ -3,7 +3,7 @@ Categories={{categories}}
 {{#if comment}}
 Comment={{comment}}
 {{/if}}
-Exec={{exec}}
+Exec={{exec}} %F
 StartupNotify=true
 StartupWMClass=app.miriago.desktop
 Icon={{icon}}

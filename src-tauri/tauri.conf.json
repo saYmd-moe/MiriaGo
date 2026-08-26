@@ -29,6 +29,15 @@
   },
   "bundle": {
     "active": true,
+    "fileAssociations": [
+      {
+        "ext": ["sjhplan"],
+        "mimeType": "application/x-miriago-sjhplan",
+        "name": "MiriaGo plan package",
+        "description": "MiriaGo plan package for import preview",
+        "role": "Editor"
+      }
+    ],
     "targets": "all",
     "category": "Utility",
     "shortDescription": "Plan and record anime pilgrimage trips.",

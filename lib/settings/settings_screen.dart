@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../app_theme.dart';
@@ -2171,7 +2173,7 @@ String _formatCacheBytes(int bytes) {
   return '${gb.toStringAsFixed(1)} GB';
 }
 
-class _DesktopSettingsPage extends StatelessWidget {
+class _DesktopSettingsPage extends StatefulWidget {
   const _DesktopSettingsPage({
     required this.desktopLauncherInfo,
     required this.desktopLauncherStatusText,
@@ -2179,6 +2181,78 @@ class _DesktopSettingsPage extends StatelessWidget {
 
   final DesktopLauncherInfo? desktopLauncherInfo;
   final String desktopLauncherStatusText;
+
+  @override
+  State<_DesktopSettingsPage> createState() => _DesktopSettingsPageState();
+}
+
+class _DesktopSettingsPageState extends State<_DesktopSettingsPage> {
+  DesktopDiagnostics? _diagnostics;
+  var _loadingDiagnostics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDiagnostics();
+  }
+
+  Future<void> _loadDiagnostics() async {
+    setState(() => _loadingDiagnostics = true);
+    final diagnostics = await loadDesktopDiagnostics();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _diagnostics = diagnostics;
+      _loadingDiagnostics = false;
+    });
+  }
+
+  Future<void> _copyDiagnostics() async {
+    final text = _diagnostics?.text;
+    if (text == null || text.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已复制脱敏诊断信息')));
+    }
+  }
+
+  Future<void> _exportDiagnostics() async {
+    final text = _diagnostics?.text;
+    if (text == null || text.isEmpty) {
+      return;
+    }
+    try {
+      final destination = await prepareDesktopExportDestination(
+        fileName: 'miriago-diagnostics.txt',
+        mimeType: 'text/plain',
+        extension: 'txt',
+      );
+      if (destination == null) {
+        return;
+      }
+      await writeDesktopExportFile(
+        path: destination.path,
+        extension: 'txt',
+        dataBase64: base64Encode(utf8.encode(text)),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已导出脱敏诊断信息')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('诊断信息导出失败')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2190,20 +2264,55 @@ class _DesktopSettingsPage extends StatelessWidget {
           children: [
             _InfoRow(
               icon: Icons.desktop_windows_outlined,
-              text: desktopLauncherStatusText,
+              text: widget.desktopLauncherStatusText,
             ),
-            if (desktopLauncherInfo != null) ...[
+            if (widget.desktopLauncherInfo != null) ...[
               const SizedBox(height: 10),
               _InfoRow(
                 icon: Icons.folder_outlined,
-                text: desktopLauncherInfo!.dataDir,
+                text: widget.desktopLauncherInfo!.dataDir,
               ),
               const SizedBox(height: 10),
               _InfoRow(
                 icon: Icons.inventory_2_outlined,
-                text: desktopLauncherInfo!.assetsDir,
+                text: widget.desktopLauncherInfo!.assetsDir,
               ),
             ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '诊断',
+          children: [
+            const Text(
+              '内容已脱敏，不包含完整用户路径、Token、私密 URL 或照片内容。',
+              style: _secondaryTextStyle,
+            ),
+            const SizedBox(height: 10),
+            if (_loadingDiagnostics)
+              const LinearProgressIndicator()
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _diagnostics == null ? null : _copyDiagnostics,
+                      icon: const Icon(Icons.copy_outlined),
+                      label: const Text('复制诊断信息'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _diagnostics == null
+                          ? null
+                          : _exportDiagnostics,
+                      icon: const Icon(Icons.save_alt_outlined),
+                      label: const Text('导出诊断信息'),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ],

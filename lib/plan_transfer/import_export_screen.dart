@@ -3,6 +3,7 @@ import 'package:file_selector/file_selector.dart' as file_selector;
 
 import '../app_theme.dart';
 import '../desktop/desktop_input.dart';
+import '../desktop/desktop_notifications.dart';
 import '../data/pilgrimage_repository.dart';
 import '../platform/platform_flags_stub.dart'
     if (dart.library.io) '../platform/platform_flags_io.dart';
@@ -460,9 +461,9 @@ class _ImportExportScreenState extends State<ImportExportScreen> {
         messenger.showReplacingSnackBar(const SnackBar(content: Text('已取消导出')));
         return;
       }
-      messenger.showReplacingSnackBar(
-        SnackBar(content: Text(result.successMessage(successMessage))),
-      );
+      final message = result.successMessage(successMessage);
+      messenger.showReplacingSnackBar(SnackBar(content: Text(message)));
+      await notifyDesktopTaskIfBackground(title: 'MiriaGo 导出完成', body: message);
     } on PlanExportCanceledException {
       if (!_isCurrentExport(generation)) {
         return;
