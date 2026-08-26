@@ -160,6 +160,9 @@ void main() {
     tester,
   ) async {
     final widths = [360.0, 600.0, 960.0, 1440.0];
+    final originalDevicePixelRatio = tester.view.devicePixelRatio;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.devicePixelRatio = originalDevicePixelRatio);
     for (final width in widths) {
       await tester.binding.setSurfaceSize(Size(width, 800));
       await tester.pumpWidget(
@@ -167,6 +170,27 @@ void main() {
       );
       await tester.pump(const Duration(seconds: 1));
       expect(tester.takeException(), isNull, reason: 'width=$width');
+      if (width >= 600) {
+        await tester.tap(find.text('记录').last);
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('records-inline-detail')),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('设置').last);
+        await tester.pump();
+        expect(
+          find.byKey(const ValueKey('settings-category-navigation')),
+          findsOneWidget,
+        );
+      }
+      if (width >= 1440) {
+        await tester.tap(find.text('地图').last);
+        await tester.pump();
+        expect(find.byKey(const ValueKey('map-point-sidebar')), findsOneWidget);
+      }
+      await tester.tap(find.text('计划').last);
+      await tester.pump();
     }
     addTearDown(() => tester.binding.setSurfaceSize(null));
   });

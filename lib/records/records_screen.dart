@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../desktop/desktop_input.dart';
+import '../desktop/responsive_layout.dart';
+import '../widgets/copyable_text.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
 import '../plan/plan_group_utils.dart';
@@ -40,6 +42,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
   var _expandedSectionsInitialized = false;
   final Set<String> _expandedSectionIds = {};
   final _searchFieldFocusNode = FocusNode(debugLabel: 'records-search-focus');
+  String? _selectedRecordId;
 
   @override
   void initState() {
@@ -107,92 +110,145 @@ class _RecordsScreenState extends State<RecordsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: CustomScrollView(
-        key: const ValueKey('records-scroll-view'),
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            sliver: SliverList.list(
-              children: [
-                _RecordsSummary(controller: controller),
-                const SizedBox(height: 16),
-                _RecordFilters(
-                  statusFilter: _statusFilter,
-                  searchQuery: _searchQuery,
-                  searchFieldFocusNode: _searchFieldFocusNode,
-                  activeScopeFilterCount:
-                      (_selectedWorkIds == null ? 0 : 1) +
-                      (_selectedGroupFilterIds == null ? 0 : 1),
-                  onSearchChanged: (query) {
-                    setState(() {
-                      _searchQuery = query;
-                      _resetExpandedSections();
-                    });
-                  },
-                  onStatusSelected: (filter) {
-                    setState(() {
-                      _statusFilter = filter;
-                      _resetExpandedSections();
-                    });
-                  },
-                  onOpenScopeFilters: _openScopeFilters,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final tier = AppLayout.tierFor(constraints.maxWidth);
+          final list = _buildRecordsList(
+            tier: tier,
+            records: records,
+            sections: sections,
+            allSectionsExpanded: allSectionsExpanded,
+          );
+          if (tier.isNarrow) return list;
+          final selected =
+              records
+                  .where((record) => record.id == _selectedRecordId)
+                  .firstOrNull ??
+              records.firstOrNull;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: list),
+              const VerticalDivider(width: 1),
+              SizedBox(
+                // Keep enough room for the existing record card at the
+                // medium breakpoint; the detail pane grows on wide windows.
+                width: tier.isWide ? 380 : 240,
+                child: _RecordInlineDetail(
+                  record: selected,
+                  point: selected == null
+                      ? null
+                      : widget.controller.pointById(selected.pointId),
+                  onOpen: selected == null
+                      ? null
+                      : () => _openRecordDetail(context, selected),
                 ),
-                const SizedBox(height: 16),
-                _RecordsSectionHeader(
-                  visibleCount: records.length,
-                  totalCount: controller.visitRecords.length,
-                ),
-                const SizedBox(height: 4),
-              ],
-            ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildRecordsList({
+    required LayoutTier tier,
+    required List<PilgrimageVisitRecord> records,
+    required List<_RecordGroup> sections,
+    required bool allSectionsExpanded,
+  }) {
+    return CustomScrollView(
+      key: const ValueKey('records-scroll-view'),
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          sliver: SliverList.list(
+            children: [
+              _RecordsSummary(controller: widget.controller),
+              const SizedBox(height: 16),
+              _RecordFilters(
+                statusFilter: _statusFilter,
+                searchQuery: _searchQuery,
+                searchFieldFocusNode: _searchFieldFocusNode,
+                activeScopeFilterCount:
+                    (_selectedWorkIds == null ? 0 : 1) +
+                    (_selectedGroupFilterIds == null ? 0 : 1),
+                onSearchChanged: (query) {
+                  setState(() {
+                    _searchQuery = query;
+                    _resetExpandedSections();
+                  });
+                },
+                onStatusSelected: (filter) {
+                  setState(() {
+                    _statusFilter = filter;
+                    _resetExpandedSections();
+                  });
+                },
+                onOpenScopeFilters: _openScopeFilters,
+              ),
+              const SizedBox(height: 16),
+              _RecordsSectionHeader(
+                visibleCount: records.length,
+                totalCount: widget.controller.visitRecords.length,
+              ),
+              const SizedBox(height: 4),
+            ],
           ),
-          if (records.isEmpty)
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
-              sliver: SliverToBoxAdapter(child: _EmptyRecords()),
-            )
-          else
-            for (final section in sections)
-              SliverMainAxisGroup(
-                slivers: [
-                  SliverPersistentHeader(
-                    pinned: _expandedSectionIds.contains(section.id),
-                    delegate: _RecordGroupHeaderDelegate(
-                      section: section,
-                      expanded: _expandedSectionIds.contains(section.id),
-                      onToggleExpanded: () {
-                        setState(() {
-                          if (!_expandedSectionIds.add(section.id)) {
-                            _expandedSectionIds.remove(section.id);
-                          }
-                        });
+        ),
+        if (records.isEmpty)
+          const SliverPadding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 0),
+            sliver: SliverToBoxAdapter(child: _EmptyRecords()),
+          )
+        else
+          for (final section in sections)
+            SliverMainAxisGroup(
+              slivers: [
+                SliverPersistentHeader(
+                  pinned: _expandedSectionIds.contains(section.id),
+                  delegate: _RecordGroupHeaderDelegate(
+                    section: section,
+                    expanded: _expandedSectionIds.contains(section.id),
+                    onToggleExpanded: () {
+                      setState(() {
+                        if (!_expandedSectionIds.add(section.id)) {
+                          _expandedSectionIds.remove(section.id);
+                        }
+                      });
+                    },
+                  ),
+                ),
+                if (_expandedSectionIds.contains(section.id))
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    sliver: SliverList.builder(
+                      itemCount: section.entries.length,
+                      itemBuilder: (context, index) {
+                        final entry = section.entries[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _VisitRecordCard(
+                            record: entry.record,
+                            point: entry.point,
+                            onTap: () {
+                              if (!tier.isWide) {
+                                _openRecordDetail(context, entry.record);
+                              } else {
+                                setState(
+                                  () => _selectedRecordId = entry.record.id,
+                                );
+                              }
+                            },
+                          ),
+                        );
                       },
                     ),
                   ),
-                  if (_expandedSectionIds.contains(section.id))
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                      sliver: SliverList.builder(
-                        itemCount: section.entries.length,
-                        itemBuilder: (context, index) {
-                          final entry = section.entries[index];
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: _VisitRecordCard(
-                              record: entry.record,
-                              point: entry.point,
-                              onTap: () =>
-                                  _openRecordDetail(context, entry.record),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                ],
-              ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-        ],
-      ),
+              ],
+            ),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
     );
   }
 
@@ -1359,6 +1415,99 @@ class _ExpandedRecordFiltersState extends State<_ExpandedRecordFilters> {
           widget.onSearchChanged(value);
           setState(() {});
         },
+      ),
+    );
+  }
+}
+
+class _RecordInlineDetail extends StatelessWidget {
+  const _RecordInlineDetail({
+    required this.record,
+    required this.point,
+    required this.onOpen,
+  });
+
+  final PilgrimageVisitRecord? record;
+  final PilgrimagePoint? point;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentRecord = record;
+    return Material(
+      key: const ValueKey('records-inline-detail'),
+      color: AppColors.surface,
+      child: currentRecord == null
+          ? const Center(
+              child: Text(
+                '选择一条记录查看详情',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              children: [
+                const Text(
+                  '记录详情',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  point?.name ?? currentRecord.displayPointNameSnapshot,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  point == null
+                      ? currentRecord.displayWorkTitleSnapshot
+                      : '${point!.work.title} / ${point!.subtitle}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                _RecordInlineInfo(
+                  label: '拍摄时间',
+                  value: currentRecord.capturedAt.toLocal().toString(),
+                ),
+                _RecordInlineInfo(
+                  label: '照片路径',
+                  value: currentRecord.displayPhotoPath,
+                ),
+                if (currentRecord.referenceImagePath != null)
+                  _RecordInlineInfo(
+                    label: '参考图路径',
+                    value: currentRecord.referenceImagePath!,
+                  ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('打开完整详情'),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _RecordInlineInfo extends StatelessWidget {
+  const _RecordInlineInfo({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: CopyableText(
+        text: '$label：$value',
+        copyLabel: label,
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: AppColors.textSecondary),
       ),
     );
   }
