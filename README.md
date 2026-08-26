@@ -195,6 +195,8 @@ Linux 输出位于 `src-tauri/target/release/bundle/appimage/` 和 `src-tauri/ta
 sudo pacman -U dist/arch/miriago-*.pkg.tar.zst
 ```
 
+Arch CI、包验证、SHA256SUMS 和可选签名说明见 [`docs/ARCH_LINUX_RELEASE.md`](docs/ARCH_LINUX_RELEASE.md)。Flatpak 仅作独立评估，见 [`docs/FLATPAK_EVALUATION.md`](docs/FLATPAK_EVALUATION.md)。
+
 脚本默认执行干净的 npm 安装、Flutter Web release 构建和 Tauri/Rust release 编译，然后用 `makepkg` 生成包。如果刚完成同一源码的 release 编译，可设置 `MIRIAGO_SKIP_BUILD=1` 仅重新打包。生成的包安装稳定启动命令 `/usr/bin/miriago`、FreeDesktop 菜单项和多尺寸 hicolor 图标，并声明 WebKitGTK、GTK Portal 回退后端与 `xdg-utils` 运行时依赖。
 
 ## Release 构建
