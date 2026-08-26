@@ -131,6 +131,24 @@ pub struct ReadAssetResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ReferenceCacheStatsResult {
+    pub full_bytes: i64,
+    pub full_count: i64,
+    pub thumbnail_bytes: i64,
+    pub thumbnail_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceCacheClearResult {
+    pub full_freed_bytes: i64,
+    pub full_freed_count: i64,
+    pub thumbnail_freed_bytes: i64,
+    pub thumbnail_freed_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RestoreImportAssetsResult {
     pub restored_paths: HashMap<String, String>,
 }
@@ -460,6 +478,100 @@ pub fn read_asset(request: ReadAssetRequest) -> Result<ReadAssetResult, String> 
     })
 }
 
+/// Namespaces that are safe to clear: re-fetchable network reference-image caches.
+const CLEARABLE_REFERENCE_NAMESPACES: [&str; 2] = ["reference_full", "reference_thumbnails"];
+
+struct DirectoryTotals {
+    bytes: i64,
+    count: i64,
+}
+
+fn directory_totals(directory: &std::path::Path) -> DirectoryTotals {
+    let mut totals = DirectoryTotals { bytes: 0, count: 0 };
+    let Ok(entries) = fs::read_dir(directory) else {
+        return totals;
+    };
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let length = metadata.len();
+        if length > 0 {
+            totals.bytes += length as i64;
+            totals.count += 1;
+        }
+    }
+    totals
+}
+
+fn clear_directory(directory: &std::path::Path) -> DirectoryTotals {
+    let mut totals = DirectoryTotals { bytes: 0, count: 0 };
+    let Ok(entries) = fs::read_dir(directory) else {
+        return totals;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() || path.is_dir() {
+            continue;
+        }
+        let length = metadata.len();
+        if fs::remove_file(&path).is_ok() && length > 0 {
+            totals.bytes += length as i64;
+            totals.count += 1;
+        }
+    }
+    totals
+}
+
+/// Report the byte size and file count of the re-fetchable reference-image caches.
+///
+/// Only touches `assets/reference_full` and `assets/reference_thumbnails`. It never
+/// inspects or deletes SQLite, user photos, imported package assets, or visit records.
+#[tauri::command]
+pub fn reference_cache_stats() -> Result<ReferenceCacheStatsResult, String> {
+    let dirs = storage::ensure_data_dirs()?;
+    let root = &dirs.assets_dir;
+    let full = directory_totals(&root.join(CLEARABLE_REFERENCE_NAMESPACES[0]));
+    let thumb = directory_totals(&root.join(CLEARABLE_REFERENCE_NAMESPACES[1]));
+    Ok(ReferenceCacheStatsResult {
+        full_bytes: full.bytes,
+        full_count: full.count,
+        thumbnail_bytes: thumb.bytes,
+        thumbnail_count: thumb.count,
+    })
+}
+
+/// Clear the re-fetchable reference-image caches.
+///
+/// Deletes only immediate files under `assets/reference_full` (and, when requested,
+/// `assets/reference_thumbnails`). It never touches SQLite, user photos, imported
+/// package assets, or visit records.
+#[tauri::command]
+pub fn clear_reference_cache(
+    include_thumbnails: bool,
+) -> Result<ReferenceCacheClearResult, String> {
+    let dirs = storage::ensure_data_dirs()?;
+    let root = &dirs.assets_dir;
+    let full = clear_directory(&root.join(CLEARABLE_REFERENCE_NAMESPACES[0]));
+    let thumb = if include_thumbnails {
+        clear_directory(&root.join(CLEARABLE_REFERENCE_NAMESPACES[1]))
+    } else {
+        DirectoryTotals { bytes: 0, count: 0 }
+    };
+    Ok(ReferenceCacheClearResult {
+        full_freed_bytes: full.bytes,
+        full_freed_count: full.count,
+        thumbnail_freed_bytes: thumb.bytes,
+        thumbnail_freed_count: thumb.count,
+    })
+}
+
 #[tauri::command]
 pub fn fetch_anitabi_static_json(
     request: FetchAnitabiStaticJsonRequest,
@@ -780,5 +892,41 @@ mod tests {
             assert!(safe_asset_path(path).is_err(), "{path}");
             assert!(safe_local_asset_path(path).is_err(), "{path}");
         }
+    }
+
+    #[test]
+    fn directory_totals_counts_regular_files_only() {
+        let dir = std::env::temp_dir().join(format!("miriago_cache_totals_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).expect("create subdir");
+        std::fs::write(dir.join("a.jpg"), vec![0u8; 100]).expect("write a.jpg");
+        std::fs::write(dir.join("b.webp"), vec![0u8; 250]).expect("write b.webp");
+        std::fs::write(dir.join("sub/c.jpg"), vec![0u8; 999]).expect("write sub/c.jpg");
+
+        let totals = super::directory_totals(&dir);
+        // Only immediate regular files: 100 + 250 bytes, two files. The subdir and
+        // its file are ignored.
+        assert_eq!(totals.bytes, 350);
+        assert_eq!(totals.count, 2);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clear_directory_removes_only_immediate_files() {
+        let dir = std::env::temp_dir().join(format!("miriago_cache_clear_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("keep")).expect("create keep subdir");
+        std::fs::write(dir.join("keep/nested.jpg"), vec![0u8; 500]).expect("write nested");
+        std::fs::write(dir.join("top.jpg"), vec![0u8; 120]).expect("write top");
+
+        let cleared = super::clear_directory(&dir);
+        assert_eq!(cleared.bytes, 120);
+        assert_eq!(cleared.count, 1);
+        // The nested file inside the kept subdir is untouched.
+        assert_eq!(super::directory_totals(&dir.join("keep")).count, 1);
+        assert!(dir.join("keep/nested.jpg").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

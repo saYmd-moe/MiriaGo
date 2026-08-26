@@ -65,6 +65,34 @@ class DesktopAssetResult {
   final String mimeType;
 }
 
+class DesktopReferenceCacheStats {
+  const DesktopReferenceCacheStats({
+    required this.fullBytes,
+    required this.fullCount,
+    required this.thumbnailBytes,
+    required this.thumbnailCount,
+  });
+
+  final int fullBytes;
+  final int fullCount;
+  final int thumbnailBytes;
+  final int thumbnailCount;
+}
+
+class DesktopReferenceCacheClearResult {
+  const DesktopReferenceCacheClearResult({
+    required this.fullFreedBytes,
+    required this.fullFreedCount,
+    required this.thumbnailFreedBytes,
+    required this.thumbnailFreedCount,
+  });
+
+  final int fullFreedBytes;
+  final int fullFreedCount;
+  final int thumbnailFreedBytes;
+  final int thumbnailFreedCount;
+}
+
 bool get isTauriLauncherAvailable => false;
 
 Future<DesktopLauncherInfo?> loadDesktopLauncherInfo() async {
@@ -151,6 +179,16 @@ Future<DesktopAssetResult> writeDesktopAsset({
   required String dataBase64,
 }) async {
   throw UnsupportedError('Tauri desktop launcher is not available.');
+}
+
+Future<DesktopReferenceCacheStats?> loadDesktopReferenceCacheStats() async {
+  return null;
+}
+
+Future<DesktopReferenceCacheClearResult?> clearDesktopReferenceCache({
+  required bool includeThumbnails,
+}) async {
+  return null;
 }
 
 Future<String> fetchDesktopAnitabiStaticJson({

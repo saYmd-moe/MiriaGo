@@ -53,6 +53,8 @@ fn main() {
             commands::restore_import_assets,
             commands::write_asset,
             commands::read_asset,
+            commands::reference_cache_stats,
+            commands::clear_reference_cache,
             commands::fetch_anitabi_static_json,
             commands::open_external_url
         ])

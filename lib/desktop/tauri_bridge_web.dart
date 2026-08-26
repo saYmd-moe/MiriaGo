@@ -7,6 +7,8 @@ import 'tauri_bridge_stub.dart'
         DesktopExportSaveResult,
         DesktopLauncherInfo,
         DesktopAssetResult,
+        DesktopReferenceCacheStats,
+        DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
         DesktopStateResult;
 export 'tauri_bridge_stub.dart'
@@ -15,6 +17,8 @@ export 'tauri_bridge_stub.dart'
         DesktopExportSaveResult,
         DesktopLauncherInfo,
         DesktopAssetResult,
+        DesktopReferenceCacheStats,
+        DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
         DesktopStateResult;
 
@@ -263,6 +267,36 @@ Future<DesktopAssetResult> writeDesktopAsset({
   );
 }
 
+Future<DesktopReferenceCacheStats?> loadDesktopReferenceCacheStats() async {
+  final result = await _invokeObject('reference_cache_stats', const {});
+  if (result == null) {
+    return null;
+  }
+  return DesktopReferenceCacheStats(
+    fullBytes: _intProperty(result, 'fullBytes') ?? 0,
+    fullCount: _intProperty(result, 'fullCount') ?? 0,
+    thumbnailBytes: _intProperty(result, 'thumbnailBytes') ?? 0,
+    thumbnailCount: _intProperty(result, 'thumbnailCount') ?? 0,
+  );
+}
+
+Future<DesktopReferenceCacheClearResult?> clearDesktopReferenceCache({
+  required bool includeThumbnails,
+}) async {
+  final result = await _invokeObject('clear_reference_cache', {
+    'include_thumbnails': includeThumbnails,
+  });
+  if (result == null) {
+    return null;
+  }
+  return DesktopReferenceCacheClearResult(
+    fullFreedBytes: _intProperty(result, 'fullFreedBytes') ?? 0,
+    fullFreedCount: _intProperty(result, 'fullFreedCount') ?? 0,
+    thumbnailFreedBytes: _intProperty(result, 'thumbnailFreedBytes') ?? 0,
+    thumbnailFreedCount: _intProperty(result, 'thumbnailFreedCount') ?? 0,
+  );
+}
+
 Future<DesktopStateResult> _invokeDesktopState(
   String command,
   Map<String, Object?> arguments,
@@ -374,4 +408,12 @@ bool? _boolProperty(JSObject object, String name) {
     return null;
   }
   return (value as JSBoolean).toDart;
+}
+
+int? _intProperty(JSObject object, String name) {
+  final value = object.getProperty<JSAny?>(name.toJS);
+  if (value == null || value.isUndefinedOrNull) {
+    return null;
+  }
+  return (value as JSNumber).toDartDouble.toInt();
 }
