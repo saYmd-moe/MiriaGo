@@ -61,8 +61,8 @@ fn main() {
                     .cloned()
                     .collect::<Vec<_>>();
                 pending.add_args(plan_files.iter().cloned());
-                for path in plan_files {
-                    let _ = app.emit("miriago://open-plan-file", path);
+                if !plan_files.is_empty() {
+                    let _ = app.emit("miriago://open-plan-file", ());
                 }
             }
         }))

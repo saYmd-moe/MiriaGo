@@ -100,8 +100,8 @@ class _AppShellState extends State<AppShell> {
   Future<void> _initializeApp() async {
     await _loadActivePlan();
     if (isTauriLauncherAvailable) {
-      _desktopPlanFileSubscription = await listenForDesktopPlanFiles((path) {
-        unawaited(_queueImportPlanFromPath(path));
+      _desktopPlanFileSubscription = await listenForDesktopPlanFiles(() async {
+        await _drainPendingPlanFiles();
       });
     }
     await _loadInitialIncomingPlanFile();
@@ -192,11 +192,7 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _loadInitialIncomingPlanFile() async {
-    final pending = await takePendingDesktopPlanFiles();
-    if (pending.isNotEmpty) {
-      for (final path in pending) {
-        await _queueImportPlanFromPath(path);
-      }
+    if (await _drainPendingPlanFiles()) {
       return;
     }
 
@@ -204,6 +200,16 @@ class _AppShellState extends State<AppShell> {
     if (path != null && path.isNotEmpty) {
       await _queueImportPlanFromPath(path);
     }
+  }
+
+  Future<bool> _drainPendingPlanFiles() async {
+    final pending = await takePendingDesktopPlanFiles();
+    for (final path in pending) {
+      if (mounted) {
+        await _queueImportPlanFromPath(path);
+      }
+    }
+    return pending.isNotEmpty;
   }
 
   Future<void> _queueImportPlanFromPath(String path) async {

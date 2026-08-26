@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
@@ -258,7 +259,7 @@ Future<bool> openDesktopExternalUrl({required String url}) {
 }
 
 Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
-  void Function(String path) onPath,
+  Future<void> Function() onQueueChanged,
 ) async {
   final tauri = _tauriGlobal();
   if (tauri == null) {
@@ -275,14 +276,7 @@ Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
       if (rawEvent == null || rawEvent.isUndefinedOrNull) {
         return;
       }
-      final eventObject = rawEvent as JSObject;
-      final payload = eventObject.getProperty<JSAny?>('payload'.toJS);
-      final path = payload?.isA<JSString>() == true
-          ? (payload as JSString).toDart
-          : null;
-      if (path != null && path.isNotEmpty) {
-        onPath(path);
-      }
+      unawaited(onQueueChanged());
     }).toJS,
   );
   final unlisten = await promise.toDart;

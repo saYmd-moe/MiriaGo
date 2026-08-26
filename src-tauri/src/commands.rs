@@ -516,7 +516,7 @@ pub fn notify_desktop_task(app: tauri::AppHandle, request: DesktopNotificationRe
 }
 
 fn is_plan_file_path(value: &str) -> bool {
-    let path = Path::new(value.trim());
+    let path = Path::new(value);
     path.is_file()
         && path
             .extension()
@@ -800,11 +800,18 @@ mod tests {
         let temporary = std::env::temp_dir().join("MiriaGo test 空格.sjhplan");
         std::fs::write(&temporary, b"test").unwrap();
         assert!(is_plan_file_path(temporary.to_str().unwrap()));
+        let spaced_dir = std::env::temp_dir().join("trailing space ");
+        std::fs::create_dir_all(&spaced_dir).unwrap();
+        let spaced = spaced_dir.join(" leading.sjhplan");
+        std::fs::write(&spaced, b"test").unwrap();
+        assert!(is_plan_file_path(spaced.to_str().unwrap()));
         assert!(!is_plan_file_path("/does/not/exist.sjhplan"));
         assert!(!is_plan_file_path(
             temporary.with_extension("txt").to_str().unwrap()
         ));
         std::fs::remove_file(temporary).unwrap();
+        std::fs::remove_file(&spaced).unwrap();
+        std::fs::remove_dir(spaced_dir).unwrap();
     }
 
     #[test]

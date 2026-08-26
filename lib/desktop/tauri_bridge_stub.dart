@@ -166,7 +166,7 @@ Future<bool> openDesktopExternalUrl({required String url}) async {
 }
 
 Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
-  void Function(String path) onPath,
+  Future<void> Function() onQueueChanged,
 ) async {
   return null;
 }
