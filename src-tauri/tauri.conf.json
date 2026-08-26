@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'self'; worker-src 'self' blob:; font-src 'self'; img-src 'self' data: blob: https://image.anitabi.cn https://img-tc.anitabi.cn https:; style-src 'self' 'unsafe-inline' https://unpkg.com; script-src 'self' 'wasm-unsafe-eval' https://unpkg.com; connect-src 'self' https:;"
     }
   },
   "bundle": {

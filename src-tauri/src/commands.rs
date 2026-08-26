@@ -211,7 +211,7 @@ pub fn write_export_file(
     request: WriteExportFileRequest,
 ) -> Result<ExportDestinationResult, String> {
     let extension = normalize_extension(&request.extension);
-    let path = ensure_extension(PathBuf::from(&request.path), &extension);
+    let path = ensure_extension(safe_export_path(&request.path)?, &extension);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
@@ -521,6 +521,18 @@ fn export_filter_label(mime_type: &str, extension: &str) -> String {
     }
 }
 
+fn safe_export_path(path: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(path);
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(format!("unsafe export path: {}", path.display()));
+    }
+    Ok(path)
+}
+
 fn safe_asset_path(path: &str) -> Result<PathBuf, String> {
     if !path.starts_with("assets/") || path.ends_with('/') || path.contains('\\') {
         return Err(format!("unsafe asset path: {path}"));
@@ -579,6 +591,10 @@ fn safe_anitabi_static_version(version: &str) -> Option<String> {
 fn fetch_text(url: &str) -> Result<String, String> {
     let response = reqwest::blocking::Client::builder()
         .user_agent("MiriaGo desktop launcher")
+        // Do not follow a redirect from a validated public host into a local
+        // or private address. The caller validates the initial URL; refusing
+        // redirects keeps that validation meaningful.
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| error.to_string())?
         .get(url)
@@ -638,7 +654,7 @@ fn safe_directory_name(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        safe_asset_path, safe_local_asset_path, safe_public_external_url,
+        safe_asset_path, safe_export_path, safe_local_asset_path, safe_public_external_url,
         safe_public_https_base_url,
     };
 
@@ -665,6 +681,13 @@ mod tests {
         assert!(safe_public_external_url("https://localhost/test").is_err());
         assert!(safe_public_external_url("http://10.0.0.1/test").is_err());
         assert!(safe_public_external_url("https://[fc00::1]/test").is_err());
+    }
+
+    #[test]
+    fn export_paths_require_absolute_paths_without_parent_segments() {
+        assert!(safe_export_path("/tmp/MiriaGo/export.sjhplan").is_ok());
+        assert!(safe_export_path("exports/export.sjhplan").is_err());
+        assert!(safe_export_path("/tmp/../outside.sjhplan").is_err());
     }
 
     #[test]
