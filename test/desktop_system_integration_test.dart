@@ -16,6 +16,26 @@ void main() {
     expect(await notifyDesktopTask(title: 'ignored', body: 'ignored'), isFalse);
   });
 
+  test('diagnostic export text does not contain a full home path', () {
+    const diagnostics = RuntimeDiagnostics(
+      appVersion: '1.0.0',
+      tauriVersion: '2.0.0',
+      webkitgtkVersion: null,
+      sessionType: 'wayland',
+      sessionDesktop: 'plasma',
+      currentDesktop: 'KDE',
+      display: null,
+      waylandDisplay: 'wayland-0',
+      gtkUsePortal: '1',
+      portalBackend: 'kde',
+      dataDir: '~/.local/share/MiriaGo',
+      logsDir: '~/.local/share/MiriaGo/logs',
+    );
+    expect(diagnostics.text, contains('data_dir=~/.local/share/MiriaGo'));
+    expect(diagnostics.text, isNot(contains('/home/example')));
+    expect(diagnostics.text, isNot(contains('USERPROFILE')));
+  });
+
   test('desktop import accepts Unicode and space paths', () async {
     final repository = SamplePilgrimageRepository();
     final plan = await repository.loadActivePlan();

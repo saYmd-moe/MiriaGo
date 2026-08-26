@@ -11,6 +11,7 @@
 //! entry point and any live D-Bus portal probing. This module deliberately
 //! does not perform network or privileged queries, and never mutates state.
 
+use std::path::Path;
 #[cfg(target_os = "linux")]
 use std::process::Command;
 
@@ -63,8 +64,8 @@ pub fn collect() -> Result<RuntimeDiagnostics, String> {
         wayland_display: env_option("WAYLAND_DISPLAY"),
         gtk_use_portal: gtk_use_portal.clone(),
         portal_backend: portal_backend_hint(current_desktop.as_deref(), gtk_use_portal.as_deref()),
-        data_dir: dirs.data_dir.display().to_string(),
-        logs_dir: dirs.logs_dir.display().to_string(),
+        data_dir: redact_path(&dirs.data_dir),
+        logs_dir: redact_path(&dirs.logs_dir),
     })
 }
 
@@ -119,6 +120,25 @@ fn env_option(name: &str) -> Option<String> {
     std::env::var(name)
         .ok()
         .filter(|value| !value.trim().is_empty())
+}
+
+/// Keep diagnostics useful without exporting a user's full home path.
+fn redact_path(path: &Path) -> String {
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .and_then(|value| value.into_string().ok());
+    if let Some(home) = home.as_deref() {
+        let home_path = Path::new(home);
+        if let Ok(relative) = path.strip_prefix(home_path) {
+            let relative = relative.to_string_lossy().replace('\\', "/");
+            return if relative.is_empty() {
+                "~".to_string()
+            } else {
+                format!("~/{relative}")
+            };
+        }
+    }
+    "<user-data>".to_string()
 }
 
 /// Redacts sensitive values from a log line.
@@ -228,15 +248,33 @@ fn redact_sensitive_params(input: String) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect, portal_backend_hint, redact_for_log, redact_for_log_with_home};
+    use super::{
+        collect, portal_backend_hint, redact_for_log, redact_for_log_with_home, redact_path,
+    };
 
     #[test]
-    fn collect_reports_versions_and_paths_without_initializing_storage() {
+    fn collect_reports_versions_and_redacted_paths_without_initializing_storage() {
         let report = collect().expect("diagnostics should resolve on the test host");
         assert!(!report.app_version.is_empty());
         assert!(!report.tauri_version.is_empty());
         assert!(!report.data_dir.is_empty());
         assert!(!report.logs_dir.is_empty());
+        assert!(!report.data_dir.contains("/home/"));
+        assert!(!report.logs_dir.contains("/home/"));
+    }
+
+    #[test]
+    fn redacted_paths_fold_home_prefix() {
+        let path = std::path::Path::new("/home/example/.local/share/MiriaGo");
+        // The helper uses the process home, so test the invariant directly with
+        // a synthetic path only when it is under the actual home directory.
+        if let Some(home) = std::env::var_os("HOME") {
+            let home = std::path::PathBuf::from(home);
+            let path = home.join(".local/share/MiriaGo");
+            assert_eq!(redact_path(&path), "~/.local/share/MiriaGo");
+        } else {
+            assert_eq!(redact_path(path), "<user-data>");
+        }
     }
 
     #[test]

@@ -215,12 +215,6 @@ pub struct AnitabiStaticJsonResult {
     pub body: String,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DesktopDiagnostics {
-    pub text: String,
-}
-
 impl From<storage::DataDirs> for LauncherInfo {
     fn from(value: storage::DataDirs) -> Self {
         Self {
@@ -654,28 +648,6 @@ pub fn take_pending_plan_files(state: State<'_, PendingPlanFiles>) -> Vec<String
 }
 
 #[tauri::command]
-pub fn desktop_diagnostics() -> Result<DesktopDiagnostics, String> {
-    let dirs = storage::ensure_data_dirs()?;
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from));
-    let data_dir = redact_path(&dirs.data_dir, home.as_deref());
-    let logs_dir = redact_path(&dirs.logs_dir, home.as_deref());
-    let text = format!(
-        "MiriaGo diagnostics\napp_version={}\nos={}\ndesktop={}\nsession_type={}\nscale={}\nportal={}\ndata_dir={}\nlogs_dir={}\nrecent_errors=not-collected",
-        env!("CARGO_PKG_VERSION"),
-        std::env::consts::OS,
-        env_value("XDG_CURRENT_DESKTOP"),
-        env_value("XDG_SESSION_TYPE"),
-        first_env_value(["GDK_SCALE", "GDK_DPI_SCALE", "QT_SCALE_FACTOR"]),
-        env_value("GTK_USE_PORTAL"),
-        data_dir,
-        logs_dir,
-    );
-    Ok(DesktopDiagnostics { text })
-}
-
-#[tauri::command]
 pub fn notify_desktop_task(app: tauri::AppHandle, request: DesktopNotificationRequest) -> bool {
     let title = truncate_notification_text(&request.title);
     let body = truncate_notification_text(&request.body);
@@ -694,30 +666,6 @@ fn is_plan_file_path(value: &str) -> bool {
             .extension()
             .and_then(|extension| extension.to_str())
             .is_some_and(|extension| extension.eq_ignore_ascii_case("sjhplan"))
-}
-
-fn redact_path(path: &Path, home: Option<&Path>) -> String {
-    let path = path.to_string_lossy();
-    if let Some(home) = home.and_then(|value| value.to_str()) {
-        if let Some(relative) = path
-            .strip_prefix(home)
-            .and_then(|value| value.strip_prefix('/'))
-        {
-            return format!("~/{relative}");
-        }
-    }
-    "<user-data>".to_string()
-}
-
-fn env_value(name: &str) -> String {
-    std::env::var(name).unwrap_or_else(|_| "unknown".to_string())
-}
-
-fn first_env_value<const N: usize>(names: [&str; N]) -> String {
-    names
-        .into_iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
-        .unwrap_or_else(|| "unknown".to_string())
 }
 
 fn truncate_notification_text(value: &str) -> String {
@@ -954,10 +902,10 @@ fn safe_directory_name(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_extension, first_environment_component, is_plan_file_path,
-        normalise_session_type, portal_setting, safe_asset_path, safe_export_path,
-        safe_local_asset_path, safe_public_external_url, safe_public_https_base_url,
-        truncate_notification_text, PendingPlanFiles,
+        ensure_extension, first_environment_component, is_plan_file_path, normalise_session_type,
+        portal_setting, safe_asset_path, safe_export_path, safe_local_asset_path,
+        safe_public_external_url, safe_public_https_base_url, truncate_notification_text,
+        PendingPlanFiles,
     };
 
     #[test]

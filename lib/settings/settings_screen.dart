@@ -2195,7 +2195,7 @@ class _DesktopSettingsPage extends StatefulWidget {
 }
 
 class _DesktopSettingsPageState extends State<_DesktopSettingsPage> {
-  DesktopDiagnostics? _diagnostics;
+  RuntimeDiagnostics? _diagnostics;
   var _loadingDiagnostics = false;
 
   @override

@@ -107,7 +107,6 @@ fn main() {
             commands::fetch_anitabi_static_json,
             commands::open_external_url,
             commands::take_pending_plan_files,
-            commands::desktop_diagnostics,
             commands::notify_desktop_task
         ])
         .run(tauri::generate_context!())

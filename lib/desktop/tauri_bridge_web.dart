@@ -12,7 +12,7 @@ import 'tauri_bridge_stub.dart'
         DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
         DesktopStateResult,
-        DesktopDiagnostics,
+        RuntimeDiagnostics,
         DesktopPlanFileSubscription;
 export 'tauri_bridge_stub.dart'
     show
@@ -24,7 +24,7 @@ export 'tauri_bridge_stub.dart'
         DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
         DesktopStateResult,
-        DesktopDiagnostics,
+        RuntimeDiagnostics,
         DesktopPlanFileSubscription;
 
 class _DesktopPlanFileSubscription implements DesktopPlanFileSubscription {
@@ -307,12 +307,25 @@ Future<List<String>> takePendingDesktopPlanFiles() async {
       .toList(growable: false);
 }
 
-Future<DesktopDiagnostics?> loadDesktopDiagnostics() async {
-  final result = await _invokeObject('desktop_diagnostics', const {});
+Future<RuntimeDiagnostics?> loadDesktopDiagnostics() async {
+  final result = await _invokeObject('runtime_diagnostics', const {});
   if (result == null) {
     return null;
   }
-  return DesktopDiagnostics(text: _stringProperty(result, 'text') ?? '');
+  return RuntimeDiagnostics(
+    appVersion: _stringProperty(result, 'appVersion') ?? '',
+    tauriVersion: _stringProperty(result, 'tauriVersion') ?? '',
+    webkitgtkVersion: _stringProperty(result, 'webkitgtkVersion'),
+    sessionType: _stringProperty(result, 'sessionType'),
+    sessionDesktop: _stringProperty(result, 'sessionDesktop'),
+    currentDesktop: _stringProperty(result, 'currentDesktop'),
+    display: _stringProperty(result, 'display'),
+    waylandDisplay: _stringProperty(result, 'waylandDisplay'),
+    gtkUsePortal: _stringProperty(result, 'gtkUsePortal'),
+    portalBackend: _stringProperty(result, 'portalBackend'),
+    dataDir: _stringProperty(result, 'dataDir') ?? '<user-data>',
+    logsDir: _stringProperty(result, 'logsDir') ?? '<user-data>',
+  );
 }
 
 Future<bool> notifyDesktopTask({

@@ -32,7 +32,10 @@ mod tests {
         assert!(!scripts.contains(&"'unsafe-eval'"));
         assert_eq!(sources(&csp, "object-src"), ["'none'"]);
         assert_eq!(sources(&csp, "base-uri"), ["'self'"]);
-        assert_eq!(sources(&csp, "script-src"), ["'self'", "'wasm-unsafe-eval'"]);
+        assert_eq!(
+            sources(&csp, "script-src"),
+            ["'self'", "'wasm-unsafe-eval'"]
+        );
         assert_eq!(sources(&csp, "style-src"), ["'self'", "'unsafe-inline'"]);
         assert!(!csp.contains("unpkg.com"));
     }

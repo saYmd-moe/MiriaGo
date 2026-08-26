@@ -62,10 +62,50 @@ abstract class DesktopPlanFileSubscription {
   Future<void> dispose();
 }
 
-class DesktopDiagnostics {
-  const DesktopDiagnostics({required this.text});
+class RuntimeDiagnostics {
+  const RuntimeDiagnostics({
+    required this.appVersion,
+    required this.tauriVersion,
+    required this.webkitgtkVersion,
+    required this.sessionType,
+    required this.sessionDesktop,
+    required this.currentDesktop,
+    required this.display,
+    required this.waylandDisplay,
+    required this.gtkUsePortal,
+    required this.portalBackend,
+    required this.dataDir,
+    required this.logsDir,
+  });
 
-  final String text;
+  final String appVersion;
+  final String tauriVersion;
+  final String? webkitgtkVersion;
+  final String? sessionType;
+  final String? sessionDesktop;
+  final String? currentDesktop;
+  final String? display;
+  final String? waylandDisplay;
+  final String? gtkUsePortal;
+  final String? portalBackend;
+  final String dataDir;
+  final String logsDir;
+
+  String get text => [
+    'MiriaGo diagnostics',
+    'app_version=$appVersion',
+    'tauri_version=$tauriVersion',
+    'webkitgtk_version=${webkitgtkVersion ?? "unknown"}',
+    'session_type=${sessionType ?? "unknown"}',
+    'session_desktop=${sessionDesktop ?? "unknown"}',
+    'current_desktop=${currentDesktop ?? "unknown"}',
+    'display=${display ?? "unset"}',
+    'wayland_display=${waylandDisplay ?? "unset"}',
+    'gtk_use_portal=${gtkUsePortal ?? "unset"}',
+    'portal_backend=${portalBackend ?? "unknown"}',
+    'data_dir=$dataDir',
+    'logs_dir=$logsDir',
+  ].join('\n');
 }
 
 class DesktopAssetResult {
@@ -223,7 +263,7 @@ Future<List<String>> takePendingDesktopPlanFiles() async {
   return const <String>[];
 }
 
-Future<DesktopDiagnostics?> loadDesktopDiagnostics() async {
+Future<RuntimeDiagnostics?> loadDesktopDiagnostics() async {
   return null;
 }
 

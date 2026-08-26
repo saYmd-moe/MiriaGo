@@ -21,7 +21,7 @@ repository and ships inside `build/web/`; it does **not** require a network at r
 | Upgrade | `node tool/update_maplibre_vendor.mjs` — see `web/vendor/maplibre-gl/README.md`. |
 
 Why local: `web/index.html` previously loaded
-`https://unpkg.com/maplibre-gl@^5.0/dist/maplibre-gl.js` / `.css` from a runtime public CDN.
+a runtime public CDN.
 Those two runtime CDN references were removed and replaced with local relative paths under
 `$FLUTTER_BASE_HREF`. The Flutter web build copies the whole `web/` tree into `build/web/`,
 so the map engine is always available locally (offline app shell + map component work; only
