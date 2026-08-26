@@ -10,6 +10,7 @@ import '../camera_reference/camera_zoom_capabilities.dart';
 import '../data/pilgrimage_repository.dart';
 import '../data/anitabi_service_config.dart';
 import '../desktop/tauri_bridge.dart';
+import '../desktop/desktop_input.dart';
 import '../map/map_tile_config.dart';
 import '../plan/pilgrimage_models.dart';
 import '../records/comparison_export_config.dart';
@@ -36,12 +37,14 @@ class SettingsScreen extends StatefulWidget {
     required this.settings,
     required this.repository,
     required this.onChanged,
+    this.shortcutTarget,
     super.key,
   });
 
   final AppSettings settings;
   final PilgrimageRepository repository;
   final ValueChanged<AppSettings> onChanged;
+  final ShortcutTarget? shortcutTarget;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -56,11 +59,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    widget.shortcutTarget?.onAction = _handleShortcut;
     _loadZoomCapabilities();
     _loadAppVersionLabel();
     if (_shouldShowDesktopSection) {
       _loadDesktopLauncherInfo();
     }
+  }
+
+  @override
+  void dispose() {
+    widget.shortcutTarget?.onAction = null;
+    super.dispose();
+  }
+
+  bool _handleShortcut(DesktopAction action) {
+    // Settings persist immediately on every change; there is no separate save
+    // transaction for Ctrl+S to trigger.
+    return false;
   }
 
   Future<void> _loadZoomCapabilities() async {

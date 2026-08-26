@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../desktop/desktop_input.dart';
 import '../plan/pilgrimage_models.dart';
 import '../plan/pilgrimage_plan_controller.dart';
 import '../plan/plan_group_utils.dart';
@@ -18,11 +19,13 @@ class RecordsScreen extends StatefulWidget {
   const RecordsScreen({
     required this.controller,
     required this.settings,
+    this.shortcutTarget,
     super.key,
   });
 
   final PilgrimagePlanController controller;
   final AppSettings settings;
+  final ShortcutTarget? shortcutTarget;
 
   @override
   State<RecordsScreen> createState() => _RecordsScreenState();
@@ -36,6 +39,28 @@ class _RecordsScreenState extends State<RecordsScreen> {
   _RecordStatusFilter _statusFilter = _RecordStatusFilter.all;
   var _expandedSectionsInitialized = false;
   final Set<String> _expandedSectionIds = {};
+  final _searchFieldFocusNode = FocusNode(debugLabel: 'records-search-focus');
+
+  @override
+  void initState() {
+    super.initState();
+    widget.shortcutTarget?.onAction = _handleShortcut;
+  }
+
+  @override
+  void dispose() {
+    widget.shortcutTarget?.onAction = null;
+    _searchFieldFocusNode.dispose();
+    super.dispose();
+  }
+
+  bool _handleShortcut(DesktopAction action) {
+    if (action != DesktopAction.focusSearch) {
+      return false;
+    }
+    _searchFieldFocusNode.requestFocus();
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +119,7 @@ class _RecordsScreenState extends State<RecordsScreen> {
                 _RecordFilters(
                   statusFilter: _statusFilter,
                   searchQuery: _searchQuery,
+                  searchFieldFocusNode: _searchFieldFocusNode,
                   activeScopeFilterCount:
                       (_selectedWorkIds == null ? 0 : 1) +
                       (_selectedGroupFilterIds == null ? 0 : 1),
@@ -426,6 +452,7 @@ class _RecordFilters extends StatelessWidget {
   const _RecordFilters({
     required this.statusFilter,
     required this.searchQuery,
+    required this.searchFieldFocusNode,
     required this.activeScopeFilterCount,
     required this.onSearchChanged,
     required this.onStatusSelected,
@@ -434,6 +461,7 @@ class _RecordFilters extends StatelessWidget {
 
   final _RecordStatusFilter statusFilter;
   final String searchQuery;
+  final FocusNode searchFieldFocusNode;
   final int activeScopeFilterCount;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<_RecordStatusFilter> onStatusSelected;
@@ -458,6 +486,7 @@ class _RecordFilters extends StatelessWidget {
             height: _recordsToolbarControlHeight,
             child: _ExpandedRecordFilters(
               searchQuery: searchQuery,
+              searchFieldFocusNode: searchFieldFocusNode,
               onSearchChanged: onSearchChanged,
             ),
           ),
@@ -1224,10 +1253,12 @@ class _RecordStatusPickerState extends State<_RecordStatusPicker> {
 class _ExpandedRecordFilters extends StatefulWidget {
   const _ExpandedRecordFilters({
     required this.searchQuery,
+    required this.searchFieldFocusNode,
     required this.onSearchChanged,
   });
 
   final String searchQuery;
+  final FocusNode searchFieldFocusNode;
   final ValueChanged<String> onSearchChanged;
 
   @override
@@ -1274,6 +1305,7 @@ class _ExpandedRecordFiltersState extends State<_ExpandedRecordFilters> {
         onTapOutside: dismissKeyboardOnTapOutside,
         key: const ValueKey('records-search-field'),
         controller: _searchController,
+        focusNode: widget.searchFieldFocusNode,
         decoration: InputDecoration(
           hintText: '搜索点位、作品、场景',
           hintStyle: TextStyle(
