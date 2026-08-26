@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, net::IpAddr, path::PathBuf, process::Command
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
-use crate::storage;
+use crate::{diagnostics, storage};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,6 +162,13 @@ impl From<storage::DataDirs> for LauncherInfo {
             temp_dir: value.temp_dir.display().to_string(),
         }
     }
+}
+
+/// Read-only runtime diagnostics snapshot (M0). Backing data for the future
+/// About/diagnostics entry; never mutates state.
+#[tauri::command]
+pub fn runtime_diagnostics() -> Result<diagnostics::RuntimeDiagnostics, String> {
+    diagnostics::collect()
 }
 
 #[tauri::command]
