@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../app_theme.dart';
+import '../config/csp_config.dart';
 import 'map_marker_scale.dart';
 import '../widgets/snackbar_helper.dart';
 import '../camera_reference/camerawesome_reference_screen.dart';
@@ -600,6 +601,24 @@ class _PilgrimageMapScreenState extends State<PilgrimageMapScreen> {
             ),
             children: [
               configuredMapTileLayer(widget.settings),
+              if (mapSourceConfigurationMessage(widget.settings)
+                  case final message?)
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  child: Material(
+                    color: AppColors.warning.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Text(
+                        message,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ),
               PolygonLayer(
                 simplificationTolerance: 0,
                 polygons: groupAreaPolygons(

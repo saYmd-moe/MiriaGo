@@ -4,6 +4,8 @@
 )]
 
 mod commands;
+#[cfg(test)]
+mod csp;
 mod desktop_db;
 mod diagnostics;
 mod storage;

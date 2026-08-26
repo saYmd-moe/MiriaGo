@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import '../app_theme.dart';
 import '../app_version.dart';
 import '../camera_reference/camera_zoom_capabilities.dart';
+import '../config/csp_config.dart';
 import '../data/cache_management.dart';
 import '../data/pilgrimage_repository.dart';
 import '../data/anitabi_service_config.dart';
@@ -1593,6 +1594,13 @@ class _DataSourceSettingsPageState extends State<_DataSourceSettingsPage> {
               _InfoRow(
                 icon: Icons.error_outline,
                 text: validateMapTileSettings(settings)!,
+              ),
+            ],
+            if (customMapSourceCspNotice(settings) case final notice?) ...[
+              const SizedBox(height: 10),
+              _InfoRow(
+                icon: Icons.security_outlined,
+                text: notice,
               ),
             ],
           ],
