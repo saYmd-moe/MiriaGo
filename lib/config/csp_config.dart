@@ -10,8 +10,6 @@ import '../plan/pilgrimage_models.dart';
 ///
 /// This module documents the resource types and hosts the app actually talks
 /// to, so tightening the policy can be reasoned about in one place.
-library;
-
 /// Hosts the MapLibre renderer fetches style documents and raster/vector
 /// tiles from for the default map sources.
 ///
@@ -36,8 +34,8 @@ const defaultMapTileHosts = <String>[
 /// hosts the app cannot enumerate ahead of time; the policy therefore also
 /// allows `https:` for `img-src`.
 const anitabiImageHostsForCsp = <String>[
-  'image.anitabi.cn',
-  'img-tc.anitabi.cn',
+  'https://image.anitabi.cn',
+  'https://img-tc.anitabi.cn',
 ];
 
 /// Builds the MiriaGo desktop CSP.

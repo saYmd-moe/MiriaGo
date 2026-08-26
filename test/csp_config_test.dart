@@ -50,13 +50,13 @@ void main() {
     });
 
     test('locks down scripting surfaces', () {
-      expect(csp['object-src'], {'none'});
-      expect(csp['base-uri'], {'self'});
-      expect(csp['frame-src'], {'self'});
-      expect(csp['default-src'], {'self'});
+      expect(csp['object-src'], {"'none'"});
+      expect(csp['base-uri'], {"'self'"});
+      expect(csp['frame-src'], {"'self'"});
+      expect(csp['default-src'], {"'self'"});
 
       final scripts = csp['script-src']!;
-      expect(scripts.contains('self'), isTrue);
+      expect(scripts.contains("'self'"), isTrue);
       expect(scripts.contains("'unsafe-inline'"), isFalse);
       expect(scripts.contains("'unsafe-eval'"), isFalse);
       expect(scripts.contains('data:'), isFalse);
@@ -64,7 +64,7 @@ void main() {
 
     test('allows default map and Anitabi sources', () {
       final connects = csp['connect-src']!;
-      expect(connects.contains('self'), isTrue);
+      expect(connects.contains("'self'"), isTrue);
       // Default and user-configured https map/image sources stay reachable.
       expect(connects.contains('https:'), isTrue);
       expect(connects.contains('http:'), isFalse);
@@ -77,7 +77,11 @@ void main() {
         'https://image.anitabi.cn',
         'https://img-tc.anitabi.cn',
       ]) {
-        expect(images.contains(host), isTrue, reason: '$host should be allowed');
+        expect(
+          images.contains(host == 'self' ? "'self'" : host),
+          isTrue,
+          reason: '$host should be allowed',
+        );
       }
     });
 
@@ -86,8 +90,8 @@ void main() {
       // 'self' — it must not hard-depend on the transitional CDN host.
       final scripts = csp['script-src']!;
       final styles = csp['style-src']!;
-      expect(scripts.contains('self'), isTrue);
-      expect(styles.contains('self'), isTrue);
+      expect(scripts.contains("'self'"), isTrue);
+      expect(styles.contains("'self'"), isTrue);
       expect(MiriaGoCsp.desktopPolicy.contains('unpkg.com'), isFalse);
       expect(scripts, {"'self'", "'wasm-unsafe-eval'"});
       expect(styles, {"'self'", "'unsafe-inline'"});
