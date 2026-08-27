@@ -2,7 +2,7 @@
 # Internal payload recipe: use ../../scripts/build-arch-package.sh from the
 # repository root; that script creates and checksums the local source archive.
 pkgname=miriago
-pkgver=1.1.6
+pkgver=1.1.7
 pkgrel=1
 pkgdesc='Anime pilgrimage planning and recording application'
 arch=('x86_64')
