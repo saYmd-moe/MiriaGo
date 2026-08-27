@@ -53,6 +53,10 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Trust Flutter SDK checkout inside the Arch container
+        shell: bash
+        run: git config --global --add safe.directory "$FLUTTER_ROOT"
+
       - name: Check packaging scripts
         shell: bash
         run: ./scripts/test-arch-package.sh
