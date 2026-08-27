@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../app_theme.dart';
+import '../desktop/desktop_notifications.dart';
 import '../data/pilgrimage_repository.dart';
 import '../widgets/confirm_action_dialog.dart';
 import '../widgets/input_dialog.dart';
@@ -21,6 +22,7 @@ import 'plan_memo_screen.dart';
 import 'pilgrimage_models.dart';
 import 'pilgrimage_plan_controller.dart';
 import 'reference_full_cache_runner.dart';
+import '../desktop/desktop_input.dart';
 
 class PlanScreen extends StatefulWidget {
   const PlanScreen({
@@ -32,6 +34,7 @@ class PlanScreen extends StatefulWidget {
     required this.onOpenAddPoints,
     required this.onOpenPointManager,
     required this.onOpenImportExport,
+    this.shortcutTarget,
     super.key,
   });
 
@@ -43,6 +46,7 @@ class PlanScreen extends StatefulWidget {
   final VoidCallback onOpenAddPoints;
   final VoidCallback onOpenPointManager;
   final VoidCallback onOpenImportExport;
+  final ShortcutTarget? shortcutTarget;
 
   @override
   State<PlanScreen> createState() => _PlanScreenState();
@@ -73,12 +77,72 @@ class _PlanScreenState extends State<PlanScreen> {
     super.initState();
     _selectedPlanId = controller.plan.id;
     _selectedGroupId = controller.plan.currentGroupId;
+    widget.shortcutTarget?.onAction = _handleShortcut;
   }
 
   @override
   void dispose() {
+    widget.shortcutTarget?.onAction = null;
     _pointListController.dispose();
     super.dispose();
+  }
+
+  bool _handleShortcut(DesktopAction action) {
+    switch (action) {
+      case DesktopAction.moveDown:
+        _movePointSelection(1);
+      case DesktopAction.moveUp:
+        _movePointSelection(-1);
+      case DesktopAction.moveRight:
+        _moveGroupSelection(1);
+      case DesktopAction.moveLeft:
+        _moveGroupSelection(-1);
+      default:
+        // Plan edits are persisted by each controller operation; there is no
+        // separate save transaction for Ctrl+S to trigger here.
+        return false;
+    }
+    return true;
+  }
+
+  void _moveGroupSelection(int offset) {
+    final groups = planGroupBuckets(
+      controller.plan,
+      controller.completedPointIds,
+    );
+    if (groups.isEmpty) {
+      return;
+    }
+    final next = (_selectedGroupIndex + offset).clamp(0, groups.length - 1);
+    _selectGroup(next, groups);
+  }
+
+  void _movePointSelection(int offset) {
+    final groups = planGroupBuckets(
+      controller.plan,
+      controller.completedPointIds,
+    );
+    final selectedGroup = groups.isEmpty ? null : groups[_selectedGroupIndex];
+    if (selectedGroup == null) {
+      return;
+    }
+    final displayPoints = displayPointsForGroup(
+      selectedGroup,
+      sortMode: _sortMode,
+      descending: _sortDescending,
+      currentLocation: _currentLocation,
+    );
+    if (displayPoints.isEmpty) {
+      return;
+    }
+    final currentIndex = displayPoints.indexWhere(
+      (point) => point.id == controller.selectedPoint?.id,
+    );
+    final base = currentIndex < 0 ? (offset < 0 ? 0 : -1) : currentIndex;
+    final nextIndex = (base + offset).clamp(0, displayPoints.length - 1);
+    final point = displayPoints[nextIndex];
+    _selectPoint(point, groups);
+    _scrollPointTileIntoView(point.id);
   }
 
   void _selectGroup(int index, List<PlanGroupBucket> groups) {
@@ -333,98 +397,129 @@ class _PlanScreenState extends State<PlanScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (selectedGroup == null || controller.points.isEmpty)
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                children: [
-                  _WorkHeader(plan: plan),
-                  const SizedBox(height: 16),
-                  _EmptyPlanCard(onAddPoints: widget.onOpenAddPoints),
-                ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 960;
+          final content = Column(
+            children: [
+              if (selectedGroup == null || controller.points.isEmpty)
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    children: [
+                      _WorkHeader(plan: plan),
+                      const SizedBox(height: 16),
+                      _EmptyPlanCard(onAddPoints: widget.onOpenAddPoints),
+                    ],
+                  ),
+                )
+              else ...[
+                if (!_showMap) _PlanMetaStrip(plan: plan),
+                if (!wide)
+                  _GroupSwitcher(
+                    groups: groups,
+                    selectedIndex: _selectedGroupIndex,
+                    showProgressRing: widget.settings.showPlanGroupProgress,
+                    onSelectGroup: (group) {
+                      final currentGroups = planGroupBuckets(
+                        controller.plan,
+                        controller.completedPointIds,
+                      );
+                      final index = currentGroups.indexWhere(
+                        (candidate) => candidate.id == group.id,
+                      );
+                      if (index >= 0) {
+                        _selectGroup(index, currentGroups);
+                      }
+                    },
+                    onCreateGroup: () => _createGroupFromPointDetail(context),
+                  ),
+                _PlanGroupControls(
+                  plan: plan,
+                  group: selectedGroup,
+                  showMap: _showMap,
+                  sortMode: _sortMode,
+                  sortDescending: _sortDescending,
+                  mapHeightRatio: _mapHeightRatio,
+                  settings: settings,
+                  showVirtualLocation: _showVirtualLocation,
+                  isLocating: _isLocating,
+                  currentLocation: _currentLocation,
+                  selectedPointId: controller.selectedPoint?.id,
+                  onSetSortMode: (mode) {
+                    setState(() {
+                      _sortMode = mode;
+                    });
+                  },
+                  onToggleSortDirection: () {
+                    setState(() {
+                      _sortDescending = !_sortDescending;
+                    });
+                  },
+                  onToggleMap: () {
+                    setState(() {
+                      _showMap = !_showMap;
+                    });
+                  },
+                  onResizeMap: _resizeMap,
+                  onToggleVirtualLocation: _toggleCurrentLocation,
+                  onSelectPoint: (point) =>
+                      _handleMapPointTap(context, point, groups),
+                  completedPointIds: controller.completedPointIds,
+                ),
+                Expanded(
+                  child: ListView(
+                    controller: _pointListController,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    children: [
+                      for (final point in displayPoints) ...[
+                        _PlanPointTile(
+                          key: _pointTileKey(point.id),
+                          point: point,
+                          selected: controller.selectedPoint?.id == point.id,
+                          status: controller.statusFor(point),
+                          recordCount: controller
+                              .recordsForPoint(point.id)
+                              .length,
+                          onTap: () {
+                            _selectPoint(point, groups);
+                            _showPointDetail(context, point);
+                          },
+                          onOpenCamera: () => _openCamera(context, point),
+                          onComplete: () => controller.completePoint(point),
+                          onReopen: () => controller.reopenPoint(point),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          );
+          if (!wide) return content;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: 248,
+                child: _PlanGroupSidebar(
+                  groups: groups,
+                  selectedIndex: _selectedGroupIndex,
+                  onSelect: (group) {
+                    final index = groups.indexWhere(
+                      (item) => item.id == group.id,
+                    );
+                    if (index >= 0) _selectGroup(index, groups);
+                  },
+                  onCreateGroup: () => _createGroupFromPointDetail(context),
+                ),
               ),
-            )
-          else ...[
-            if (!_showMap) _PlanMetaStrip(plan: plan),
-            _GroupSwitcher(
-              groups: groups,
-              selectedIndex: _selectedGroupIndex,
-              showProgressRing: widget.settings.showPlanGroupProgress,
-              onSelectGroup: (group) {
-                final currentGroups = planGroupBuckets(
-                  controller.plan,
-                  controller.completedPointIds,
-                );
-                final index = currentGroups.indexWhere(
-                  (candidate) => candidate.id == group.id,
-                );
-                if (index >= 0) {
-                  _selectGroup(index, currentGroups);
-                }
-              },
-              onCreateGroup: () => _createGroupFromPointDetail(context),
-            ),
-            _PlanGroupControls(
-              plan: plan,
-              group: selectedGroup,
-              showMap: _showMap,
-              sortMode: _sortMode,
-              sortDescending: _sortDescending,
-              mapHeightRatio: _mapHeightRatio,
-              settings: settings,
-              showVirtualLocation: _showVirtualLocation,
-              isLocating: _isLocating,
-              currentLocation: _currentLocation,
-              selectedPointId: controller.selectedPoint?.id,
-              onSetSortMode: (mode) {
-                setState(() {
-                  _sortMode = mode;
-                });
-              },
-              onToggleSortDirection: () {
-                setState(() {
-                  _sortDescending = !_sortDescending;
-                });
-              },
-              onToggleMap: () {
-                setState(() {
-                  _showMap = !_showMap;
-                });
-              },
-              onResizeMap: _resizeMap,
-              onToggleVirtualLocation: _toggleCurrentLocation,
-              onSelectPoint: (point) =>
-                  _handleMapPointTap(context, point, groups),
-              completedPointIds: controller.completedPointIds,
-            ),
-            Expanded(
-              child: ListView(
-                controller: _pointListController,
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                children: [
-                  for (final point in displayPoints) ...[
-                    _PlanPointTile(
-                      key: _pointTileKey(point.id),
-                      point: point,
-                      status: controller.statusFor(point),
-                      recordCount: controller.recordsForPoint(point.id).length,
-                      onTap: () {
-                        _selectPoint(point, groups);
-                        _showPointDetail(context, point);
-                      },
-                      onOpenCamera: () => _openCamera(context, point),
-                      onComplete: () => controller.completePoint(point),
-                      onReopen: () => controller.reopenPoint(point),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ],
+              const VerticalDivider(width: 1),
+              Expanded(child: content),
+            ],
+          );
+        },
       ),
     );
   }
@@ -634,6 +729,12 @@ class _PlanScreenState extends State<PlanScreen> {
           messenger.showReplacingSnackBar(
             SnackBar(content: Text(progress.label)),
           );
+          if (progress.done) {
+            await notifyDesktopTaskIfBackground(
+              title: 'MiriaGo 参考图缓存完成',
+              body: progress.label,
+            );
+          }
         }
       }
     }
@@ -716,6 +817,114 @@ class _ReferenceCacheIconButton extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.download_for_offline_outlined),
+    );
+  }
+}
+
+class _PlanGroupSidebar extends StatelessWidget {
+  const _PlanGroupSidebar({
+    required this.groups,
+    required this.selectedIndex,
+    required this.onSelect,
+    required this.onCreateGroup,
+  });
+
+  final List<PlanGroupBucket> groups;
+  final int selectedIndex;
+  final ValueChanged<PlanGroupBucket> onSelect;
+  final Future<PilgrimagePlanGroup?> Function() onCreateGroup;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surface,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Text(
+              '片区',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+          for (var index = 0; index < groups.length; index += 1)
+            _PlanGroupSidebarTile(
+              group: groups[index],
+              selected: index == selectedIndex,
+              onTap: () => onSelect(groups[index]),
+            ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onCreateGroup,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('新建片区'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanGroupSidebarTile extends StatelessWidget {
+  const _PlanGroupSidebarTile({
+    required this.group,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final PlanGroupBucket group;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? AppColors.accent.withValues(alpha: 0.12)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            children: [
+              Icon(
+                group.isUngrouped
+                    ? Icons.inventory_2_outlined
+                    : Icons.folder_outlined,
+                size: 20,
+                color: selected
+                    ? AppColors.accentDark
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  group.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    color: selected
+                        ? AppColors.accentDark
+                        : AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                '${group.completedCount}/${group.points.length}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1789,6 +1998,7 @@ class _PlanMetaStrip extends StatelessWidget {
 class _PlanPointTile extends StatelessWidget {
   const _PlanPointTile({
     required this.point,
+    required this.selected,
     required this.status,
     required this.recordCount,
     required this.onTap,
@@ -1799,6 +2009,7 @@ class _PlanPointTile extends StatelessWidget {
   });
 
   final PilgrimagePoint point;
+  final bool selected;
   final VisitStatus status;
   final int recordCount;
   final VoidCallback onTap;
@@ -1811,7 +2022,9 @@ class _PlanPointTile extends StatelessWidget {
     final colors = _statusColors(status);
 
     return Material(
-      color: AppColors.surface,
+      color: selected
+          ? AppColors.accent.withValues(alpha: 0.08)
+          : AppColors.surface,
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
@@ -1820,7 +2033,10 @@ class _PlanPointTile extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: colors.border),
+            border: Border.all(
+              color: selected ? AppColors.accent : colors.border,
+              width: selected ? 2 : 1,
+            ),
           ),
           child: Row(
             children: [

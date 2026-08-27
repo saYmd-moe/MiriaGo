@@ -2,10 +2,10 @@
 # Internal payload recipe: use ../../scripts/build-arch-package.sh from the
 # repository root; that script creates and checksums the local source archive.
 pkgname=miriago
-pkgver=1.1.6
+pkgver=1.1.7
 pkgrel=1
 pkgdesc='Anime pilgrimage planning and recording application'
-arch=('x86_64' 'aarch64')
+arch=('x86_64')
 url='https://github.com/BilyHurington/MiriaGo'
 license=('MIT')
 depends=('gtk3' 'webkit2gtk-4.1' 'xdg-desktop-portal-gtk' 'xdg-utils')
@@ -22,6 +22,8 @@ package() {
     "${pkgdir}/usr/lib/miriago/miriago-desktop"
   install -Dm755 "${srcdir}/miriago" \
     "${pkgdir}/usr/bin/miriago"
+  install -Dm755 "${srcdir}/miriago-legacy-drivers" \
+    "${pkgdir}/usr/bin/miriago-legacy-drivers"
   install -Dm644 "${srcdir}/app.miriago.desktop.desktop" \
     "${pkgdir}/usr/share/applications/app.miriago.desktop.desktop"
   install -Dm644 "${srcdir}/LICENSE" \

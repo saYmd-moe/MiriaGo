@@ -1,15 +1,21 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../app_theme.dart';
 import '../app_version.dart';
 import '../camera_reference/camera_zoom_capabilities.dart';
+import '../config/csp_config.dart';
+import '../data/cache_management.dart';
 import '../data/pilgrimage_repository.dart';
 import '../data/anitabi_service_config.dart';
 import '../desktop/tauri_bridge.dart';
+import '../desktop/desktop_input.dart';
+import '../desktop/responsive_layout.dart';
 import '../map/map_tile_config.dart';
 import '../plan/pilgrimage_models.dart';
 import '../records/comparison_export_config.dart';
@@ -22,7 +28,8 @@ import '../widgets/input_dialog.dart';
 import '../widgets/snackbar_helper.dart';
 
 bool get _showFutureThemeModeSettings => false;
-bool get _showFutureCacheCleanupSettings => false;
+// Reference-image cache capacity display + safe cleanup is implemented (M3).
+bool get _showFutureCacheCleanupSettings => true;
 bool get _shouldShowMobileGallerySettings {
   if (kIsWeb) {
     return false;
@@ -36,12 +43,14 @@ class SettingsScreen extends StatefulWidget {
     required this.settings,
     required this.repository,
     required this.onChanged,
+    this.shortcutTarget,
     super.key,
   });
 
   final AppSettings settings;
   final PilgrimageRepository repository;
   final ValueChanged<AppSettings> onChanged;
+  final ShortcutTarget? shortcutTarget;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -52,15 +61,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DesktopLauncherInfo? _desktopLauncherInfo;
   String? _appVersionLabel;
   var _desktopLauncherLoaded = false;
+  final _settingsScrollController = ScrollController();
+  final _settingsSectionKeys = <String, GlobalKey>{};
+  String _selectedSettingsCategory = 'appearance';
 
   @override
   void initState() {
     super.initState();
+    widget.shortcutTarget?.onAction = _handleShortcut;
     _loadZoomCapabilities();
     _loadAppVersionLabel();
     if (_shouldShowDesktopSection) {
       _loadDesktopLauncherInfo();
     }
+  }
+
+  @override
+  void dispose() {
+    widget.shortcutTarget?.onAction = null;
+    _settingsScrollController.dispose();
+    super.dispose();
+  }
+
+  bool _handleShortcut(DesktopAction action) {
+    // Settings persist immediately on every change; there is no separate save
+    // transaction for Ctrl+S to trigger.
+    return false;
   }
 
   Future<void> _loadZoomCapabilities() async {
@@ -115,210 +141,270 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: [
-          _SettingsCard(
-            header: _SettingsCardHeader(
-              icon: Icons.palette_outlined,
-              title: '外观设置',
-              subtitle: '主题色、缩放、显示等',
-              onTap: () => _pushDetail(
-                _AppearanceSettingsPage(
-                  settings: settings,
-                  onChanged: widget.onChanged,
-                ),
-              ),
-            ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final tier = AppLayout.tierFor(constraints.maxWidth);
+          final details = ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              _SummaryGrid(
-                children: [
-                  _SummaryTile(
-                    icon: Icons.circle,
-                    title: '主题色',
-                    value: settings.themePalette.label,
-                    swatch: _ThemeSwatch(
-                      palette: settings.themePalette,
-                      customColorValue: settings.customThemeColorValue,
-                    ),
-                    onTap: () => _pushDetail(
-                      _AppearanceSettingsPage(
-                        settings: settings,
-                        onChanged: widget.onChanged,
-                      ),
+              _SettingsCard(
+                header: _SettingsCardHeader(
+                  key: _settingsSectionKeys.putIfAbsent(
+                    'appearance',
+                    GlobalKey.new,
+                  ),
+                  icon: Icons.palette_outlined,
+                  title: '外观设置',
+                  subtitle: '主题色、缩放、显示等',
+                  onTap: () => _pushDetail(
+                    _AppearanceSettingsPage(
+                      settings: settings,
+                      onChanged: widget.onChanged,
                     ),
                   ),
-                  _SummaryTile(
-                    icon: Icons.zoom_out_map_outlined,
-                    title: '页面缩放',
-                    value: '${(settings.uiScale * 100).round()}%',
-                    onTap: () => _pushDetail(
-                      _AppearanceSettingsPage(
-                        settings: settings,
-                        onChanged: widget.onChanged,
+                ),
+                children: [
+                  _SummaryGrid(
+                    children: [
+                      _SummaryTile(
+                        icon: Icons.circle,
+                        title: '主题色',
+                        value: settings.themePalette.label,
+                        swatch: _ThemeSwatch(
+                          palette: settings.themePalette,
+                          customColorValue: settings.customThemeColorValue,
+                        ),
+                        onTap: () => _pushDetail(
+                          _AppearanceSettingsPage(
+                            settings: settings,
+                            onChanged: widget.onChanged,
+                          ),
+                        ),
                       ),
-                    ),
+                      _SummaryTile(
+                        icon: Icons.zoom_out_map_outlined,
+                        title: '页面缩放',
+                        value: '${(settings.uiScale * 100).round()}%',
+                        onTap: () => _pushDetail(
+                          _AppearanceSettingsPage(
+                            settings: settings,
+                            onChanged: widget.onChanged,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _SettingsCard(
-            header: _SettingsCardHeader(
-              icon: Icons.photo_camera_outlined,
-              title: '拍摄设置',
-              subtitle: '照片比例、参考图比例、备份等',
-              onTap: () => _pushDetail(
-                _CameraSettingsPage(
-                  settings: settings,
-                  onChanged: widget.onChanged,
-                  zoomCapabilities: _zoomCapabilities,
+              const SizedBox(height: 12),
+              _SettingsCard(
+                header: _SettingsCardHeader(
+                  key: _settingsSectionKeys.putIfAbsent(
+                    'camera',
+                    GlobalKey.new,
+                  ),
+                  icon: Icons.photo_camera_outlined,
+                  title: '拍摄设置',
+                  subtitle: '照片比例、参考图比例、备份等',
+                  onTap: () => _pushDetail(
+                    _CameraSettingsPage(
+                      settings: settings,
+                      onChanged: widget.onChanged,
+                      zoomCapabilities: _zoomCapabilities,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            children: [
-              _SummaryGrid(
                 children: [
-                  _SummaryTile(
-                    icon: Icons.crop_outlined,
-                    title: '拍摄图片比例',
-                    value: settings.cameraCaptureAspectRatio.label,
-                    onTap: () => _pushDetail(
-                      _CameraSettingsPage(
-                        settings: settings,
-                        onChanged: widget.onChanged,
-                        zoomCapabilities: _zoomCapabilities,
+                  _SummaryGrid(
+                    children: [
+                      _SummaryTile(
+                        icon: Icons.crop_outlined,
+                        title: '拍摄图片比例',
+                        value: settings.cameraCaptureAspectRatio.label,
+                        onTap: () => _pushDetail(
+                          _CameraSettingsPage(
+                            settings: settings,
+                            onChanged: widget.onChanged,
+                            zoomCapabilities: _zoomCapabilities,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  _SummaryTile(
-                    icon: Icons.view_sidebar_outlined,
-                    title: '相机缩放',
-                    value:
-                        '${settings.cameraMinZoom.toStringAsFixed(1)}x-${settings.cameraMaxZoom.toStringAsFixed(1)}x',
-                    onTap: () => _pushDetail(
-                      _CameraSettingsPage(
-                        settings: settings,
-                        onChanged: widget.onChanged,
-                        zoomCapabilities: _zoomCapabilities,
+                      _SummaryTile(
+                        icon: Icons.view_sidebar_outlined,
+                        title: '相机缩放',
+                        value:
+                            '${settings.cameraMinZoom.toStringAsFixed(1)}x-${settings.cameraMaxZoom.toStringAsFixed(1)}x',
+                        onTap: () => _pushDetail(
+                          _CameraSettingsPage(
+                            settings: settings,
+                            onChanged: widget.onChanged,
+                            zoomCapabilities: _zoomCapabilities,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
+                  if (_shouldShowMobileGallerySettings) ...[
+                    const _SettingsDivider(),
+                    _SummarySwitchTile(
+                      icon: Icons.cloud_upload_outlined,
+                      title: '照片备份',
+                      subtitle: '保存巡礼照片到相册',
+                      value: settings.saveVisitPhotoToGallery,
+                      onChanged: (value) {
+                        widget.onChanged(
+                          settings.copyWith(saveVisitPhotoToGallery: value),
+                        );
+                      },
+                    ),
+                  ],
                 ],
               ),
-              if (_shouldShowMobileGallerySettings) ...[
-                const _SettingsDivider(),
-                _SummarySwitchTile(
-                  icon: Icons.cloud_upload_outlined,
-                  title: '照片备份',
-                  subtitle: '保存巡礼照片到相册',
-                  value: settings.saveVisitPhotoToGallery,
-                  onChanged: (value) {
-                    widget.onChanged(
-                      settings.copyWith(saveVisitPhotoToGallery: value),
-                    );
-                  },
+              const SizedBox(height: 12),
+              _SettingsCard(
+                header: _SettingsCardHeader(
+                  key: _settingsSectionKeys.putIfAbsent(
+                    'comparison',
+                    GlobalKey.new,
+                  ),
+                  icon: Icons.compare_arrows_outlined,
+                  title: '对比图设置',
+                  subtitle: '导出样式、自动保存到相册',
+                  onTap: () => _openComparisonStyleSettings(settings),
                 ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          _SettingsCard(
-            header: _SettingsCardHeader(
-              icon: Icons.compare_arrows_outlined,
-              title: '对比图设置',
-              subtitle: '导出样式、自动保存到相册',
-              onTap: () => _openComparisonStyleSettings(settings),
-            ),
-            children: [
-              if (_shouldShowMobileGallerySettings) ...[
-                _SummarySwitchTile(
-                  icon: Icons.photo_library_outlined,
-                  title: '自动保存对比图',
-                  subtitle: '保存记录时保存到相册',
-                  value: settings.autoSaveComparisonToGallery,
-                  onChanged: (value) {
-                    widget.onChanged(
-                      settings.copyWith(autoSaveComparisonToGallery: value),
-                    );
-                  },
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          _SettingsCard(
-            header: _SettingsCardHeader(
-              icon: Icons.map_outlined,
-              title: '数据源设置',
-              subtitle: '地图源、图片源等',
-              onTap: () => _pushDetail(
-                _DataSourceSettingsPage(
-                  settings: settings,
-                  onChanged: widget.onChanged,
-                  showMapUrlDialog: _showMapUrlDialog,
-                ),
+                children: [
+                  if (_shouldShowMobileGallerySettings) ...[
+                    _SummarySwitchTile(
+                      icon: Icons.photo_library_outlined,
+                      title: '自动保存对比图',
+                      subtitle: '保存记录时保存到相册',
+                      value: settings.autoSaveComparisonToGallery,
+                      onChanged: (value) {
+                        widget.onChanged(
+                          settings.copyWith(autoSaveComparisonToGallery: value),
+                        );
+                      },
+                    ),
+                  ],
+                ],
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _SettingsCard(
-            header: _SettingsCardHeader(
-              icon: Icons.layers_outlined,
-              title: '地图显示',
-              subtitle: '点位、片区、聚合与缩略图',
-              onTap: () => _pushDetail(
-                _MapDisplaySettingsPage(
-                  settings: settings,
-                  onChanged: widget.onChanged,
-                ),
-              ),
-            ),
-          ),
-          if (_showFutureCacheCleanupSettings) ...[
-            const SizedBox(height: 12),
-            _SettingsCard(
-              header: _SettingsCardHeader(
-                icon: Icons.cleaning_services_outlined,
-                title: '清除缓存',
-                subtitle: '完整参考图缓存',
-                onTap: () => _pushDetail(
-                  _CacheCleanupSettingsPage(repository: widget.repository),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          if (_shouldShowDesktopSection) ...[
-            _SettingsCard(
-              header: _SettingsCardHeader(
-                icon: Icons.desktop_windows_outlined,
-                title: '桌面端',
-                subtitle: '启动器、数据目录等',
-                onTap: () => _pushDetail(
-                  _DesktopSettingsPage(
-                    desktopLauncherInfo: _desktopLauncherInfo,
-                    desktopLauncherStatusText: _desktopLauncherStatusText,
+              const SizedBox(height: 12),
+              _SettingsCard(
+                header: _SettingsCardHeader(
+                  key: _settingsSectionKeys.putIfAbsent(
+                    'source',
+                    GlobalKey.new,
+                  ),
+                  icon: Icons.map_outlined,
+                  title: '数据源设置',
+                  subtitle: '地图源、图片源等',
+                  onTap: () => _pushDetail(
+                    _DataSourceSettingsPage(
+                      settings: settings,
+                      onChanged: widget.onChanged,
+                      showMapUrlDialog: _showMapUrlDialog,
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          _SettingsCard(
-            header: _SettingsCardHeader(
-              icon: Icons.info_outline,
-              title: '关于 MiriaGo',
-              subtitle: '版本信息、开源许可等',
-              onTap: () => _pushDetail(
-                _AboutSettingsPage(appVersionLabel: _appVersionLabel),
+              const SizedBox(height: 12),
+              _SettingsCard(
+                header: _SettingsCardHeader(
+                  key: _settingsSectionKeys.putIfAbsent('map', GlobalKey.new),
+                  icon: Icons.layers_outlined,
+                  title: '地图显示',
+                  subtitle: '点位、片区、聚合与缩略图',
+                  onTap: () => _pushDetail(
+                    _MapDisplaySettingsPage(
+                      settings: settings,
+                      onChanged: widget.onChanged,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+              if (_showFutureCacheCleanupSettings) ...[
+                const SizedBox(height: 12),
+                _SettingsCard(
+                  header: _SettingsCardHeader(
+                    key: _settingsSectionKeys.putIfAbsent(
+                      'cache',
+                      GlobalKey.new,
+                    ),
+                    icon: Icons.cleaning_services_outlined,
+                    title: '清除缓存',
+                    subtitle: '完整参考图缓存',
+                    onTap: () => _pushDetail(
+                      _CacheCleanupSettingsPage(),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              if (_shouldShowDesktopSection) ...[
+                _SettingsCard(
+                  header: _SettingsCardHeader(
+                    key: _settingsSectionKeys.putIfAbsent(
+                      'desktop',
+                      GlobalKey.new,
+                    ),
+                    icon: Icons.desktop_windows_outlined,
+                    title: '桌面端',
+                    subtitle: '启动器、数据目录等',
+                    onTap: () => _pushDetail(
+                      _DesktopSettingsPage(
+                        desktopLauncherInfo: _desktopLauncherInfo,
+                        desktopLauncherStatusText: _desktopLauncherStatusText,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              _SettingsCard(
+                header: _SettingsCardHeader(
+                  key: _settingsSectionKeys.putIfAbsent('about', GlobalKey.new),
+                  icon: Icons.info_outline,
+                  title: '关于 MiriaGo',
+                  subtitle: '版本信息、开源许可等',
+                  onTap: () => _pushDetail(
+                    _AboutSettingsPage(appVersionLabel: _appVersionLabel),
+                  ),
+                ),
+              ),
+            ],
+          );
+          if (tier.isNarrow) return details;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: tier.isWide ? 240 : 200,
+                child: _SettingsCategoryNavigation(
+                  selected: _selectedSettingsCategory,
+                  compact: tier.isMedium,
+                  onSelected: _scrollToSettingsCategory,
+                ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: details),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  void _scrollToSettingsCategory(String category) {
+    setState(() => _selectedSettingsCategory = category);
+    final target = _settingsSectionKeys[category]?.currentContext;
+    if (target != null) {
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: 0.05,
+      );
+    }
   }
 
   Future<void> _pushDetail(Widget page) {
@@ -1510,6 +1596,13 @@ class _DataSourceSettingsPageState extends State<_DataSourceSettingsPage> {
                 text: validateMapTileSettings(settings)!,
               ),
             ],
+            if (customMapSourceCspNotice(settings) case final notice?) ...[
+              const SizedBox(height: 10),
+              _InfoRow(
+                icon: Icons.security_outlined,
+                text: notice,
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
@@ -1856,9 +1949,7 @@ class _MapDisplaySettingsPageState extends State<_MapDisplaySettingsPage> {
 }
 
 class _CacheCleanupSettingsPage extends StatefulWidget {
-  const _CacheCleanupSettingsPage({required this.repository});
-
-  final PilgrimageRepository repository;
+  const _CacheCleanupSettingsPage();
 
   @override
   State<_CacheCleanupSettingsPage> createState() =>
@@ -1866,13 +1957,64 @@ class _CacheCleanupSettingsPage extends StatefulWidget {
 }
 
 class _CacheCleanupSettingsPageState extends State<_CacheCleanupSettingsPage> {
-  final Set<String> _selectedPlanIds = <String>{};
-  Future<List<PilgrimagePlan>>? _plansFuture;
+  Future<ReferenceCacheStats>? _statsFuture;
+  bool _includeThumbnails = false;
+  bool _clearing = false;
 
   @override
   void initState() {
     super.initState();
-    _plansFuture = widget.repository.loadPlans();
+    _statsFuture = loadReferenceCacheStats();
+  }
+
+  void _refreshStats() {
+    setState(() {
+      _statsFuture = loadReferenceCacheStats();
+    });
+  }
+
+  Future<void> _clearCache() async {
+    final confirmed = await showConfirmActionDialog(
+      context,
+      title: '清除参考图缓存',
+      message: _includeThumbnails
+          ? '将删除全部完整参考图缓存和缩略图缓存。它们均可在联网后重新下载。'
+          : '将删除全部完整参考图缓存。缩略图缓存会保留以维持列表和地图加载速度。',
+      confirmLabel: '清除',
+      notice: '不会删除照片、巡礼记录、导入的资料或数据库。',
+      emphasizedValues: const ['完整参考图缓存'],
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setState(() {
+      _clearing = true;
+    });
+    try {
+      final result = await clearReferenceCache(
+        includeThumbnails: _includeThumbnails,
+      );
+      if (!mounted) {
+        return;
+      }
+      final freedBytes = result.fullFreedBytes + result.thumbnailFreedBytes;
+      final message = switch (result.outcome) {
+        CacheClearOutcome.cleared =>
+          '已释放缓存 ${_formatCacheBytes(freedBytes)}（${result.fullFreedCount + result.thumbnailFreedCount} 个文件）',
+        CacheClearOutcome.unavailable => result.message ?? '当前环境不支持清除参考图缓存',
+      };
+      ScaffoldMessenger.of(
+        context,
+      ).showReplacingSnackBar(SnackBar(content: Text(message)));
+      _refreshStats();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearing = false;
+        });
+      }
+    }
   }
 
   @override
@@ -1880,13 +2022,12 @@ class _CacheCleanupSettingsPageState extends State<_CacheCleanupSettingsPage> {
     return _DetailScaffold(
       title: '清除缓存',
       children: [
-        FutureBuilder<List<PilgrimagePlan>>(
-          future: _plansFuture,
+        FutureBuilder<ReferenceCacheStats>(
+          future: _statsFuture,
           builder: (context, snapshot) {
-            final plans = snapshot.data;
             if (snapshot.connectionState != ConnectionState.done) {
               return const _SettingsSection(
-                title: '计划',
+                title: '缓存容量',
                 children: [
                   Center(
                     child: SizedBox(
@@ -1898,121 +2039,149 @@ class _CacheCleanupSettingsPageState extends State<_CacheCleanupSettingsPage> {
                 ],
               );
             }
-            if (snapshot.hasError || plans == null) {
-              return _SettingsSection(
-                title: '计划',
-                children: [
-                  const _InfoRow(icon: Icons.error_outline, text: '计划列表读取失败'),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _plansFuture = widget.repository.loadPlans();
-                      });
-                    },
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('重试'),
+            final stats = snapshot.data;
+            final available = isReferenceCacheManagementAvailable;
+            return _SettingsSection(
+              title: '缓存容量',
+              children: [
+                if (stats == null) ...[
+                  const _InfoRow(icon: Icons.error_outline, text: '缓存容量读取失败'),
+                ] else ...[
+                  _CacheSizeRow(
+                    icon: Icons.photo_library_outlined,
+                    label: '完整参考图缓存',
+                    bytes: stats.fullBytes,
+                    count: stats.fullCount,
+                  ),
+                  const SizedBox(height: 8),
+                  _CacheSizeRow(
+                    icon: Icons.photo_outlined,
+                    label: '缩略图缓存',
+                    bytes: stats.thumbnailBytes,
+                    count: stats.thumbnailCount,
                   ),
                 ],
-              );
-            }
-
-            _selectedPlanIds.removeWhere(
-              (id) => plans.every((plan) => plan.id != id),
-            );
-
-            return Column(
-              children: [
-                _SettingsSection(
-                  title: '选择计划',
+                if (!available) ...[
+                  const SizedBox(height: 12),
+                  const _InfoRow(
+                    icon: Icons.info_outline,
+                    text: '当前环境没有可管理的本地缓存目录。',
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '已选择 ${_selectedPlanIds.length} / ${plans.length} 个计划',
-                            style: _secondaryTextStyle,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: '全选',
-                          onPressed: () {
-                            setState(() {
-                              _selectedPlanIds
-                                ..clear()
-                                ..addAll(plans.map((plan) => plan.id));
-                            });
-                          },
-                          icon: const Icon(Icons.select_all_outlined),
-                        ),
-                        IconButton(
-                          tooltip: '清空',
-                          onPressed: _selectedPlanIds.isEmpty
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _selectedPlanIds.clear();
-                                  });
-                                },
-                          icon: const Icon(Icons.deselect_outlined),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ...plans.map(
-                      (plan) => CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text(plan.name, style: _titleTextStyle),
-                        subtitle: Text(
-                          '${plan.area} / ${plan.points.length} 个点位',
-                          style: _secondaryTextStyle,
-                        ),
-                        value: _selectedPlanIds.contains(plan.id),
-                        onChanged: (value) {
-                          setState(() {
-                            if (value == true) {
-                              _selectedPlanIds.add(plan.id);
-                            } else {
-                              _selectedPlanIds.remove(plan.id);
-                            }
-                          });
-                        },
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: _refreshStats,
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('刷新'),
                     ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                const _FullReferenceCacheSection(),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _selectedPlanIds.isEmpty
-                        ? null
-                        : _showCachePlaceholder,
-                    icon: const Icon(Icons.cleaning_services_outlined),
-                    label: const Text(
-                      '\u6e05\u9664\u5b8c\u6574\u53c2\u8003\u56fe\u7f13\u5b58',
-                    ),
-                  ),
                 ),
               ],
             );
           },
         ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '范围说明',
+          children: [
+            const _InfoRow(
+              icon: Icons.download_done_outlined,
+              text: '完整参考图缓存和缩略图缓存都是联网后自动下载的图片，可安全重新下载。',
+            ),
+            const SizedBox(height: 8),
+            const _InfoRow(
+              icon: Icons.lock_outline,
+              text: '照片、巡礼记录、导入的资料和数据库不会被删除。',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('同时清除缩略图缓存', style: _titleTextStyle),
+          subtitle: Text(
+            '清除后可释放更多空间，但列表和地图缩略图会重新加载。',
+            style: _secondaryTextStyle,
+          ),
+          value: _includeThumbnails,
+          onChanged: (value) {
+            setState(() {
+              _includeThumbnails = value ?? false;
+            });
+          },
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _clearing || !isReferenceCacheManagementAvailable
+                ? null
+                : _clearCache,
+            icon: _clearing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cleaning_services_outlined),
+            label: const Text('清除参考图缓存'),
+          ),
+        ),
       ],
     );
   }
+}
 
-  void _showCachePlaceholder() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('清除缓存功能尚未接入，仅展示界面。')));
+class _CacheSizeRow extends StatelessWidget {
+  const _CacheSizeRow({
+    required this.icon,
+    required this.label,
+    required this.bytes,
+    required this.count,
+  });
+
+  final IconData icon;
+  final String label;
+  final int bytes;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeText = count == 0
+        ? '无缓存'
+        : '${_formatCacheBytes(bytes)} · $count 个文件';
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.accent),
+        const SizedBox(width: 10),
+        Expanded(child: Text(label, style: _titleTextStyle)),
+        Text(sizeText, style: _secondaryTextStyle),
+      ],
+    );
   }
 }
 
-class _DesktopSettingsPage extends StatelessWidget {
+String _formatCacheBytes(int bytes) {
+  if (bytes < 1024) {
+    return '$bytes B';
+  }
+  final kb = bytes / 1024;
+  if (kb < 1024) {
+    return '${kb.toStringAsFixed(1)} KB';
+  }
+  final mb = kb / 1024;
+  if (mb < 1024) {
+    return '${mb.toStringAsFixed(1)} MB';
+  }
+  final gb = mb / 1024;
+  return '${gb.toStringAsFixed(1)} GB';
+}
+
+class _DesktopSettingsPage extends StatefulWidget {
   const _DesktopSettingsPage({
     required this.desktopLauncherInfo,
     required this.desktopLauncherStatusText,
@@ -2020,6 +2189,78 @@ class _DesktopSettingsPage extends StatelessWidget {
 
   final DesktopLauncherInfo? desktopLauncherInfo;
   final String desktopLauncherStatusText;
+
+  @override
+  State<_DesktopSettingsPage> createState() => _DesktopSettingsPageState();
+}
+
+class _DesktopSettingsPageState extends State<_DesktopSettingsPage> {
+  RuntimeDiagnostics? _diagnostics;
+  var _loadingDiagnostics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDiagnostics();
+  }
+
+  Future<void> _loadDiagnostics() async {
+    setState(() => _loadingDiagnostics = true);
+    final diagnostics = await loadDesktopDiagnostics();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _diagnostics = diagnostics;
+      _loadingDiagnostics = false;
+    });
+  }
+
+  Future<void> _copyDiagnostics() async {
+    final text = _diagnostics?.text;
+    if (text == null || text.isEmpty) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已复制脱敏诊断信息')));
+    }
+  }
+
+  Future<void> _exportDiagnostics() async {
+    final text = _diagnostics?.text;
+    if (text == null || text.isEmpty) {
+      return;
+    }
+    try {
+      final destination = await prepareDesktopExportDestination(
+        fileName: 'miriago-diagnostics.txt',
+        mimeType: 'text/plain',
+        extension: 'txt',
+      );
+      if (destination == null) {
+        return;
+      }
+      await writeDesktopExportFile(
+        path: destination.path,
+        extension: 'txt',
+        dataBase64: base64Encode(utf8.encode(text)),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('已导出脱敏诊断信息')));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('诊断信息导出失败')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2031,20 +2272,55 @@ class _DesktopSettingsPage extends StatelessWidget {
           children: [
             _InfoRow(
               icon: Icons.desktop_windows_outlined,
-              text: desktopLauncherStatusText,
+              text: widget.desktopLauncherStatusText,
             ),
-            if (desktopLauncherInfo != null) ...[
+            if (widget.desktopLauncherInfo != null) ...[
               const SizedBox(height: 10),
               _InfoRow(
                 icon: Icons.folder_outlined,
-                text: desktopLauncherInfo!.dataDir,
+                text: widget.desktopLauncherInfo!.dataDir,
               ),
               const SizedBox(height: 10),
               _InfoRow(
                 icon: Icons.inventory_2_outlined,
-                text: desktopLauncherInfo!.assetsDir,
+                text: widget.desktopLauncherInfo!.assetsDir,
               ),
             ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        _SettingsSection(
+          title: '诊断',
+          children: [
+            const Text(
+              '内容已脱敏，不包含完整用户路径、Token、私密 URL 或照片内容。',
+              style: _secondaryTextStyle,
+            ),
+            const SizedBox(height: 10),
+            if (_loadingDiagnostics)
+              const LinearProgressIndicator()
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _diagnostics == null ? null : _copyDiagnostics,
+                      icon: const Icon(Icons.copy_outlined),
+                      label: const Text('复制诊断信息'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _diagnostics == null
+                          ? null
+                          : _exportDiagnostics,
+                      icon: const Icon(Icons.save_alt_outlined),
+                      label: const Text('导出诊断信息'),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ],
@@ -2239,6 +2515,95 @@ extension _ZoomStepSnap on double {
   double snapToZoomStep() => (this * 10).round() / 10;
 }
 
+class _SettingsCategoryNavigation extends StatelessWidget {
+  const _SettingsCategoryNavigation({
+    required this.selected,
+    required this.onSelected,
+    this.compact = false,
+  });
+
+  final String selected;
+  final ValueChanged<String> onSelected;
+  final bool compact;
+
+  static const _items = <(String, String, IconData)>[
+    ('appearance', '外观设置', Icons.palette_outlined),
+    ('camera', '拍摄设置', Icons.photo_camera_outlined),
+    ('comparison', '对比图设置', Icons.compare_arrows_outlined),
+    ('source', '数据源设置', Icons.storage_outlined),
+    ('map', '地图显示', Icons.layers_outlined),
+    ('cache', '清除缓存', Icons.cleaning_services_outlined),
+    ('desktop', '桌面端', Icons.desktop_windows_outlined),
+    ('about', '关于 MiriaGo', Icons.info_outline),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: const ValueKey('settings-category-navigation'),
+      color: AppColors.surface,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
+            child: Text(
+              '设置分类',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ),
+          for (final item in _items.where(
+            (item) => item.$1 != 'desktop' || kIsWeb,
+          ))
+            Material(
+              color: selected == item.$1
+                  ? AppColors.accent.withValues(alpha: 0.12)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                onTap: () => onSelected(item.$1),
+                borderRadius: BorderRadius.circular(8),
+                child: Tooltip(
+                  message: item.$2,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          item.$3,
+                          color: selected == item.$1
+                              ? AppColors.accentDark
+                              : AppColors.textSecondary,
+                        ),
+                        if (!compact) const SizedBox(width: 10),
+                        if (!compact)
+                          Expanded(
+                            child: Text(
+                              item.$2,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: selected == item.$1
+                                    ? FontWeight.w800
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SettingsCard extends StatelessWidget {
   const _SettingsCard({required this.header, this.children = const []});
 
@@ -2270,6 +2635,7 @@ class _SettingsCardHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    super.key,
   });
 
   final IconData icon;
@@ -2680,74 +3046,6 @@ class _AspectRatioGrid extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _FullReferenceCacheSection extends StatelessWidget {
-  const _FullReferenceCacheSection();
-
-  @override
-  Widget build(BuildContext context) {
-    return const _SettingsSection(
-      title: '\u7f13\u5b58\u5185\u5bb9',
-      children: [
-        _CacheTargetCard(
-          icon: Icons.photo_library_outlined,
-          title: '\u5b8c\u6574\u53c2\u8003\u56fe\u7f13\u5b58',
-          subtitle:
-              '\u6e05\u9664\u76f8\u673a\u53c2\u8003\u548c\u5927\u56fe\u67e5\u770b\u4f7f\u7528\u7684\u5b8c\u6574\u53c2\u8003\u56fe\u3002\u7f29\u7565\u56fe\u7f13\u5b58\u4f1a\u4fdd\u7559\uff0c\u4ee5\u4fdd\u6301\u5217\u8868\u548c\u5730\u56fe\u52a0\u8f7d\u901f\u5ea6\u3002',
-        ),
-      ],
-    );
-  }
-}
-
-class _CacheTargetCard extends StatelessWidget {
-  const _CacheTargetCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: AppColors.accent, size: 21),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: _titleTextStyle),
-                const SizedBox(height: 4),
-                Text(subtitle, style: _secondaryParagraphTextStyle),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -17,6 +17,17 @@ pub struct DataDirs {
     pub temp_dir: PathBuf,
 }
 
+/// Resolves the application data paths without creating directories or touching
+/// files. This is used by read-only diagnostics.
+pub fn resolve_data_dirs() -> Result<DataDirs, String> {
+    match data_directory_policy_for(env::consts::OS) {
+        DataDirectoryPolicy::PortableWithSystemFallback => {
+            Ok(data_dirs_for_path(portable_data_dir(), true, false))
+        }
+        DataDirectoryPolicy::System => Ok(data_dirs_for_path(system_data_dir()?, false, false)),
+    }
+}
+
 pub fn ensure_data_dirs() -> Result<DataDirs, String> {
     match data_directory_policy_for(env::consts::OS) {
         DataDirectoryPolicy::PortableWithSystemFallback => {
@@ -49,25 +60,32 @@ fn create_data_dirs(
     portable: bool,
     fallback_used: bool,
 ) -> Result<DataDirs, String> {
-    let assets_dir = data_dir.join("assets");
-    let exports_dir = data_dir.join("exports");
-    let logs_dir = data_dir.join("logs");
-    let temp_dir = data_dir.join("temp");
+    let dirs = data_dirs_for_path(data_dir, portable, fallback_used);
 
-    for dir in [&data_dir, &assets_dir, &exports_dir, &logs_dir, &temp_dir] {
+    for dir in [
+        &dirs.data_dir,
+        &dirs.assets_dir,
+        &dirs.exports_dir,
+        &dirs.logs_dir,
+        &dirs.temp_dir,
+    ] {
         fs::create_dir_all(dir)
             .map_err(|error| format!("failed to create {}: {error}", dir.display()))?;
     }
 
-    Ok(DataDirs {
+    Ok(dirs)
+}
+
+fn data_dirs_for_path(data_dir: PathBuf, portable: bool, fallback_used: bool) -> DataDirs {
+    DataDirs {
+        assets_dir: data_dir.join("assets"),
+        exports_dir: data_dir.join("exports"),
+        logs_dir: data_dir.join("logs"),
+        temp_dir: data_dir.join("temp"),
         portable,
         fallback_used,
         data_dir,
-        assets_dir,
-        exports_dir,
-        logs_dir,
-        temp_dir,
-    })
+    }
 }
 
 fn portable_data_dir() -> PathBuf {

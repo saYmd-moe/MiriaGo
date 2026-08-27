@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
@@ -7,16 +8,35 @@ import 'tauri_bridge_stub.dart'
         DesktopExportSaveResult,
         DesktopLauncherInfo,
         DesktopAssetResult,
+        DesktopReferenceCacheStats,
+        DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
-        DesktopStateResult;
+        DesktopStateResult,
+        RuntimeDiagnostics,
+        DesktopPlanFileSubscription;
 export 'tauri_bridge_stub.dart'
     show
         DesktopExportDestination,
         DesktopExportSaveResult,
         DesktopLauncherInfo,
         DesktopAssetResult,
+        DesktopReferenceCacheStats,
+        DesktopReferenceCacheClearResult,
         DesktopRestoreImportAssetsResult,
-        DesktopStateResult;
+        DesktopStateResult,
+        RuntimeDiagnostics,
+        DesktopPlanFileSubscription;
+
+class _DesktopPlanFileSubscription implements DesktopPlanFileSubscription {
+  _DesktopPlanFileSubscription(this._unlisten);
+
+  final JSFunction _unlisten;
+
+  @override
+  Future<void> dispose() async {
+    _unlisten.callAsFunction();
+  }
+}
 
 @JS('window')
 external JSObject get _window;
@@ -49,6 +69,11 @@ Future<DesktopLauncherInfo?> loadDesktopLauncherInfo() async {
     exportsDir: _stringProperty(object, 'exportsDir') ?? '',
     logsDir: _stringProperty(object, 'logsDir') ?? '',
     tempDir: _stringProperty(object, 'tempDir') ?? '',
+    desktopEnvironment: _stringProperty(object, 'desktopEnvironment'),
+    sessionType: _stringProperty(object, 'sessionType'),
+    portalUsed: _stringProperty(object, 'portalUsed') == null
+        ? null
+        : (_boolProperty(object, 'portalUsed') ?? false),
   );
 }
 
@@ -242,6 +267,80 @@ Future<bool> openDesktopExternalUrl({required String url}) {
   });
 }
 
+Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
+  Future<void> Function() onQueueChanged,
+) async {
+  final tauri = _tauriGlobal();
+  if (tauri == null) {
+    return null;
+  }
+  final event = tauri.getProperty<JSAny?>('event'.toJS);
+  if (event == null || event.isUndefinedOrNull) {
+    return null;
+  }
+  final promise = (event as JSObject).callMethod<JSPromise<JSAny?>>(
+    'listen'.toJS,
+    'miriago://open-plan-file'.toJS,
+    ((JSAny? rawEvent) {
+      if (rawEvent == null || rawEvent.isUndefinedOrNull) {
+        return;
+      }
+      unawaited(onQueueChanged());
+    }).toJS,
+  );
+  final unlisten = await promise.toDart;
+  if (unlisten == null || unlisten.isUndefinedOrNull) {
+    return null;
+  }
+  return _DesktopPlanFileSubscription(unlisten as JSFunction);
+}
+
+Future<List<String>> takePendingDesktopPlanFiles() async {
+  final result = await _invoke('take_pending_plan_files', const {});
+  if (result == null || result.isUndefinedOrNull) {
+    return const <String>[];
+  }
+  final values = (result as JSArray<JSAny?>).toDart;
+  return values
+      .whereType<JSString>()
+      .map((value) => value.toDart)
+      .toList(growable: false);
+}
+
+Future<RuntimeDiagnostics?> loadDesktopDiagnostics() async {
+  final result = await _invokeObject('runtime_diagnostics', const {});
+  if (result == null) {
+    return null;
+  }
+  return RuntimeDiagnostics(
+    appVersion: _stringProperty(result, 'appVersion') ?? '',
+    tauriVersion: _stringProperty(result, 'tauriVersion') ?? '',
+    webkitgtkVersion: _stringProperty(result, 'webkitgtkVersion'),
+    sessionType: _stringProperty(result, 'sessionType'),
+    sessionDesktop: _stringProperty(result, 'sessionDesktop'),
+    currentDesktop: _stringProperty(result, 'currentDesktop'),
+    display: _stringProperty(result, 'display'),
+    waylandDisplay: _stringProperty(result, 'waylandDisplay'),
+    gtkUsePortal: _stringProperty(result, 'gtkUsePortal'),
+    portalBackend: _stringProperty(result, 'portalBackend'),
+    dataDir: _stringProperty(result, 'dataDir') ?? '<user-data>',
+    logsDir: _stringProperty(result, 'logsDir') ?? '<user-data>',
+  );
+}
+
+Future<bool> notifyDesktopTask({
+  required String title,
+  required String body,
+}) async {
+  try {
+    return await _invokeBoolean('notify_desktop_task', {
+      'request': {'title': title, 'body': body},
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<DesktopAssetResult> writeDesktopAsset({
   required String path,
   required String dataBase64,
@@ -255,6 +354,36 @@ Future<DesktopAssetResult> writeDesktopAsset({
   return DesktopAssetResult(
     dataBase64: _stringProperty(result, 'dataBase64') ?? '',
     mimeType: _stringProperty(result, 'mimeType') ?? 'application/octet-stream',
+  );
+}
+
+Future<DesktopReferenceCacheStats?> loadDesktopReferenceCacheStats() async {
+  final result = await _invokeObject('reference_cache_stats', const {});
+  if (result == null) {
+    return null;
+  }
+  return DesktopReferenceCacheStats(
+    fullBytes: _intProperty(result, 'fullBytes') ?? 0,
+    fullCount: _intProperty(result, 'fullCount') ?? 0,
+    thumbnailBytes: _intProperty(result, 'thumbnailBytes') ?? 0,
+    thumbnailCount: _intProperty(result, 'thumbnailCount') ?? 0,
+  );
+}
+
+Future<DesktopReferenceCacheClearResult?> clearDesktopReferenceCache({
+  required bool includeThumbnails,
+}) async {
+  final result = await _invokeObject('clear_reference_cache', {
+    'include_thumbnails': includeThumbnails,
+  });
+  if (result == null) {
+    return null;
+  }
+  return DesktopReferenceCacheClearResult(
+    fullFreedBytes: _intProperty(result, 'fullFreedBytes') ?? 0,
+    fullFreedCount: _intProperty(result, 'fullFreedCount') ?? 0,
+    thumbnailFreedBytes: _intProperty(result, 'thumbnailFreedBytes') ?? 0,
+    thumbnailFreedCount: _intProperty(result, 'thumbnailFreedCount') ?? 0,
   );
 }
 
@@ -343,12 +472,20 @@ JSAny? _jsValue(Object? value) {
   };
 }
 
-JSObject? _tauriCore() {
+JSObject? _tauriGlobal() {
   final tauri = _window.getProperty<JSAny?>('__TAURI__'.toJS);
   if (tauri == null || tauri.isUndefinedOrNull) {
     return null;
   }
-  final core = (tauri as JSObject).getProperty<JSAny?>('core'.toJS);
+  return tauri as JSObject;
+}
+
+JSObject? _tauriCore() {
+  final tauri = _tauriGlobal();
+  if (tauri == null || tauri.isUndefinedOrNull) {
+    return null;
+  }
+  final core = tauri.getProperty<JSAny?>('core'.toJS);
   if (core == null || core.isUndefinedOrNull) {
     return null;
   }
@@ -369,4 +506,12 @@ bool? _boolProperty(JSObject object, String name) {
     return null;
   }
   return (value as JSBoolean).toDart;
+}
+
+int? _intProperty(JSObject object, String name) {
+  final value = object.getProperty<JSAny?>(name.toJS);
+  if (value == null || value.isUndefinedOrNull) {
+    return null;
+  }
+  return (value as JSNumber).toDartDouble.toInt();
 }

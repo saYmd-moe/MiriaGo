@@ -9,6 +9,9 @@ class DesktopLauncherInfo {
     required this.exportsDir,
     required this.logsDir,
     required this.tempDir,
+    this.desktopEnvironment,
+    this.sessionType,
+    this.portalUsed,
   });
 
   final String appVersion;
@@ -20,6 +23,13 @@ class DesktopLauncherInfo {
   final String exportsDir;
   final String logsDir;
   final String tempDir;
+
+  /// Present on Linux desktop; e.g. `KDE`.
+  final String? desktopEnvironment;
+  /// Present on Linux desktop; e.g. `wayland`, `x11`.
+  final String? sessionType;
+  /// Whether GTK dialogs are routed through the XDG Desktop Portal.
+  final bool? portalUsed;
 }
 
 class DesktopExportDestination {
@@ -48,11 +58,89 @@ class DesktopRestoreImportAssetsResult {
   final Map<String, String> restoredPaths;
 }
 
+abstract class DesktopPlanFileSubscription {
+  Future<void> dispose();
+}
+
+class RuntimeDiagnostics {
+  const RuntimeDiagnostics({
+    required this.appVersion,
+    required this.tauriVersion,
+    required this.webkitgtkVersion,
+    required this.sessionType,
+    required this.sessionDesktop,
+    required this.currentDesktop,
+    required this.display,
+    required this.waylandDisplay,
+    required this.gtkUsePortal,
+    required this.portalBackend,
+    required this.dataDir,
+    required this.logsDir,
+  });
+
+  final String appVersion;
+  final String tauriVersion;
+  final String? webkitgtkVersion;
+  final String? sessionType;
+  final String? sessionDesktop;
+  final String? currentDesktop;
+  final String? display;
+  final String? waylandDisplay;
+  final String? gtkUsePortal;
+  final String? portalBackend;
+  final String dataDir;
+  final String logsDir;
+
+  String get text => [
+    'MiriaGo diagnostics',
+    'app_version=$appVersion',
+    'tauri_version=$tauriVersion',
+    'webkitgtk_version=${webkitgtkVersion ?? "unknown"}',
+    'session_type=${sessionType ?? "unknown"}',
+    'session_desktop=${sessionDesktop ?? "unknown"}',
+    'current_desktop=${currentDesktop ?? "unknown"}',
+    'display=${display ?? "unset"}',
+    'wayland_display=${waylandDisplay ?? "unset"}',
+    'gtk_use_portal=${gtkUsePortal ?? "unset"}',
+    'portal_backend=${portalBackend ?? "unknown"}',
+    'data_dir=$dataDir',
+    'logs_dir=$logsDir',
+  ].join('\n');
+}
+
 class DesktopAssetResult {
   const DesktopAssetResult({required this.dataBase64, required this.mimeType});
 
   final String dataBase64;
   final String mimeType;
+}
+
+class DesktopReferenceCacheStats {
+  const DesktopReferenceCacheStats({
+    required this.fullBytes,
+    required this.fullCount,
+    required this.thumbnailBytes,
+    required this.thumbnailCount,
+  });
+
+  final int fullBytes;
+  final int fullCount;
+  final int thumbnailBytes;
+  final int thumbnailCount;
+}
+
+class DesktopReferenceCacheClearResult {
+  const DesktopReferenceCacheClearResult({
+    required this.fullFreedBytes,
+    required this.fullFreedCount,
+    required this.thumbnailFreedBytes,
+    required this.thumbnailFreedCount,
+  });
+
+  final int fullFreedBytes;
+  final int fullFreedCount;
+  final int thumbnailFreedBytes;
+  final int thumbnailFreedCount;
 }
 
 bool get isTauriLauncherAvailable => false;
@@ -143,6 +231,16 @@ Future<DesktopAssetResult> writeDesktopAsset({
   throw UnsupportedError('Tauri desktop launcher is not available.');
 }
 
+Future<DesktopReferenceCacheStats?> loadDesktopReferenceCacheStats() async {
+  return null;
+}
+
+Future<DesktopReferenceCacheClearResult?> clearDesktopReferenceCache({
+  required bool includeThumbnails,
+}) async {
+  return null;
+}
+
 Future<String> fetchDesktopAnitabiStaticJson({
   required String fileName,
   required String baseUrl,
@@ -152,5 +250,26 @@ Future<String> fetchDesktopAnitabiStaticJson({
 }
 
 Future<bool> openDesktopExternalUrl({required String url}) async {
+  return false;
+}
+
+Future<DesktopPlanFileSubscription?> listenForDesktopPlanFiles(
+  Future<void> Function() onQueueChanged,
+) async {
+  return null;
+}
+
+Future<List<String>> takePendingDesktopPlanFiles() async {
+  return const <String>[];
+}
+
+Future<RuntimeDiagnostics?> loadDesktopDiagnostics() async {
+  return null;
+}
+
+Future<bool> notifyDesktopTask({
+  required String title,
+  required String body,
+}) async {
   return false;
 }

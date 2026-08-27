@@ -164,7 +164,7 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 构建 Web 预览：
 
 ```bash
-flutter build web --no-pub
+bash scripts/build-flutter-web.sh --release --no-pub --no-web-resources-cdn
 python3 -m http.server 8080 --directory build/web
 ```
 
@@ -195,7 +195,13 @@ Linux 输出位于 `src-tauri/target/release/bundle/appimage/` 和 `src-tauri/ta
 sudo pacman -U dist/arch/miriago-*.pkg.tar.zst
 ```
 
+Arch CI、包验证、SHA256SUMS 和可选签名说明见 [`docs/ARCH_LINUX_RELEASE.md`](docs/ARCH_LINUX_RELEASE.md)。Flatpak 仅作独立评估，见 [`docs/FLATPAK_EVALUATION.md`](docs/FLATPAK_EVALUATION.md)。
+
 脚本默认执行干净的 npm 安装、Flutter Web release 构建和 Tauri/Rust release 编译，然后用 `makepkg` 生成包。如果刚完成同一源码的 release 编译，可设置 `MIRIAGO_SKIP_BUILD=1` 仅重新打包。生成的包安装稳定启动命令 `/usr/bin/miriago`、FreeDesktop 菜单项和多尺寸 hicolor 图标，并声明 WebKitGTK、GTK Portal 回退后端与 `xdg-utils` 运行时依赖。
+
+### Linux 体验优化与诊断
+
+Linux 桌面端的体验优化、兼容性验证与发行完善按主工作树中的 `docs/LINUX_UX_OPTIMIZATION_PLAN.md` 分里程碑推进。基线、测试矩阵、故障模板、日志脱敏规则与只读诊断见 [`docs/linux/README.md`](docs/linux/README.md)。只读环境/版本诊断由 Tauri 命令 `runtime_diagnostics` 提供，数据规模可用 `scripts/inspect-plan-scale.sh` 检查，启动性能测量用 `scripts/measure-linux-performance.sh`。
 
 ## Release 构建
 

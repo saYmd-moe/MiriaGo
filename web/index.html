@@ -30,8 +30,15 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>MiriaGo</title>
-  <script src="https://unpkg.com/maplibre-gl@^5.0/dist/maplibre-gl.js"></script>
-  <link href="https://unpkg.com/maplibre-gl@^5.0/dist/maplibre-gl.css" rel="stylesheet"/>
+  <!--
+    MapLibre GL JS/CSS are vendored locally (web/vendor/maplibre-gl/) so the
+    app shell and map component load without a runtime CDN dependency.
+    See docs/THIRD_PARTY_NOTICES.md for the pinned version, license and upgrade
+    procedure. Use `defer` so the map engine never blocks first paint of the
+    app shell; the Flutter bootstrap below still runs after this script.
+  -->
+  <link href="vendor/maplibre-gl/maplibre-gl.css" rel="stylesheet"/>
+  <script src="vendor/maplibre-gl/maplibre-gl.js" defer></script>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -43,6 +50,6 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js" defer></script>
 </body>
 </html>

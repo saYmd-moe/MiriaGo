@@ -1,9 +1,19 @@
-use std::{collections::HashMap, fs, net::IpAddr, path::PathBuf, process::Command};
+use std::{
+    collections::HashMap,
+    fs,
+    net::IpAddr,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Mutex,
+};
+
+use tauri::State;
+use tauri_plugin_notification::NotificationExt;
 
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
-use crate::storage;
+use crate::{diagnostics, storage};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +27,13 @@ pub struct LauncherInfo {
     pub exports_dir: String,
     pub logs_dir: String,
     pub temp_dir: String,
+    /// Present on Linux; identifies the running desktop environment (e.g. `KDE`).
+    pub desktop_environment: Option<String>,
+    /// Present on Linux; the display protocol (e.g. `wayland`, `x11`).
+    pub session_type: Option<String>,
+    /// Configured GTK file-chooser backend routed through the XDG Desktop Portal.
+    /// `Some(true)` means `GTK_USE_PORTAL=1`; `None` means the value was not set.
+    pub portal_used: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,11 +132,61 @@ pub struct OpenExternalUrlRequest {
     pub url: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopNotificationRequest {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Default)]
+pub struct PendingPlanFiles(pub Mutex<Vec<String>>);
+
+impl PendingPlanFiles {
+    pub fn from_args<I>(args: I) -> Self
+    where
+        I: IntoIterator<Item = String>,
+    {
+        Self(Mutex::new(
+            args.into_iter()
+                .filter(|path| is_plan_file_path(path))
+                .collect(),
+        ))
+    }
+
+    pub fn add_args<I>(&self, args: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
+        if let Ok(mut pending) = self.0.lock() {
+            pending.extend(args.into_iter().filter(|path| is_plan_file_path(path)));
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadAssetResult {
     pub data_base64: String,
     pub mime_type: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceCacheStatsResult {
+    pub full_bytes: i64,
+    pub full_count: i64,
+    pub thumbnail_bytes: i64,
+    pub thumbnail_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceCacheClearResult {
+    pub full_freed_bytes: i64,
+    pub full_freed_count: i64,
+    pub thumbnail_freed_bytes: i64,
+    pub thumbnail_freed_count: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -160,8 +227,61 @@ impl From<storage::DataDirs> for LauncherInfo {
             exports_dir: value.exports_dir.display().to_string(),
             logs_dir: value.logs_dir.display().to_string(),
             temp_dir: value.temp_dir.display().to_string(),
+            desktop_environment: desktop_environment(),
+            session_type: session_type(),
+            portal_used: portal_used(),
         }
     }
+}
+
+/// Read-only runtime diagnostics snapshot. The M5 diagnostics UI consumes this
+/// single model for display and redacted copy/export; this command never mutates state.
+#[tauri::command]
+pub fn runtime_diagnostics() -> Result<diagnostics::RuntimeDiagnostics, String> {
+    diagnostics::collect()
+}
+
+#[cfg(target_os = "linux")]
+fn environment_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn environment_value(_name: &str) -> Option<String> {
+    None
+}
+
+fn desktop_environment() -> Option<String> {
+    first_environment_component(environment_value("XDG_CURRENT_DESKTOP"))
+}
+
+fn session_type() -> Option<String> {
+    normalise_session_type(environment_value("XDG_SESSION_TYPE"))
+}
+
+fn portal_used() -> Option<bool> {
+    portal_setting(environment_value("GTK_USE_PORTAL"))
+}
+
+fn normalise_session_type(value: Option<String>) -> Option<String> {
+    value.map(|value| value.trim().to_ascii_lowercase())
+}
+
+fn portal_setting(value: Option<String>) -> Option<bool> {
+    match value.as_deref().map(str::trim) {
+        Some("") | None => None,
+        Some("1") => Some(true),
+        Some(_) => Some(false),
+    }
+}
+
+fn first_environment_component(value: Option<String>) -> Option<String> {
+    value?.split(':').find_map(|part| {
+        let part = part.trim();
+        (!part.is_empty()).then(|| part.to_string())
+    })
 }
 
 #[tauri::command]
@@ -211,7 +331,7 @@ pub fn write_export_file(
     request: WriteExportFileRequest,
 ) -> Result<ExportDestinationResult, String> {
     let extension = normalize_extension(&request.extension);
-    let path = ensure_extension(PathBuf::from(&request.path), &extension);
+    let path = ensure_extension(safe_export_path(&request.path)?, &extension);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
@@ -400,6 +520,100 @@ pub fn read_asset(request: ReadAssetRequest) -> Result<ReadAssetResult, String> 
     })
 }
 
+/// Namespaces that are safe to clear: re-fetchable network reference-image caches.
+const CLEARABLE_REFERENCE_NAMESPACES: [&str; 2] = ["reference_full", "reference_thumbnails"];
+
+struct DirectoryTotals {
+    bytes: i64,
+    count: i64,
+}
+
+fn directory_totals(directory: &std::path::Path) -> DirectoryTotals {
+    let mut totals = DirectoryTotals { bytes: 0, count: 0 };
+    let Ok(entries) = fs::read_dir(directory) else {
+        return totals;
+    };
+    for entry in entries.flatten() {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let length = metadata.len();
+        if length > 0 {
+            totals.bytes += length as i64;
+            totals.count += 1;
+        }
+    }
+    totals
+}
+
+fn clear_directory(directory: &std::path::Path) -> DirectoryTotals {
+    let mut totals = DirectoryTotals { bytes: 0, count: 0 };
+    let Ok(entries) = fs::read_dir(directory) else {
+        return totals;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() || path.is_dir() {
+            continue;
+        }
+        let length = metadata.len();
+        if fs::remove_file(&path).is_ok() && length > 0 {
+            totals.bytes += length as i64;
+            totals.count += 1;
+        }
+    }
+    totals
+}
+
+/// Report the byte size and file count of the re-fetchable reference-image caches.
+///
+/// Only touches `assets/reference_full` and `assets/reference_thumbnails`. It never
+/// inspects or deletes SQLite, user photos, imported package assets, or visit records.
+#[tauri::command]
+pub fn reference_cache_stats() -> Result<ReferenceCacheStatsResult, String> {
+    let dirs = storage::ensure_data_dirs()?;
+    let root = &dirs.assets_dir;
+    let full = directory_totals(&root.join(CLEARABLE_REFERENCE_NAMESPACES[0]));
+    let thumb = directory_totals(&root.join(CLEARABLE_REFERENCE_NAMESPACES[1]));
+    Ok(ReferenceCacheStatsResult {
+        full_bytes: full.bytes,
+        full_count: full.count,
+        thumbnail_bytes: thumb.bytes,
+        thumbnail_count: thumb.count,
+    })
+}
+
+/// Clear the re-fetchable reference-image caches.
+///
+/// Deletes only immediate files under `assets/reference_full` (and, when requested,
+/// `assets/reference_thumbnails`). It never touches SQLite, user photos, imported
+/// package assets, or visit records.
+#[tauri::command]
+pub fn clear_reference_cache(
+    include_thumbnails: bool,
+) -> Result<ReferenceCacheClearResult, String> {
+    let dirs = storage::ensure_data_dirs()?;
+    let root = &dirs.assets_dir;
+    let full = clear_directory(&root.join(CLEARABLE_REFERENCE_NAMESPACES[0]));
+    let thumb = if include_thumbnails {
+        clear_directory(&root.join(CLEARABLE_REFERENCE_NAMESPACES[1]))
+    } else {
+        DirectoryTotals { bytes: 0, count: 0 }
+    };
+    Ok(ReferenceCacheClearResult {
+        full_freed_bytes: full.bytes,
+        full_freed_count: full.count,
+        thumbnail_freed_bytes: thumb.bytes,
+        thumbnail_freed_count: thumb.count,
+    })
+}
+
 #[tauri::command]
 pub fn fetch_anitabi_static_json(
     request: FetchAnitabiStaticJsonRequest,
@@ -422,6 +636,40 @@ pub fn open_external_url(request: OpenExternalUrlRequest) -> Result<bool, String
     let url = safe_public_external_url(&request.url)?;
     open_url_with_system(&url)?;
     Ok(true)
+}
+
+#[tauri::command]
+pub fn take_pending_plan_files(state: State<'_, PendingPlanFiles>) -> Vec<String> {
+    state
+        .0
+        .lock()
+        .map(|mut pending| pending.drain(..).collect())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn notify_desktop_task(app: tauri::AppHandle, request: DesktopNotificationRequest) -> bool {
+    let title = truncate_notification_text(&request.title);
+    let body = truncate_notification_text(&request.body);
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .is_ok()
+}
+
+fn is_plan_file_path(value: &str) -> bool {
+    let path = Path::new(value);
+    path.is_file()
+        && path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("sjhplan"))
+}
+
+fn truncate_notification_text(value: &str) -> String {
+    value.chars().take(160).collect()
 }
 
 fn safe_public_https_base_url(value: &str) -> Result<String, String> {
@@ -521,6 +769,18 @@ fn export_filter_label(mime_type: &str, extension: &str) -> String {
     }
 }
 
+fn safe_export_path(path: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(path);
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(format!("unsafe export path: {}", path.display()));
+    }
+    Ok(path)
+}
+
 fn safe_asset_path(path: &str) -> Result<PathBuf, String> {
     if !path.starts_with("assets/") || path.ends_with('/') || path.contains('\\') {
         return Err(format!("unsafe asset path: {path}"));
@@ -579,6 +839,10 @@ fn safe_anitabi_static_version(version: &str) -> Option<String> {
 fn fetch_text(url: &str) -> Result<String, String> {
     let response = reqwest::blocking::Client::builder()
         .user_agent("MiriaGo desktop launcher")
+        // Do not follow a redirect from a validated public host into a local
+        // or private address. The caller validates the initial URL; refusing
+        // redirects keeps that validation meaningful.
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|error| error.to_string())?
         .get(url)
@@ -638,8 +902,10 @@ fn safe_directory_name(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        safe_asset_path, safe_local_asset_path, safe_public_external_url,
-        safe_public_https_base_url,
+        ensure_extension, first_environment_component, is_plan_file_path, normalise_session_type,
+        portal_setting, safe_asset_path, safe_export_path, safe_local_asset_path,
+        safe_public_external_url, safe_public_https_base_url, truncate_notification_text,
+        PendingPlanFiles,
     };
 
     #[test]
@@ -668,6 +934,79 @@ mod tests {
     }
 
     #[test]
+    fn environment_component_is_trimmed_and_split() {
+        assert_eq!(
+            first_environment_component(Some("KDE:GNOME".to_string())),
+            Some("KDE".to_string())
+        );
+        assert_eq!(
+            first_environment_component(Some("  unity ".to_string())),
+            Some("unity".to_string())
+        );
+        assert_eq!(first_environment_component(None), None);
+        assert_eq!(first_environment_component(Some("  ".to_string())), None);
+    }
+
+    #[test]
+    fn session_and_portal_values_are_normalised_without_env_mutation() {
+        assert_eq!(
+            normalise_session_type(Some(" Wayland ".to_string())),
+            Some("wayland".to_string())
+        );
+        assert_eq!(portal_setting(Some("1".to_string())), Some(true));
+        assert_eq!(portal_setting(Some("0".to_string())), Some(false));
+        assert_eq!(portal_setting(Some(" ".to_string())), None);
+        assert_eq!(portal_setting(None), None);
+    }
+
+    #[test]
+    fn export_extension_preserves_unicode_path_names() {
+        assert_eq!(
+            ensure_extension(std::path::PathBuf::from("/tmp/计划 数据"), "sjhplan"),
+            std::path::PathBuf::from("/tmp/计划 数据.sjhplan")
+        );
+    }
+
+    #[test]
+    fn pending_files_accept_only_existing_sjhplan_paths() {
+        let temporary = std::env::temp_dir().join("MiriaGo test 空格.sjhplan");
+        std::fs::write(&temporary, b"test").unwrap();
+        assert!(is_plan_file_path(temporary.to_str().unwrap()));
+        let spaced_dir = std::env::temp_dir().join("trailing space ");
+        std::fs::create_dir_all(&spaced_dir).unwrap();
+        let spaced = spaced_dir.join(" leading.sjhplan");
+        std::fs::write(&spaced, b"test").unwrap();
+        assert!(is_plan_file_path(spaced.to_str().unwrap()));
+        assert!(!is_plan_file_path("/does/not/exist.sjhplan"));
+        assert!(!is_plan_file_path(
+            temporary.with_extension("txt").to_str().unwrap()
+        ));
+        std::fs::remove_file(temporary).unwrap();
+        std::fs::remove_file(&spaced).unwrap();
+        std::fs::remove_dir(spaced_dir).unwrap();
+    }
+
+    #[test]
+    fn pending_files_are_filtered_and_notification_text_is_bounded() {
+        let pending = PendingPlanFiles::from_args([
+            "/does/not/exist.sjhplan".to_string(),
+            "notes.txt".to_string(),
+        ]);
+        assert!(pending.0.lock().unwrap().is_empty());
+        assert_eq!(
+            truncate_notification_text(&"x".repeat(200)).chars().count(),
+            160
+        );
+    }
+
+    #[test]
+    fn export_paths_require_absolute_paths_without_parent_segments() {
+        assert!(safe_export_path("/tmp/MiriaGo/export.sjhplan").is_ok());
+        assert!(safe_export_path("exports/export.sjhplan").is_err());
+        assert!(safe_export_path("/tmp/../outside.sjhplan").is_err());
+    }
+
+    #[test]
     fn asset_paths_allow_safe_relative_assets() {
         assert!(safe_asset_path("assets/full_references/point.jpg").is_ok());
         assert!(safe_local_asset_path("assets/reference_full/point.webp").is_ok());
@@ -685,5 +1024,41 @@ mod tests {
             assert!(safe_asset_path(path).is_err(), "{path}");
             assert!(safe_local_asset_path(path).is_err(), "{path}");
         }
+    }
+
+    #[test]
+    fn directory_totals_counts_regular_files_only() {
+        let dir = std::env::temp_dir().join(format!("miriago_cache_totals_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sub")).expect("create subdir");
+        std::fs::write(dir.join("a.jpg"), vec![0u8; 100]).expect("write a.jpg");
+        std::fs::write(dir.join("b.webp"), vec![0u8; 250]).expect("write b.webp");
+        std::fs::write(dir.join("sub/c.jpg"), vec![0u8; 999]).expect("write sub/c.jpg");
+
+        let totals = super::directory_totals(&dir);
+        // Only immediate regular files: 100 + 250 bytes, two files. The subdir and
+        // its file are ignored.
+        assert_eq!(totals.bytes, 350);
+        assert_eq!(totals.count, 2);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clear_directory_removes_only_immediate_files() {
+        let dir = std::env::temp_dir().join(format!("miriago_cache_clear_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("keep")).expect("create keep subdir");
+        std::fs::write(dir.join("keep/nested.jpg"), vec![0u8; 500]).expect("write nested");
+        std::fs::write(dir.join("top.jpg"), vec![0u8; 120]).expect("write top");
+
+        let cleared = super::clear_directory(&dir);
+        assert_eq!(cleared.bytes, 120);
+        assert_eq!(cleared.count, 1);
+        // The nested file inside the kept subdir is untouched.
+        assert_eq!(super::directory_totals(&dir.join("keep")).count, 1);
+        assert!(dir.join("keep/nested.jpg").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

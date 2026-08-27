@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -15,6 +17,7 @@ import 'plan/plan_screen.dart';
 import 'plan/point_manager_screen.dart';
 import 'plan_transfer/import_export_screen.dart';
 import 'plan_transfer/incoming_plan_file.dart';
+import 'desktop/tauri_bridge.dart';
 import 'plan_transfer/plan_import_file_stub.dart'
     if (dart.library.io) 'plan_transfer/plan_import_file_io.dart';
 import 'plan_transfer/plan_import_preview_screen.dart';
@@ -22,6 +25,7 @@ import 'records/records_screen.dart';
 import 'records/comparison_export_config_migration.dart';
 import 'settings/settings_screen.dart';
 import 'widgets/app_scaled_route.dart';
+import 'desktop/desktop_input.dart';
 
 class AppShell extends StatefulWidget {
   AppShell({PilgrimageRepository? repository, super.key})
@@ -39,16 +43,23 @@ class _AppShellState extends State<AppShell> {
   Object? _loadError;
   int _selectedIndex = 0;
   final _incomingPlanFiles = const IncomingPlanFileChannel();
+  final List<ShortcutTarget?> _shortcutTargets = List.generate(
+    4,
+    (_) => ShortcutTarget(),
+  );
+  DesktopPlanFileSubscription? _desktopPlanFileSubscription;
+  final Set<String> _activePlanFileImports = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _incomingPlanFiles.listen(_importPlanFromPath);
+    _incomingPlanFiles.listen(_queueImportPlanFromPath);
     _initializeApp();
   }
 
   @override
   void dispose() {
+    unawaited(_desktopPlanFileSubscription?.dispose());
     _planController?.dispose();
     super.dispose();
   }
@@ -93,6 +104,11 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _initializeApp() async {
     await _loadActivePlan();
+    if (isTauriLauncherAvailable) {
+      _desktopPlanFileSubscription = await listenForDesktopPlanFiles(() async {
+        await _drainPendingPlanFiles();
+      });
+    }
     await _loadInitialIncomingPlanFile();
   }
 
@@ -147,6 +163,18 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  void _handleGlobalShortcut(DesktopAction action) {
+    switch (action) {
+      case DesktopAction.openSettings:
+        setState(() => _selectedIndex = 3);
+      case DesktopAction.openImport:
+      case DesktopAction.openExport:
+        _openImportExport();
+      default:
+        break;
+    }
+  }
+
   Future<void> _openImportExport() async {
     final plan = _planController?.plan;
     if (plan == null) {
@@ -181,11 +209,35 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _loadInitialIncomingPlanFile() async {
-    final path = await _incomingPlanFiles.getInitialPath();
-    if (path == null || path.isEmpty) {
+    if (await _drainPendingPlanFiles()) {
       return;
     }
-    await _importPlanFromPath(path);
+
+    final path = await _incomingPlanFiles.getInitialPath();
+    if (path != null && path.isNotEmpty) {
+      await _queueImportPlanFromPath(path);
+    }
+  }
+
+  Future<bool> _drainPendingPlanFiles() async {
+    final pending = await takePendingDesktopPlanFiles();
+    for (final path in pending) {
+      if (mounted) {
+        await _queueImportPlanFromPath(path);
+      }
+    }
+    return pending.isNotEmpty;
+  }
+
+  Future<void> _queueImportPlanFromPath(String path) async {
+    if (!_activePlanFileImports.add(path)) {
+      return;
+    }
+    try {
+      await _importPlanFromPath(path);
+    } finally {
+      _activePlanFileImports.remove(path);
+    }
   }
 
   Future<void> _importPlanFromPath(String path) async {
@@ -248,7 +300,11 @@ class _AppShellState extends State<AppShell> {
                   palette: _settings.themePalette,
                   customAccentValue: _settings.customThemeColorValue,
                 ),
-                child: Scaffold(
+                child: AppShortcutHost(
+                  targets: _shortcutTargets,
+                  selectedIndex: _selectedIndex,
+                  onGlobalAction: _handleGlobalShortcut,
+                  child: Scaffold(
                   body: IndexedStack(
                     index: _selectedIndex,
                     children: [
@@ -256,6 +312,7 @@ class _AppShellState extends State<AppShell> {
                         controller: controller,
                         settings: _settings,
                         repository: widget.repository,
+                        shortcutTarget: _shortcutTargets[0],
                         onOpenMap: _openMap,
                         onOpenPlanManager: _openPlanManager,
                         onOpenAddPoints: _openAddPoints,
@@ -265,15 +322,18 @@ class _AppShellState extends State<AppShell> {
                       PilgrimageMapScreen(
                         controller: controller,
                         settings: _settings,
+                        shortcutTarget: _shortcutTargets[1],
                       ),
                       RecordsScreen(
                         controller: controller,
                         settings: _settings,
+                        shortcutTarget: _shortcutTargets[2],
                       ),
                       SettingsScreen(
                         settings: _settings,
                         repository: widget.repository,
                         onChanged: _saveSettings,
+                        shortcutTarget: _shortcutTargets[3],
                       ),
                     ],
                   ),
@@ -342,6 +402,7 @@ class _AppShellState extends State<AppShell> {
                         ),
                       ],
                     ),
+                  ),
                   ),
                 ),
               ),
