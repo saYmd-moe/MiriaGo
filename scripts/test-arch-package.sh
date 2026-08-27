@@ -24,10 +24,16 @@ grep -q 'flutter analyze --no-pub' .github/workflows/arch-package.yml
 grep -q 'bash scripts/build-flutter-web.sh --release --no-pub --no-web-resources-cdn' .github/workflows/desktop.yml
 grep -q -- '--no-web-resources-cdn' src-tauri/tauri.conf.json
 grep -q -- '--no-web-resources-cdn' scripts/build-flutter-web.sh
-! grep -q 'sed -i' scripts/build-flutter-web.sh
+if grep -q 'sed -i' scripts/build-flutter-web.sh; then
+  echo 'build-flutter-web.sh must not rewrite generated files' >&2
+  exit 1
+fi
 grep -q 'useLocalCanvasKit":true' scripts/verify-flutter-web-resources.sh
 grep -q 'canvaskit/canvaskit.js' scripts/verify-flutter-web-resources.sh
-! grep -q 'www.gstatic.com/flutter-canvaskit' scripts/verify-flutter-web-resources.sh
+if grep -q 'www.gstatic.com/flutter-canvaskit' scripts/verify-flutter-web-resources.sh; then
+  echo 'Flutter resource verifier must reject remote CanvasKit references' >&2
+  exit 1
+fi
 grep -q 'cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings' .github/workflows/arch-package.yml
 grep -q "xdotool search --onlyvisible --name '\\^MiriaGo\\$'" scripts/verify-arch-package.sh
 
