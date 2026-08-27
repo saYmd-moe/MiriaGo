@@ -46,7 +46,7 @@ overwriting the committed assets. The script writes into `web/vendor/maplibre-gl
    `tool/update_maplibre_vendor.mjs` with the real hashes of `https://unpkg.com/maplibre-gl@T/...`.
 3. Run `node tool/update_maplibre_vendor.mjs` and commit the regenerated files and this
    README's table.
-4. Verify with `bash scripts/build-flutter-web.sh --release` and an offline smoke test of the map page. The helper uses `--no-web-resources-cdn` and audits `build/web/flutter_bootstrap.js` for local CanvasKit resources.
+4. Verify with `bash scripts/build-flutter-web.sh --release --no-web-resources-cdn` and an offline smoke test of the map page. The helper uses `--no-web-resources-cdn` and audits `build/web/flutter_bootstrap.js` for local CanvasKit resources.
 
 ## Runtime wiring
 

@@ -29,11 +29,11 @@ mod tests {
             serde_json::from_str(&text).expect("tauri.conf.json should be valid JSON");
         assert_eq!(
             config["build"]["beforeBuildCommand"],
-            "bash scripts/build-flutter-web.sh --release"
+            "bash scripts/build-flutter-web.sh --release --no-web-resources-cdn"
         );
         assert_eq!(
             config["build"]["beforeDevCommand"],
-            "bash scripts/build-flutter-web.sh --debug"
+            "bash scripts/build-flutter-web.sh --debug --no-web-resources-cdn"
         );
     }
 
