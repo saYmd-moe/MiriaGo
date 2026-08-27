@@ -16,6 +16,10 @@
 | 本地桌面图片 | 应用数据目录 | Tauri `read_asset` 返回 data URL | `img-src data:`；Rust 路径校验 |
 | 外链 | Google Maps、Anitabi、OpenStreetMap 等 | `open_external_url` → `xdg-open` | 不在 WebView 导航；Rust 仅允许公开 HTTP(S) |
 
+## Flutter Web 构建约束
+
+Tauri 桌面开发、production、桌面 CI 和 Arch 打包统一调用 `scripts/build-flutter-web.sh`；该脚本固定使用 `--no-web-resources-cdn`，并在生成后执行 `scripts/verify-flutter-web-resources.sh`。Flutter 3.44 仍可能在 bootstrap 的死分支中嵌入 `www.gstatic.com/flutter-canvaskit`，脚本会移除该生成的 CDN fallback；实际 `builds` 配置必须保持 `useLocalCanvasKit":true`，且 `build/web/canvaskit/canvaskit.js` 必须存在。这样不会放宽 Tauri CSP，也不会把普通 fetch 与 module import 混为一谈。
+
 ## 分阶段策略
 
 1. **M6 当前阶段**：收紧脚本、对象、frame、base、worker、字体和 scheme；默认地图、Bangumi、Anitabi 图片可用。`connect-src`/`img-src` 允许 HTTPS，是因为自定义地图源和用户图片源是产品能力，无法用静态域名白名单覆盖。

@@ -22,6 +22,22 @@ mod tests {
     }
 
     #[test]
+    fn desktop_build_uses_the_local_flutter_web_resource_helper() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tauri.conf.json");
+        let text = std::fs::read_to_string(path).expect("tauri.conf.json should exist");
+        let config: serde_json::Value =
+            serde_json::from_str(&text).expect("tauri.conf.json should be valid JSON");
+        assert_eq!(
+            config["build"]["beforeBuildCommand"],
+            "bash scripts/build-flutter-web.sh --release"
+        );
+        assert_eq!(
+            config["build"]["beforeDevCommand"],
+            "bash scripts/build-flutter-web.sh --debug"
+        );
+    }
+
+    #[test]
     fn csp_is_non_null_and_restricts_script_surfaces() {
         let csp = policy();
         assert!(!csp.trim().is_empty());
@@ -38,6 +54,14 @@ mod tests {
         );
         assert_eq!(sources(&csp, "style-src"), ["'self'", "'unsafe-inline'"]);
         assert!(!csp.contains("unpkg.com"));
+    }
+
+    #[test]
+    fn tauri_csp_manifest_is_unchanged() {
+        assert_eq!(
+            policy(),
+            "default-src 'self'; base-uri 'self'; object-src 'none'; frame-src 'self'; worker-src 'self' blob:; font-src 'self'; img-src 'self' data: blob: https://image.anitabi.cn https://img-tc.anitabi.cn https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https:;"
+        );
     }
 
     #[test]

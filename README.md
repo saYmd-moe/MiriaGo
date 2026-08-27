@@ -164,7 +164,7 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 构建 Web 预览：
 
 ```bash
-flutter build web --no-pub
+bash scripts/build-flutter-web.sh --release --no-pub
 python3 -m http.server 8080 --directory build/web
 ```
 
