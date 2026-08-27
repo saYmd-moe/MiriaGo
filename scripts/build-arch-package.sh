@@ -83,6 +83,7 @@ if [[ "${MIRIAGO_SKIP_BUILD:-0}" != 1 ]]; then
   }
   npm ci
   npm run tauri -- build --no-bundle
+  bash scripts/verify-flutter-web-resources.sh
 fi
 
 binary="src-tauri/target/release/miriago-desktop"
