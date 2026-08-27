@@ -2,6 +2,11 @@ name: Arch Linux Package (M4)
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional existing v* Release tag to receive artifacts'
+        required: false
+        type: string
   push:
     branches: ['ci/linux-arch-release', 'main']
     tags: ['v*']
@@ -31,7 +36,7 @@ jobs:
           pacman -Syu --noconfirm --needed \
             base-devel git curl \
             file libayatana-appindicator librsvg openssl patchelf \
-            webkit2gtk-4.1 wget xdotool xdg-utils \
+            webkit2gtk-4.1 wget xdotool xdg-desktop-portal-gtk xdg-utils \
             nodejs npm fakeroot zstd rust cargo \
             desktop-file-utils gcc glibc \
             xorg-server-xvfb coreutils shellcheck
@@ -128,9 +133,10 @@ jobs:
             arch-package-baseline.txt
 
       - name: Attach Arch package to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.release_tag || github.ref_name }}
           files: |
             dist/arch/*.pkg.tar.zst
             dist/arch/SHA256SUMS
