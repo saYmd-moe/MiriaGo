@@ -18,7 +18,7 @@
 
 ## Flutter Web 构建约束
 
-Tauri 桌面开发、production、桌面 CI 和 Arch 打包统一调用 `scripts/build-flutter-web.sh`；该脚本固定使用 `--no-web-resources-cdn`，并在生成后执行 `scripts/verify-flutter-web-resources.sh`。Flutter 3.44 仍可能在 bootstrap 的死分支中嵌入 `www.gstatic.com/flutter-canvaskit`，脚本会移除该生成的 CDN fallback；实际 `builds` 配置必须保持 `useLocalCanvasKit":true`，且 `build/web/canvaskit/canvaskit.js` 必须存在。这样不会放宽 Tauri CSP，也不会把普通 fetch 与 module import 混为一谈。
+Tauri 桌面开发、production、桌面 CI 和 Arch 打包统一调用 `scripts/build-flutter-web.sh`；该脚本固定使用 `--no-web-resources-cdn`，并在生成后执行 `scripts/verify-flutter-web-resources.sh`。Flutter 3.44 的 loader 代码可能在未选中的 fallback 分支中保留 `www.gstatic.com/flutter-canvaskit` 字面量；这不是活动资源路径，不应通过修改 Flutter 生成的 bootstrap 来消除。审计以活动 `builds` 配置的 `useLocalCanvasKit":true`、bootstrap 的本地 `canvaskit.js` 引用，以及非空 `build/web/canvaskit/canvaskit.js` 为准。这样不会放宽 Tauri CSP，也不会把普通 fetch 与 module import 混为一谈。
 
 ## 分阶段策略
 

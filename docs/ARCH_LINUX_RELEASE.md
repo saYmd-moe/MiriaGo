@@ -17,7 +17,7 @@ shellcheck -x scripts/*.sh
 ./scripts/test-arch-package.sh
 ```
 
-本地构建需要 Arch 的 `base-devel`、Flutter、Node/Tauri 依赖。桌面构建统一经 `scripts/build-flutter-web.sh` 使用 `--no-web-resources-cdn`，并由 `scripts/verify-flutter-web-resources.sh` 确认 bootstrap 只选用仓库内 CanvasKit；安装或卸载包属于人工操作，不应由测试脚本自动 `sudo`。
+本地构建需要 Arch 的 `base-devel`、Flutter、Node/Tauri 依赖。桌面构建统一经 `scripts/build-flutter-web.sh` 使用 `--no-web-resources-cdn`，并由 `scripts/verify-flutter-web-resources.sh` 确认活动构建配置使用仓库内 CanvasKit；Flutter loader 中可能保留未选中的 gstatic fallback 字面量，不作为失败条件。安装或卸载包属于人工操作，不应由测试脚本自动 `sudo`。
 
 ## Artifact 与 Release
 

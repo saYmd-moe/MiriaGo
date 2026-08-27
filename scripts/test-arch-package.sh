@@ -24,6 +24,10 @@ grep -q 'flutter analyze --no-pub' .github/workflows/arch-package.yml
 grep -q 'bash scripts/build-flutter-web.sh --release --no-pub --no-web-resources-cdn' .github/workflows/desktop.yml
 grep -q -- '--no-web-resources-cdn' src-tauri/tauri.conf.json
 grep -q -- '--no-web-resources-cdn' scripts/build-flutter-web.sh
+! grep -q 'sed -i' scripts/build-flutter-web.sh
+grep -q 'useLocalCanvasKit":true' scripts/verify-flutter-web-resources.sh
+grep -q 'canvaskit/canvaskit.js' scripts/verify-flutter-web-resources.sh
+! grep -q 'www.gstatic.com/flutter-canvaskit' scripts/verify-flutter-web-resources.sh
 grep -q 'cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings' .github/workflows/arch-package.yml
 grep -q "xdotool search --onlyvisible --name '\\^MiriaGo\\$'" scripts/verify-arch-package.sh
 

@@ -15,10 +15,6 @@ if [[ ! -s "$local_canvaskit" ]]; then
   echo "error: missing or empty $local_canvaskit" >&2
   exit 1
 fi
-if grep -Fq 'www.gstatic.com/flutter-canvaskit' "$bootstrap"; then
-  echo "error: Flutter bootstrap still contains the CanvasKit CDN URL" >&2
-  exit 1
-fi
 if ! grep -Fq 'canvaskit.js' "$bootstrap"; then
   echo "error: Flutter bootstrap does not reference local canvaskit.js" >&2
   exit 1
