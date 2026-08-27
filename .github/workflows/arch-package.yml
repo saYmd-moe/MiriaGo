@@ -34,7 +34,7 @@ jobs:
       - name: Install base build dependencies
         run: |
           pacman -Syu --noconfirm --needed \
-            base-devel git curl \
+            base-devel git curl jq \
             file libayatana-appindicator librsvg openssl patchelf \
             webkit2gtk-4.1 wget xdotool xdg-desktop-portal-gtk xdg-utils \
             nodejs npm fakeroot zstd rust cargo \
